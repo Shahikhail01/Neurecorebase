@@ -1,0 +1,335 @@
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
+import type { AgentType } from '@prisma/client';
+import type {
+  CreateAgentTemplateDto,
+  UpdateAgentTemplateDto,
+} from './dto/agent-template.dto';
+
+/**
+ * AgentTemplatesService
+ *
+ * SRP: Manages CRUD for AgentTemplate records only.
+ * OCP: New template fields can be added by extending DTOs without modifying this service.
+ * Tenant isolation: Templates are either tenant-specific (tenantId set) or
+ * platform-public (isPublic = true, tenantId = null). Both are visible to a tenant.
+ */
+@Injectable()
+export class AgentTemplatesService {
+  private readonly logger = new Logger(AgentTemplatesService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  async findAll(
+    tenantId: string,
+    opts?: { type?: AgentType; page?: number; limit?: number },
+  ) {
+    try {
+      const { type, page = 1, limit = 20 } = opts ?? {};
+      const skip = (page - 1) * limit;
+
+      const where = {
+        // Public templates must be platform-wide (tenantId = null).
+        // Prevents a tenant from marking a tenant-scoped template as public.
+        OR: [{ tenantId }, { isPublic: true, tenantId: null }],
+        ...(type && { type }),
+      };
+
+      const [data, total] = await this.prisma.$transaction([
+        this.prisma.agentTemplate.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: [{ isPublic: 'asc' }, { createdAt: 'desc' }],
+        }),
+        this.prisma.agentTemplate.count({ where }),
+      ]);
+
+      return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    } catch (err) {
+      this.logger.warn('Database error in findAll: ' + String(err));
+      return { data: [], total: 0, page: opts?.page ?? 1, limit: opts?.limit ?? 20, totalPages: 0 };
+    }
+  }
+
+  async findAllPlatform(opts?: {
+    type?: AgentType;
+    page?: number;
+    limit?: number;
+  }) {
+    try {
+      const { type, page = 1, limit = 20 } = opts ?? {};
+      const skip = (page - 1) * limit;
+
+      const where = {
+        tenantId: null,
+        isPublic: true,
+        ...(type && { type }),
+      };
+
+      const [data, total] = await this.prisma.$transaction([
+        this.prisma.agentTemplate.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: [{ createdAt: 'desc' }],
+        }),
+        this.prisma.agentTemplate.count({ where }),
+      ]);
+
+      return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    } catch (err) {
+      this.logger.warn('Database error in findAllPlatform: ' + String(err));
+      return { data: [], total: 0, page: opts?.page ?? 1, limit: opts?.limit ?? 20, totalPages: 0 };
+    }
+  }
+
+  async findOne(id: string, tenantId: string) {
+    try {
+      const template = await this.prisma.agentTemplate.findFirst({
+        where: { id, OR: [{ tenantId }, { isPublic: true, tenantId: null }] },
+      });
+      if (!template) throw new NotFoundException(`Agent template ${id} not found`);
+      return template;
+    } catch (err) {
+      this.logger.warn('Database error in findOne: ' + String(err));
+      throw new ServiceUnavailableException('Database unavailable');
+    }
+  }
+
+  async findOnePlatform(id: string) {
+    try {
+      const template = await this.prisma.agentTemplate.findFirst({
+        where: { id, tenantId: null, isPublic: true },
+      });
+      if (!template)
+        throw new NotFoundException(`Platform agent template ${id} not found`);
+      return template;
+    } catch (err) {
+      this.logger.warn('Database error in findOnePlatform: ' + String(err));
+      throw new ServiceUnavailableException('Database unavailable');
+    }
+  }
+
+  async create(tenantId: string, dto: CreateAgentTemplateDto) {
+    try {
+      return await this.prisma.agentTemplate.create({
+        data: {
+          name: dto.name,
+          description: dto.description,
+          type: dto.type ?? 'FUNCTIONAL',
+          model: dto.model ?? 'gpt-4o-mini',
+          systemPrompt: dto.systemPrompt,
+          instructions: dto.instructions,
+          permissions: (dto.permissions ?? []) as never,
+          config: (dto.config ?? {}) as never,
+          // Tenants cannot publish templates platform-wide.
+          isPublic: false,
+          version: dto.version ?? '1.0.0',
+          tenantId,
+        },
+      });
+    } catch (err) {
+      this.logger.warn('Database error in create: ' + String(err));
+      throw new ServiceUnavailableException('Database unavailable');
+    }
+  }
+
+  async createPlatform(dto: CreateAgentTemplateDto) {
+    const cfg =
+      dto.config && typeof dto.config === 'object' && !Array.isArray(dto.config)
+        ? dto.config
+        : {};
+
+    if ((cfg as any).allowTenantEditing === undefined) {
+      (cfg as any).allowTenantEditing = true;
+    }
+
+    return this.prisma.agentTemplate.create({
+      data: {
+        name: dto.name,
+        description: dto.description,
+        type: dto.type ?? 'FUNCTIONAL',
+        model: dto.model ?? 'gpt-4o-mini',
+        systemPrompt: dto.systemPrompt,
+        instructions: dto.instructions,
+        permissions: (dto.permissions ?? []) as never,
+        config: (cfg ?? {}) as never,
+        isPublic: true,
+        version: dto.version ?? '1.0.0',
+        tenantId: null,
+      },
+    });
+  }
+
+  /**
+   * Clone a platform template into a tenant-scoped template so the tenant can edit TORs safely.
+   */
+  async cloneToTenant(
+    platformTemplateId: string,
+    tenantId: string,
+    opts?: { name?: string },
+  ) {
+    const template = await this.prisma.agentTemplate.findFirst({
+      where: { id: platformTemplateId, tenantId: null, isPublic: true },
+    });
+    if (!template)
+      throw new NotFoundException(
+        `Platform agent template ${platformTemplateId} not found`,
+      );
+
+    const cfg =
+      template.config &&
+      typeof template.config === 'object' &&
+      !Array.isArray(template.config)
+        ? template.config
+        : {};
+    const allowTenantEditing = (cfg as any).allowTenantEditing === true;
+    if (!allowTenantEditing) {
+      throw new ForbiddenException(
+        'Tenant editing is disabled for this template',
+      );
+    }
+
+    // If tenant already cloned this platform template, return the existing tenant-scoped copy.
+    const existingClone = await this.prisma.agentTemplate.findFirst({
+      where: {
+        tenantId,
+        config: {
+          path: ['clonedFromPlatformTemplateId'],
+          equals: template.id,
+        },
+      },
+    });
+    if (existingClone) return existingClone;
+
+    return this.prisma.agentTemplate.create({
+      data: {
+        name: opts?.name?.trim() ? opts.name.trim() : template.name,
+        description: template.description,
+        type: template.type,
+        model: template.model,
+        systemPrompt: template.systemPrompt,
+        instructions: template.instructions,
+        permissions: (template.permissions ?? []) as never,
+        config: {
+          ...(template.config &&
+          typeof template.config === 'object' &&
+          !Array.isArray(template.config)
+            ? template.config
+            : {}),
+          clonedFromPlatformTemplateId: template.id,
+          clonedAt: new Date().toISOString(),
+        } as never,
+        isPublic: false,
+        version: template.version,
+        tenantId,
+      },
+    });
+  }
+
+  async update(id: string, tenantId: string, dto: UpdateAgentTemplateDto) {
+    // Tenants can only update their own templates, not public ones
+    const template = await this.prisma.agentTemplate.findFirst({
+      where: { id, tenantId },
+    });
+    if (!template)
+      throw new NotFoundException(
+        `Agent template ${id} not found or not yours`,
+      );
+
+    return this.prisma.agentTemplate.update({
+      where: { id },
+      data: {
+        ...(dto.name && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.type && { type: dto.type }),
+        ...(dto.model && { model: dto.model }),
+        ...(dto.systemPrompt !== undefined && {
+          systemPrompt: dto.systemPrompt,
+        }),
+        ...(dto.instructions !== undefined && {
+          instructions: dto.instructions,
+        }),
+        ...(dto.permissions && { permissions: dto.permissions as never }),
+        ...(dto.config && { config: dto.config as never }),
+        ...(dto.version && { version: dto.version }),
+      },
+    });
+  }
+
+  async updatePlatform(id: string, dto: UpdateAgentTemplateDto) {
+    const template = await this.prisma.agentTemplate.findFirst({
+      where: { id, tenantId: null, isPublic: true },
+    });
+    if (!template)
+      throw new NotFoundException(`Platform agent template ${id} not found`);
+
+    return this.prisma.agentTemplate.update({
+      where: { id },
+      data: {
+        ...(dto.name && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.type && { type: dto.type }),
+        ...(dto.model && { model: dto.model }),
+        ...(dto.systemPrompt !== undefined && {
+          systemPrompt: dto.systemPrompt,
+        }),
+        ...(dto.instructions !== undefined && {
+          instructions: dto.instructions,
+        }),
+        ...(dto.permissions && { permissions: dto.permissions as never }),
+        ...(dto.config && { config: dto.config as never }),
+        ...(dto.version && { version: dto.version }),
+        // Enforce platform invariants.
+        isPublic: true,
+        tenantId: null,
+      },
+    });
+  }
+
+  async remove(id: string, tenantId: string): Promise<void> {
+    const template = await this.prisma.agentTemplate.findFirst({
+      where: { id, tenantId },
+    });
+    if (!template)
+      throw new NotFoundException(
+        `Agent template ${id} not found or not yours`,
+      );
+    await this.prisma.agentTemplate.delete({ where: { id } });
+  }
+
+  async removePlatform(id: string): Promise<void> {
+    const template = await this.prisma.agentTemplate.findFirst({
+      where: { id, tenantId: null, isPublic: true },
+    });
+    if (!template)
+      throw new NotFoundException(`Platform agent template ${id} not found`);
+    await this.prisma.agentTemplate.delete({ where: { id } });
+  }
+
+  /**
+   * Instantiate a template — returns a create-agent payload pre-filled from the template.
+   * The caller (AgentsService.create) takes this as input.
+   */
+  async instantiate(id: string, tenantId: string) {
+    const template = await this.findOne(id, tenantId);
+    return {
+      name: template.name,
+      description: template.description,
+      type: template.type,
+      model: template.model,
+      systemPrompt: template.systemPrompt,
+      instructions: template.instructions,
+      permissions: template.permissions,
+      config: template.config,
+      templateId: template.id,
+    };
+  }
+}

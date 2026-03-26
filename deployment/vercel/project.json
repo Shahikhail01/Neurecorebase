@@ -1,0 +1,39 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "name": "neurecore",
+  "orgId": "@VERCEL_ORG_ID",
+  "projectId": "@VERCEL_PROJECT_ID",
+
+  "regions": ["iad1"],
+
+  "builds": [
+    {
+      "src": "frontend-tenant/**",
+      "use": "@vercel/next"
+    },
+    {
+      "src": "frontend-admin/**",
+      "use": "@vercel/next"
+    }
+  ],
+
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    }
+  ],
+
+  "env": {
+    "NODE_ENV": "production"
+  },
+
+  "areas": {
+    "APAC": ["hnd1"],
+    "EU": ["fra1"],
+    "NA": ["iad1"]
+  }
+}

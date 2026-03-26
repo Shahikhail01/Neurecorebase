@@ -1,0 +1,139 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Body,
+  Query,
+  ParseIntPipe,
+  DefaultValuePipe,
+  UseGuards,
+  ForbiddenException,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import { UsersService } from './users.service';
+import {
+  CreateUserDto,
+  UpdateUserDto,
+  ChangePasswordDto,
+} from './dto/user.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UserRole } from '@prisma/client';
+import { ValidatedUser } from '../auth/interfaces/auth.interface';
+
+// Type for authenticated user from JWT (includes role and tenantId)
+type AuthenticatedUser = ValidatedUser & { sub: string; jti: string };
+
+@Controller({ path: 'users', version: '1' })
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Get()
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.PLATFORM_ADMIN,
+    UserRole.SECURITY_OFFICER,
+    UserRole.SUPPORT,
+  )
+  findAll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('tenantId') tenantId?: string,
+    @Query('search') search?: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
+    // Platform admins can query any tenant; tenant users can only query their own
+    const effectiveTenantId =
+      user.role === UserRole.SUPER_ADMIN ||
+      user.role === UserRole.PLATFORM_ADMIN ||
+      user.role === UserRole.SECURITY_OFFICER ||
+      user.role === UserRole.SUPPORT
+        ? tenantId
+        : (user.tenantId ?? undefined);
+    return this.usersService.findAll(effectiveTenantId, page, limit, search);
+  }
+
+  @Get(':id')
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.PLATFORM_ADMIN,
+    UserRole.SECURITY_OFFICER,
+    UserRole.SUPPORT,
+  )
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    // Platform admins can query any user; tenant users only their tenant
+    const tenantId =
+      user.role === UserRole.SUPER_ADMIN ||
+      user.role === UserRole.PLATFORM_ADMIN
+        ? undefined
+        : (user.tenantId ?? undefined);
+    return this.usersService.findOne(id, tenantId);
+  }
+
+  @Post()
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN, UserRole.OWNER)
+  create(@Body() dto: CreateUserDto, @CurrentUser() user: AuthenticatedUser) {
+    // Enforce tenantId from JWT for tenant-level users
+    if (user.tenantId && !dto.tenantId) {
+      dto.tenantId = user.tenantId;
+    }
+    return this.usersService.create(dto);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const adminRoles: UserRole[] = [
+      UserRole.SUPER_ADMIN,
+      UserRole.PLATFORM_ADMIN,
+      UserRole.OWNER,
+      UserRole.ADMIN,
+    ];
+    const isAdmin = adminRoles.includes(user.role);
+    const isSelf = user.id === id;
+
+    if (!isAdmin && !isSelf) {
+      throw new ForbiddenException('Insufficient permissions');
+    }
+
+    const tenantId =
+      user.role === UserRole.SUPER_ADMIN ||
+      user.role === UserRole.PLATFORM_ADMIN
+        ? undefined
+        : (user.tenantId ?? undefined);
+    return this.usersService.update(id, dto, tenantId);
+  }
+
+  @Patch(':id/password')
+  @HttpCode(HttpStatus.OK)
+  changePassword(
+    @Param('id') id: string,
+    @Body() dto: ChangePasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (user.id !== id) {
+      throw new ForbiddenException('Can only change your own password');
+    }
+    return this.usersService.changePassword(id, dto);
+  }
+
+  @Patch(':id/deactivate')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN, UserRole.OWNER)
+  deactivate(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    const tenantId =
+      user.role === UserRole.SUPER_ADMIN ||
+      user.role === UserRole.PLATFORM_ADMIN
+        ? undefined
+        : (user.tenantId ?? undefined);
+    return this.usersService.deactivate(id, tenantId);
+  }
+}

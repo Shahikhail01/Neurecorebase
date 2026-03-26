@@ -1,0 +1,256 @@
+{
+  "visited": [
+    {
+      "name": "Overview",
+      "path": "/overview",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Overview.png"
+    },
+    {
+      "name": "Tenants",
+      "path": "/tenants",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Tenants.png"
+    },
+    {
+      "name": "Users",
+      "path": "/users",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Users.png"
+    },
+    {
+      "name": "Agent Fleet",
+      "path": "/agents",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Agent_Fleet.png"
+    },
+    {
+      "name": "Models",
+      "path": "/models",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Models.png"
+    },
+    {
+      "name": "Monitoring",
+      "path": "/monitoring",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Monitoring.png"
+    },
+    {
+      "name": "Security",
+      "path": "/security",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Security.png"
+    },
+    {
+      "name": "Billing",
+      "path": "/billing",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Billing.png"
+    },
+    {
+      "name": "Connectors",
+      "path": "/connectors",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Connectors.png"
+    },
+    {
+      "name": "Audit Logs",
+      "path": "/audit",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Audit_Logs.png"
+    },
+    {
+      "name": "Platform Brain Map",
+      "path": "/brain",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Platform_Brain_Map.png"
+    },
+    {
+      "name": "Strategy Room",
+      "path": "/strategy",
+      "screenshot": "/mnt/LinuxData/Web Dev/NeureCore/scripts/output/admin-scan/Strategy_Room.png"
+    }
+  ],
+  "consoleLogs": [
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "location": {
+        "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.5.12_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js",
+        "lineNumber": 25630,
+        "columnNumber": 16
+      }
+    },
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "location": {
+        "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.5.12_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js",
+        "lineNumber": 25630,
+        "columnNumber": 16
+      }
+    },
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "location": {
+        "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.5.12_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js",
+        "lineNumber": 25630,
+        "columnNumber": 16
+      }
+    },
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "location": {
+        "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.5.12_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js",
+        "lineNumber": 25630,
+        "columnNumber": 16
+      }
+    },
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "location": {
+        "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.5.12_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js",
+        "lineNumber": 25630,
+        "columnNumber": 16
+      }
+    },
+    {
+      "type": "log",
+      "text": "[Fast Refresh] rebuilding",
+      "location": {
+        "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.5.12_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/client/dev/hot-reloader/app/hot-reloader-app.js",
+        "lineNumber": 196,
+        "columnNumber": 28
+      }
+    },
+    {
+      "type": "log",
+      "text": "[Fast Refresh] done in 15732ms",
+      "location": {
+        "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.5.12_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/client/dev/report-hmr-latency.js",
+        "lineNumber": 13,
+        "columnNumber": 12
+      }
+    },
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "location": {
+        "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.5.12_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js",
+        "lineNumber": 25630,
+        "columnNumber": 16
+      }
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://localhost:3000/api/v1/health",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "type": "error",
+      "text": "Error occurred: {code: NOT_FOUND, message: The requested resource was not found., statusCode: 404, details: undefined, requestId: c28c10ab-5bee-4130-8240-c902ac4f01e3}",
+      "location": {
+        "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.5.12_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/next-devtools/userspace/app/errors/intercept-console-error.js",
+        "lineNumber": 56,
+        "columnNumber": 31
+      }
+    },
+    {
+      "type": "log",
+      "text": "[Fast Refresh] rebuilding",
+      "location": {
+        "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.5.12_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/client/dev/hot-reloader/app/hot-reloader-app.js",
+        "lineNumber": 196,
+        "columnNumber": 28
+      }
+    },
+    {
+      "type": "log",
+      "text": "[Fast Refresh] done in 8847ms",
+      "location": {
+        "url": "webpack-internal:///(app-pages-browser)/./node_modules/.pnpm/next@15.5.12_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/client/dev/report-hmr-latency.js",
+        "lineNumber": 13,
+        "columnNumber": 12
+      }
+    }
+  ],
+  "networkFailures": [
+    {
+      "url": "http://127.0.0.1:3002/_next/static/chunks/main-app.js?v=1773739630947",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://127.0.0.1:3002/login?_rsc=1keda",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://localhost:3000/api/v1/tasks?limit=500",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://localhost:3000/api/v1/tenants",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://127.0.0.1:3002/login?_rsc=1xrn3",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://127.0.0.1:3002/_next/static/chunks/app/login/page.js",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://127.0.0.1:3002/login?_rsc=19zwu",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://127.0.0.1:3002/login?_rsc=18ic6",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://127.0.0.1:3002/_next/static/chunks/app/login/page.js",
+      "method": "GET",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://localhost:3000/api/v1/health",
+      "status": 404,
+      "statusText": "Not Found"
+    },
+    {
+      "url": "http://127.0.0.1:3002/security",
+      "method": "GET",
+      "failure": "net::ERR_CONNECTION_REFUSED"
+    },
+    {
+      "url": "http://127.0.0.1:3002/billing",
+      "method": "GET",
+      "failure": "net::ERR_CONNECTION_REFUSED"
+    },
+    {
+      "url": "http://127.0.0.1:3002/connectors",
+      "method": "GET",
+      "failure": "net::ERR_CONNECTION_REFUSED"
+    },
+    {
+      "url": "http://127.0.0.1:3002/audit",
+      "method": "GET",
+      "failure": "net::ERR_CONNECTION_REFUSED"
+    },
+    {
+      "url": "http://127.0.0.1:3002/brain",
+      "method": "GET",
+      "failure": "net::ERR_CONNECTION_REFUSED"
+    },
+    {
+      "url": "http://127.0.0.1:3002/strategy",
+      "method": "GET",
+      "failure": "net::ERR_CONNECTION_REFUSED"
+    }
+  ]
+}

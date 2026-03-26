@@ -1,0 +1,89 @@
+0d16da3cb5ae4fdd288ab24d234fc771
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var SpendingCapService_1;
+var _a, _b;
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SpendingCapService = void 0;
+const common_1 = require("@nestjs/common");
+const prisma_service_1 = require("../../../infrastructure/database/prisma.service");
+const billing_calculator_service_1 = require("../../finance/services/billing-calculator.service");
+/**
+ * SpendingCapService — Phase 4.5
+ *
+ * SRP:  Evaluates cumulative spend against soft/hard caps stored in TenantLimit.
+ *       Emits structured warnings; callers decide whether to block execution.
+ * OCP:  Extend cap sources (e.g. per-agent caps) by adding new quota keys to
+ *       TenantLimit.limits without changing this service.
+ */
+let SpendingCapService = SpendingCapService_1 = class SpendingCapService {
+    prisma;
+    calculator;
+    logger = new common_1.Logger(SpendingCapService_1.name);
+    constructor(prisma, calculator) {
+        this.prisma = prisma;
+        this.calculator = calculator;
+    }
+    async evaluate(tenantId) {
+        const tenantLimit = await this.prisma.tenantLimit.findUnique({
+            where: { tenantId },
+        });
+        const limits = tenantLimit?.limits ?? {};
+        // Defaults: 0 = unlimited
+        const softCapUsd = limits['spending_soft_cap_usd'] ?? 0;
+        const hardCapUsd = limits['spending_hard_cap_usd'] ?? 0;
+        // Current month spend
+        const now = new Date();
+        const summary = await this.calculator.calculateMonthly(tenantId, now.getFullYear(), now.getMonth() + 1);
+        const totalSpentUsd = summary.grandTotal;
+        const atSoftCap = softCapUsd > 0 && totalSpentUsd >= softCapUsd;
+        const atHardCap = hardCapUsd > 0 && totalSpentUsd >= hardCapUsd;
+        if (atHardCap) {
+            this.logger.warn(`Hard spending cap reached for tenant ${tenantId}: $${totalSpentUsd} >= $${hardCapUsd}`);
+        }
+        else if (atSoftCap) {
+            this.logger.warn(`Soft spending cap warning for tenant ${tenantId}: $${totalSpentUsd} >= $${softCapUsd}`);
+        }
+        return {
+            tenantId,
+            totalSpentUsd,
+            softCapUsd,
+            hardCapUsd,
+            atSoftCap,
+            atHardCap,
+            blocked: atHardCap,
+        };
+    }
+    async setSoftCap(tenantId, amountUsd) {
+        await this.upsertLimit(tenantId, 'spending_soft_cap_usd', amountUsd);
+    }
+    async setHardCap(tenantId, amountUsd) {
+        await this.upsertLimit(tenantId, 'spending_hard_cap_usd', amountUsd);
+    }
+    async upsertLimit(tenantId, key, value) {
+        const current = await this.prisma.tenantLimit.findUnique({
+            where: { tenantId },
+        });
+        const limits = current?.limits ?? {};
+        limits[key] = value;
+        await this.prisma.tenantLimit.upsert({
+            where: { tenantId },
+            create: { tenantId, limits },
+            update: { limits },
+        });
+    }
+};
+exports.SpendingCapService = SpendingCapService;
+exports.SpendingCapService = SpendingCapService = SpendingCapService_1 = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object, typeof (_b = typeof billing_calculator_service_1.BillingCalculatorService !== "undefined" && billing_calculator_service_1.BillingCalculatorService) === "function" ? _b : Object])
+], SpendingCapService);
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJmaWxlIjoiL21udC9MaW51eERhdGEvV2ViIERldi9OZXVyZUNvcmUvYmFja2VuZC9zcmMvbW9kdWxlcy9yZWxpYWJpbGl0eS9zZXJ2aWNlcy9zcGVuZGluZy1jYXAuc2VydmljZS50cyIsIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7OztBQUFBLDJDQUFvRDtBQUNwRCxvRkFBZ0Y7QUFDaEYsa0dBQTZGO0FBWTdGOzs7Ozs7O0dBT0c7QUFFSSxJQUFNLGtCQUFrQiwwQkFBeEIsTUFBTSxrQkFBa0I7SUFJVjtJQUNBO0lBSkYsTUFBTSxHQUFHLElBQUksZUFBTSxDQUFDLG9CQUFrQixDQUFDLElBQUksQ0FBQyxDQUFDO0lBRTlELFlBQ21CLE1BQXFCLEVBQ3JCLFVBQW9DO1FBRHBDLFdBQU0sR0FBTixNQUFNLENBQWU7UUFDckIsZUFBVSxHQUFWLFVBQVUsQ0FBMEI7SUFDcEQsQ0FBQztJQUVKLEtBQUssQ0FBQyxRQUFRLENBQUMsUUFBZ0I7UUFDN0IsTUFBTSxXQUFXLEdBQUcsTUFBTSxJQUFJLENBQUMsTUFBTSxDQUFDLFdBQVcsQ0FBQyxVQUFVLENBQUM7WUFDM0QsS0FBSyxFQUFFLEVBQUUsUUFBUSxFQUFFO1NBQ3BCLENBQUMsQ0FBQztRQUNILE1BQU0sTUFBTSxHQUFJLFdBQVcsRUFBRSxNQUFpQyxJQUFJLEVBQUUsQ0FBQztRQUVyRSwwQkFBMEI7UUFDMUIsTUFBTSxVQUFVLEdBQUcsTUFBTSxDQUFDLHVCQUF1QixDQUFDLElBQUksQ0FBQyxDQUFDO1FBQ3hELE1BQU0sVUFBVSxHQUFHLE1BQU0sQ0FBQyx1QkFBdUIsQ0FBQyxJQUFJLENBQUMsQ0FBQztRQUV4RCxzQkFBc0I7UUFDdEIsTUFBTSxHQUFHLEdBQUcsSUFBSSxJQUFJLEVBQUUsQ0FBQztRQUN2QixNQUFNLE9BQU8sR0FBRyxNQUFNLElBQUksQ0FBQyxVQUFVLENBQUMsZ0JBQWdCLENBQ3BELFFBQVEsRUFDUixHQUFHLENBQUMsV0FBVyxFQUFFLEVBQ2pCLEdBQUcsQ0FBQyxRQUFRLEVBQUUsR0FBRyxDQUFDLENBQ25CLENBQUM7UUFDRixNQUFNLGFBQWEsR0FBRyxPQUFPLENBQUMsVUFBVSxDQUFDO1FBRXpDLE1BQU0sU0FBUyxHQUFHLFVBQVUsR0FBRyxDQUFDLElBQUksYUFBYSxJQUFJLFVBQVUsQ0FBQztRQUNoRSxNQUFNLFNBQVMsR0FBRyxVQUFVLEdBQUcsQ0FBQyxJQUFJLGFBQWEsSUFBSSxVQUFVLENBQUM7UUFFaEUsSUFBSSxTQUFTLEVBQUUsQ0FBQztZQUNkLElBQUksQ0FBQyxNQUFNLENBQUMsSUFBSSxDQUNkLHdDQUF3QyxRQUFRLE1BQU0sYUFBYSxRQUFRLFVBQVUsRUFBRSxDQUN4RixDQUFDO1FBQ0osQ0FBQzthQUFNLElBQUksU0FBUyxFQUFFLENBQUM7WUFDckIsSUFBSSxDQUFDLE1BQU0sQ0FBQyxJQUFJLENBQ2Qsd0NBQXdDLFFBQVEsTUFBTSxhQUFhLFFBQVEsVUFBVSxFQUFFLENBQ3hGLENBQUM7UUFDSixDQUFDO1FBRUQsT0FBTztZQUNMLFFBQVE7WUFDUixhQUFhO1lBQ2IsVUFBVTtZQUNWLFVBQVU7WUFDVixTQUFTO1lBQ1QsU0FBUztZQUNULE9BQU8sRUFBRSxTQUFTO1NBQ25CLENBQUM7SUFDSixDQUFDO0lBRUQsS0FBSyxDQUFDLFVBQVUsQ0FBQyxRQUFnQixFQUFFLFNBQWlCO1FBQ2xELE1BQU0sSUFBSSxDQUFDLFdBQVcsQ0FBQyxRQUFRLEVBQUUsdUJBQXVCLEVBQUUsU0FBUyxDQUFDLENBQUM7SUFDdkUsQ0FBQztJQUVELEtBQUssQ0FBQyxVQUFVLENBQUMsUUFBZ0IsRUFBRSxTQUFpQjtRQUNsRCxNQUFNLElBQUksQ0FBQyxXQUFXLENBQUMsUUFBUSxFQUFFLHVCQUF1QixFQUFFLFNBQVMsQ0FBQyxDQUFDO0lBQ3ZFLENBQUM7SUFFTyxLQUFLLENBQUMsV0FBVyxDQUN2QixRQUFnQixFQUNoQixHQUFXLEVBQ1gsS0FBYTtRQUViLE1BQU0sT0FBTyxHQUFHLE1BQU0sSUFBSSxDQUFDLE1BQU0sQ0FBQyxXQUFXLENBQUMsVUFBVSxDQUFDO1lBQ3ZELEtBQUssRUFBRSxFQUFFLFFBQVEsRUFBRTtTQUNwQixDQUFDLENBQUM7UUFDSCxNQUFNLE1BQU0sR0FBSSxPQUFPLEVBQUUsTUFBaUMsSUFBSSxFQUFFLENBQUM7UUFDakUsTUFBTSxDQUFDLEdBQUcsQ0FBQyxHQUFHLEtBQUssQ0FBQztRQUNwQixNQUFNLElBQUksQ0FBQyxNQUFNLENBQUMsV0FBVyxDQUFDLE1BQU0sQ0FBQztZQUNuQyxLQUFLLEVBQUUsRUFBRSxRQUFRLEVBQUU7WUFDbkIsTUFBTSxFQUFFLEVBQUUsUUFBUSxFQUFFLE1BQU0sRUFBRTtZQUM1QixNQUFNLEVBQUUsRUFBRSxNQUFNLEVBQUU7U0FDbkIsQ0FBQyxDQUFDO0lBQ0wsQ0FBQztDQUNGLENBQUE7QUEzRVksZ0RBQWtCOzZCQUFsQixrQkFBa0I7SUFEOUIsSUFBQSxtQkFBVSxHQUFFO3lEQUtnQiw4QkFBYSxvQkFBYiw4QkFBYSxvREFDVCxxREFBd0Isb0JBQXhCLHFEQUF3QjtHQUw1QyxrQkFBa0IsQ0EyRTlCIiwibmFtZXMiOltdLCJzb3VyY2VzIjpbIi9tbnQvTGludXhEYXRhL1dlYiBEZXYvTmV1cmVDb3JlL2JhY2tlbmQvc3JjL21vZHVsZXMvcmVsaWFiaWxpdHkvc2VydmljZXMvc3BlbmRpbmctY2FwLnNlcnZpY2UudHMiXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgSW5qZWN0YWJsZSwgTG9nZ2VyIH0gZnJvbSAnQG5lc3Rqcy9jb21tb24nO1xuaW1wb3J0IHsgUHJpc21hU2VydmljZSB9IGZyb20gJy4uLy4uLy4uL2luZnJhc3RydWN0dXJlL2RhdGFiYXNlL3ByaXNtYS5zZXJ2aWNlJztcbmltcG9ydCB7IEJpbGxpbmdDYWxjdWxhdG9yU2VydmljZSB9IGZyb20gJy4uLy4uL2ZpbmFuY2Uvc2VydmljZXMvYmlsbGluZy1jYWxjdWxhdG9yLnNlcnZpY2UnO1xuXG5leHBvcnQgaW50ZXJmYWNlIFNwZW5kaW5nQ2FwUmVzdWx0IHtcbiAgdGVuYW50SWQ6IHN0cmluZztcbiAgdG90YWxTcGVudFVzZDogbnVtYmVyO1xuICBzb2Z0Q2FwVXNkOiBudW1iZXI7XG4gIGhhcmRDYXBVc2Q6IG51bWJlcjtcbiAgYXRTb2Z0Q2FwOiBib29sZWFuO1xuICBhdEhhcmRDYXA6IGJvb2xlYW47XG4gIGJsb2NrZWQ6IGJvb2xlYW47XG59XG5cbi8qKlxuICogU3BlbmRpbmdDYXBTZXJ2aWNlIOKAlCBQaGFzZSA0LjVcbiAqXG4gKiBTUlA6ICBFdmFsdWF0ZXMgY3VtdWxhdGl2ZSBzcGVuZCBhZ2FpbnN0IHNvZnQvaGFyZCBjYXBzIHN0b3JlZCBpbiBUZW5hbnRMaW1pdC5cbiAqICAgICAgIEVtaXRzIHN0cnVjdHVyZWQgd2FybmluZ3M7IGNhbGxlcnMgZGVjaWRlIHdoZXRoZXIgdG8gYmxvY2sgZXhlY3V0aW9uLlxuICogT0NQOiAgRXh0ZW5kIGNhcCBzb3VyY2VzIChlLmcuIHBlci1hZ2VudCBjYXBzKSBieSBhZGRpbmcgbmV3IHF1b3RhIGtleXMgdG9cbiAqICAgICAgIFRlbmFudExpbWl0LmxpbWl0cyB3aXRob3V0IGNoYW5naW5nIHRoaXMgc2VydmljZS5cbiAqL1xuQEluamVjdGFibGUoKVxuZXhwb3J0IGNsYXNzIFNwZW5kaW5nQ2FwU2VydmljZSB7XG4gIHByaXZhdGUgcmVhZG9ubHkgbG9nZ2VyID0gbmV3IExvZ2dlcihTcGVuZGluZ0NhcFNlcnZpY2UubmFtZSk7XG5cbiAgY29uc3RydWN0b3IoXG4gICAgcHJpdmF0ZSByZWFkb25seSBwcmlzbWE6IFByaXNtYVNlcnZpY2UsXG4gICAgcHJpdmF0ZSByZWFkb25seSBjYWxjdWxhdG9yOiBCaWxsaW5nQ2FsY3VsYXRvclNlcnZpY2UsXG4gICkge31cblxuICBhc3luYyBldmFsdWF0ZSh0ZW5hbnRJZDogc3RyaW5nKTogUHJvbWlzZTxTcGVuZGluZ0NhcFJlc3VsdD4ge1xuICAgIGNvbnN0IHRlbmFudExpbWl0ID0gYXdhaXQgdGhpcy5wcmlzbWEudGVuYW50TGltaXQuZmluZFVuaXF1ZSh7XG4gICAgICB3aGVyZTogeyB0ZW5hbnRJZCB9LFxuICAgIH0pO1xuICAgIGNvbnN0IGxpbWl0cyA9ICh0ZW5hbnRMaW1pdD8ubGltaXRzIGFzIFJlY29yZDxzdHJpbmcsIG51bWJlcj4pID8/IHt9O1xuXG4gICAgLy8gRGVmYXVsdHM6IDAgPSB1bmxpbWl0ZWRcbiAgICBjb25zdCBzb2Z0Q2FwVXNkID0gbGltaXRzWydzcGVuZGluZ19zb2Z0X2NhcF91c2QnXSA/PyAwO1xuICAgIGNvbnN0IGhhcmRDYXBVc2QgPSBsaW1pdHNbJ3NwZW5kaW5nX2hhcmRfY2FwX3VzZCddID8/IDA7XG5cbiAgICAvLyBDdXJyZW50IG1vbnRoIHNwZW5kXG4gICAgY29uc3Qgbm93ID0gbmV3IERhdGUoKTtcbiAgICBjb25zdCBzdW1tYXJ5ID0gYXdhaXQgdGhpcy5jYWxjdWxhdG9yLmNhbGN1bGF0ZU1vbnRobHkoXG4gICAgICB0ZW5hbnRJZCxcbiAgICAgIG5vdy5nZXRGdWxsWWVhcigpLFxuICAgICAgbm93LmdldE1vbnRoKCkgKyAxLFxuICAgICk7XG4gICAgY29uc3QgdG90YWxTcGVudFVzZCA9IHN1bW1hcnkuZ3JhbmRUb3RhbDtcblxuICAgIGNvbnN0IGF0U29mdENhcCA9IHNvZnRDYXBVc2QgPiAwICYmIHRvdGFsU3BlbnRVc2QgPj0gc29mdENhcFVzZDtcbiAgICBjb25zdCBhdEhhcmRDYXAgPSBoYXJkQ2FwVXNkID4gMCAmJiB0b3RhbFNwZW50VXNkID49IGhhcmRDYXBVc2Q7XG5cbiAgICBpZiAoYXRIYXJkQ2FwKSB7XG4gICAgICB0aGlzLmxvZ2dlci53YXJuKFxuICAgICAgICBgSGFyZCBzcGVuZGluZyBjYXAgcmVhY2hlZCBmb3IgdGVuYW50ICR7dGVuYW50SWR9OiAkJHt0b3RhbFNwZW50VXNkfSA+PSAkJHtoYXJkQ2FwVXNkfWAsXG4gICAgICApO1xuICAgIH0gZWxzZSBpZiAoYXRTb2Z0Q2FwKSB7XG4gICAgICB0aGlzLmxvZ2dlci53YXJuKFxuICAgICAgICBgU29mdCBzcGVuZGluZyBjYXAgd2FybmluZyBmb3IgdGVuYW50ICR7dGVuYW50SWR9OiAkJHt0b3RhbFNwZW50VXNkfSA+PSAkJHtzb2Z0Q2FwVXNkfWAsXG4gICAgICApO1xuICAgIH1cblxuICAgIHJldHVybiB7XG4gICAgICB0ZW5hbnRJZCxcbiAgICAgIHRvdGFsU3BlbnRVc2QsXG4gICAgICBzb2Z0Q2FwVXNkLFxuICAgICAgaGFyZENhcFVzZCxcbiAgICAgIGF0U29mdENhcCxcbiAgICAgIGF0SGFyZENhcCxcbiAgICAgIGJsb2NrZWQ6IGF0SGFyZENhcCxcbiAgICB9O1xuICB9XG5cbiAgYXN5bmMgc2V0U29mdENhcCh0ZW5hbnRJZDogc3RyaW5nLCBhbW91bnRVc2Q6IG51bWJlcik6IFByb21pc2U8dm9pZD4ge1xuICAgIGF3YWl0IHRoaXMudXBzZXJ0TGltaXQodGVuYW50SWQsICdzcGVuZGluZ19zb2Z0X2NhcF91c2QnLCBhbW91bnRVc2QpO1xuICB9XG5cbiAgYXN5bmMgc2V0SGFyZENhcCh0ZW5hbnRJZDogc3RyaW5nLCBhbW91bnRVc2Q6IG51bWJlcik6IFByb21pc2U8dm9pZD4ge1xuICAgIGF3YWl0IHRoaXMudXBzZXJ0TGltaXQodGVuYW50SWQsICdzcGVuZGluZ19oYXJkX2NhcF91c2QnLCBhbW91bnRVc2QpO1xuICB9XG5cbiAgcHJpdmF0ZSBhc3luYyB1cHNlcnRMaW1pdChcbiAgICB0ZW5hbnRJZDogc3RyaW5nLFxuICAgIGtleTogc3RyaW5nLFxuICAgIHZhbHVlOiBudW1iZXIsXG4gICk6IFByb21pc2U8dm9pZD4ge1xuICAgIGNvbnN0IGN1cnJlbnQgPSBhd2FpdCB0aGlzLnByaXNtYS50ZW5hbnRMaW1pdC5maW5kVW5pcXVlKHtcbiAgICAgIHdoZXJlOiB7IHRlbmFudElkIH0sXG4gICAgfSk7XG4gICAgY29uc3QgbGltaXRzID0gKGN1cnJlbnQ/LmxpbWl0cyBhcyBSZWNvcmQ8c3RyaW5nLCBudW1iZXI+KSA/PyB7fTtcbiAgICBsaW1pdHNba2V5XSA9IHZhbHVlO1xuICAgIGF3YWl0IHRoaXMucHJpc21hLnRlbmFudExpbWl0LnVwc2VydCh7XG4gICAgICB3aGVyZTogeyB0ZW5hbnRJZCB9LFxuICAgICAgY3JlYXRlOiB7IHRlbmFudElkLCBsaW1pdHMgfSxcbiAgICAgIHVwZGF0ZTogeyBsaW1pdHMgfSxcbiAgICB9KTtcbiAgfVxufVxuIl0sInZlcnNpb24iOjN9

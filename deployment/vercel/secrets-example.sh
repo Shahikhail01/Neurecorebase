@@ -1,0 +1,55 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════════════════
+# GitHub Secrets Setup Script
+# ═══════════════════════════════════════════════════════════════════════════
+# Sets up required GitHub secrets for CI/CD pipelines.
+# Run this script to see required secrets.
+#
+# Usage:
+#   ./secrets-check.sh
+
+echo "=========================================="
+echo "Required GitHub Secrets for NeureCore"
+echo "=========================================="
+echo ""
+echo "Add these secrets in GitHub > Settings > Secrets > Actions:"
+echo ""
+echo "VERCEL_TOKEN"
+echo "  Description: Vercel Personal Access Token"
+echo "  Get from: https://vercel.com/account/tokens"
+echo ""
+echo "VERCEL_ORG_ID"
+echo "  Description: Vercel Organization ID"
+echo "  Get from: Vercel Dashboard > Settings > General"
+echo ""
+echo "VERCEL_PROJECT_ID"
+echo "  Description: Vercel Project ID"
+echo "  Get from: Vercel Dashboard > Project > Settings"
+echo ""
+echo "SLACK_WEBHOOK_URL"
+echo "  Description: Slack Webhook for notifications"
+echo "  Get from: Slack > Apps > Incoming Webhooks"
+echo ""
+echo "SNYK_TOKEN"
+echo "  Description: Snyk API Token for security scanning"
+echo "  Get from: https://app.snyk.io/account"
+echo ""
+echo "STAGING_DATABASE_URL"
+echo "  Description: PostgreSQL connection string for staging"
+echo "  Format: postgresql://user:pass@host:5432/db"
+echo ""
+echo "PRODUCTION_DATABASE_URL"
+echo "  Description: PostgreSQL connection string for production"
+echo "  Format: postgresql://user:pass@host:5432/db"
+echo ""
+echo "=========================================="
+echo "Optional Secrets"
+echo "=========================================="
+echo ""
+echo "DATADOG_API_KEY"
+echo "  Description: Datadog API key for monitoring"
+echo ""
+echo "PAGERDUTY_KEY"
+echo "  Description: PagerDuty integration key"
+echo ""
+echo "=========================================="
