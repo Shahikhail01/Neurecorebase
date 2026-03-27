@@ -92,7 +92,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     };
 
     // Call backend API
-    const result = await apiRequest<User>('/api/v1/users', {
+    const result = await apiRequest<User>('/users', {
       method: 'POST',
       body: createInput,
       headers: { Authorization: `Bearer ${await getAuthToken(request)}` },

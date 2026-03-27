@@ -47,7 +47,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       return badRequest('Missing required fields: name, type, tenantId');
     }
 
-    const result = await apiRequest<Connector>('/api/v1/connectors', {
+    const result = await apiRequest<Connector>('/connectors', {
       method: 'POST',
       body: { name, type, tenantId, config },
       headers: { Authorization: `Bearer ${await getAuthToken(request)}` },

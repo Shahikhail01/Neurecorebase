@@ -12,7 +12,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   try {
     await authenticate(request);
 
-    const result = await apiRequest<{ data: unknown }>('/api/v1/memory', {
+    const result = await apiRequest<{ data: unknown }>('/memory', {
       headers: { Authorization: `Bearer ${await getAuthToken(request)}` },
     });
 

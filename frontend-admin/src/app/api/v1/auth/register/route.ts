@@ -47,7 +47,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     };
 
     // Call backend API (or use embedded logic after migration)
-    const result = await apiRequest<AuthResult>('/api/v1/auth/register', {
+    const result = await apiRequest<AuthResult>('/auth/register', {
       method: 'POST',
       body: registerInput,
       requiresAuth: false,

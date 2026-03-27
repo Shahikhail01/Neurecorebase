@@ -27,11 +27,14 @@ async function bootstrap() {
   const adminFrontendUrl = config.get<string>('ADMIN_FRONTEND_URL');
 
   // Dev defaults in this repo: admin=3001, tenant=3002 (support localhost and 127.0.0.1)
+  // Production domains for Vercel frontends
   const defaultOrigins = [
     'http://localhost:3001',
     'http://localhost:3002',
     'http://127.0.0.1:3001',
     'http://127.0.0.1:3002',
+    'https://hq.neurecore.com',
+    'https://cc.neurecore.com',
   ];
   const origins = [
     tenantFrontendUrl,
@@ -68,7 +71,7 @@ async function bootstrap() {
 
   // Add a lightweight root handler for `/api` so the base path returns useful info
   try {
-    const adapter = app.getHttpAdapter().getInstance() as any;
+    const adapter = app.getHttpAdapter().getInstance();
     if (adapter && typeof adapter.get === 'function') {
       adapter.get('/api', (_req: any, res: any) => {
         res.json({

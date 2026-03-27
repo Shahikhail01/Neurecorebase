@@ -53,7 +53,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const input: CreateAgentInput = { name, description, tenantId, departmentId, templateId };
 
-    const result = await apiRequest<Agent>('/api/v1/agents', {
+    const result = await apiRequest<Agent>('/agents', {
       method: 'POST',
       body: input,
       headers: { Authorization: `Bearer ${await getAuthToken(request)}` },

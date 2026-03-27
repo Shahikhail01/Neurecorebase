@@ -1,30 +1,30 @@
 # Progress Tracking — NeureCore Gold Phase 1
 
-**Last Updated**: March 26, 2026
+**Last Updated**: March 27, 2026
 **Current Phase**: Phase 1 Foundation
-**Overall Status**: 🟢 Phase 1 ~99% Complete - DNS Configured, Ready for Deployment
+**Overall Status**: 🟢 Phase 1 ~99% Complete - CORS Fixed, Frontend-Backend Communication Verified
 
 ---
 
 ## High-Level Status Summary
 
-| Component                  | Status       | % Complete | Notes                                     |
-| -------------------------- | ------------ | :--------: | ----------------------------------------- |
-| **Backend (Contabo)**      | 🟢 Running   |    100%    | Running on Contabo VPS, LiteSpeed proxy   |
-| **Admin Portal (Vercel)**  | 🟢 DNS Ready |    98%     | CNAME configured → cname.vercel-dns.com   |
-| **Tenant Portal (Vercel)** | 🟢 DNS Ready |    98%     | CNAME configured → cname.vercel-dns.com   |
-| **Wildcard Subdomain**     | 🟢 DNS Ready |    100%    | \*.neurecore.com → Vercel (Phase 3+ SaaS) |
-| **Database (Neon)**        | 🟢 Cloud     |    100%    | Cloud PostgreSQL - connected via Contabo  |
-| **Redis (Contabo)**        | 🟢 Local     |    100%    | Using local Redis on Contabo              |
-| **CORS Configuration**     | 🟢 Updated   |    100%    | Updated to hq/cc.neurecore.com + wildcard |
-| **Auth Module**            | 🟢 Complete  |    100%    | Full auth with token rotation             |
-| **Tenants Module**         | 🟢 Complete  |    100%    | Full CRUD with role guards                |
-| **Users Module**           | 🟢 Complete  |    100%    | Full CRUD with tenantId filtering         |
-| **Health Module**          | 🟢 Complete  |    100%    | /health routes (public)                   |
-| **Events (WebSocket)**     | 🟡 Complete  |    90%     | JWT auth, tenant namespacing              |
-| **Guard & Filter Layer**   | 🟢 Complete  |    100%    | Global guards, filters, interceptors      |
-| **Testing**                | 🔴 To Do     |    10%     | Integration testing needed                |
-| **Documentation**          | 🟢 Complete  |    100%    | This memory-bank ✅                       |
+| Component                  | Status       | % Complete | Notes                                                   |
+| -------------------------- | ------------ | :--------: | ------------------------------------------------------- |
+| **Backend (Contabo)**      | 🟢 Running   |    100%    | Running on Contabo VPS, Nginx proxy to port 3003        |
+| **Admin Portal (Vercel)**  | 🟢 DNS Ready |    98%     | CNAME configured → cname.vercel-dns.com                 |
+| **Tenant Portal (Vercel)** | 🟢 DNS Ready |    98%     | CNAME configured → cname.vercel-dns.com                 |
+| **Wildcard Subdomain**     | 🟢 DNS Ready |    100%    | \*.neurecore.com → Vercel (Phase 3+ SaaS)               |
+| **Database (Neon)**        | 🟢 Cloud     |    100%    | Cloud PostgreSQL - connected via Contabo                |
+| **Redis (Contabo)**        | 🟢 Local     |    100%    | Using local Redis on Contabo                            |
+| **CORS Configuration**     | 🟢 Fixed     |    100%    | ✅ Verified: hq.neurecore.com, cc.neurecore.com allowed |
+| **Auth Module**            | 🟢 Complete  |    100%    | Full auth with token rotation                           |
+| **Tenants Module**         | 🟢 Complete  |    100%    | Full CRUD with role guards                              |
+| **Users Module**           | 🟢 Complete  |    100%    | Full CRUD with tenantId filtering                       |
+| **Health Module**          | 🟢 Complete  |    100%    | /health routes (public)                                 |
+| **Events (WebSocket)**     | 🟡 Complete  |    90%     | JWT auth, tenant namespacing                            |
+| **Guard & Filter Layer**   | 🟢 Complete  |    100%    | Global guards, filters, interceptors                    |
+| **Testing**                | 🔴 To Do     |    10%     | Integration testing needed                              |
+| **Documentation**          | 🟢 Complete  |    100%    | This memory-bank ✅                                     |
 
 ---
 
@@ -33,15 +33,20 @@
 | Component         | Domain              | Platform | Status     | Access                          |
 | ----------------- | ------------------- | -------- | ---------- | ------------------------------- |
 | **Backend API**   | brain.neurecore.com | Contabo  | ✅ Running | https://brain.neurecore.com/api |
-| **Admin Portal**  | cc.neurecore.com    | Vercel   | ⚠️ DNS     | https://cc.neurecore.com        |
-| **Tenant Portal** | hq.neurecore.com    | Vercel   | ⚠️ DNS     | https://hq.neurecore.com        |
+| **Admin Portal**  | cc.neurecore.com    | Vercel   | ✅ DNS OK  | https://cc.neurecore.com        |
+| **Tenant Portal** | hq.neurecore.com    | Vercel   | ✅ DNS OK  | https://hq.neurecore.com        |
 
-**Contabo Server**: `109.123.248.253` (LiteSpeed + PM2)
+**Contabo Server**: `109.123.248.253` (Nginx + LiteSpeed + PM2)
 
 **Vercel Projects**:
 
-- `frontend-admin` → will serve cc.neurecore.com
-- `frontend-tenant` → will serve hq.neurecore.com
+- `frontend-admin` → serves cc.neurecore.com
+- `frontend-tenant` → serves hq.neurecore.com
+
+**CORS Verified** (March 27, 2026):
+
+- ✅ `https://hq.neurecore.com` → `https://brain.neurecore.com/api` (CORS OK)
+- ✅ `https://cc.neurecore.com` → `https://brain.neurecore.com/api` (CORS OK)
 
 ---
 
@@ -211,7 +216,7 @@ docker compose ps
 
 ---
 
-### 9. Tenant Portal Frontend (85%)
+### 9. Tenant Portal Frontend (95%)
 
 **Completed**:
 
@@ -240,6 +245,8 @@ docker compose ps
   - SocketManager
   - EventBus
   - LocalStorageManager
+- ✅ API routes connect to live backend (verified with Contabo backend)
+- ✅ Full login → dashboard flow working (login loop bug fixed)
 
 **Features**:
 
@@ -257,14 +264,13 @@ docker compose ps
 
 **Remaining**:
 
-- [ ] Verify API routes connect to live backend
-- [ ] Test full login → dashboard → logout flow
-- [ ] WebSocket event handling
+- [ ] WebSocket event handling (connectors, api-keys endpoints 500/404 on backend)
 - [ ] Role-based access control
+- [ ] Logout flow testing
 
 ---
 
-### 10. Admin Portal Frontend (70%)
+### 10. Admin Portal Frontend (90%)
 
 **Completed**:
 
@@ -314,15 +320,16 @@ docker compose ps
   - api/database.ts (API proxy utilities)
   - api/response.ts (response formatters)
   - errors.ts, security.ts
+- ✅ API routes connect to live backend (verified with Contabo backend)
+- ✅ Login → dashboard flow working
 
 **Remaining**:
 
-- [ ] Verify all API routes connect to live backend
-- [ ] Test full login → dashboard → logout flow
+- [ ] Test logout flow
 - [ ] WebSocket event handling (user online/offline)
-- [ ] Test role-based access control
+- [ ] Role-based access control testing
 
-**Estimated effort**: 1-2 days (testing/integration)
+**Estimated effort**: 0.5-1 day (testing/integration)
 
 ---
 

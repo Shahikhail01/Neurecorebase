@@ -23,7 +23,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     }
 
     // Call backend API to get current user
-    const user = await apiRequest<ValidatedUser>('/api/v1/auth/me', {
+    const user = await apiRequest<ValidatedUser>('/auth/me', {
       headers: { Authorization: `Bearer ${token}` },
     });
 
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     
     if (token) {
       // Call backend API to invalidate token
-      await apiRequest('/api/v1/auth/logout', {
+      await apiRequest('/auth/logout', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });

@@ -1,23 +1,32 @@
-'use client';
+"use client";
 
-import { useState, FormEvent, useEffect } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { authService } from '@/services/auth.service';
-import { useAuthStore } from '@/stores/authStore';
+import { useState, FormEvent, useEffect } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { authService } from "@/services/auth.service";
+import { useAuthStore } from "@/stores/authStore";
+import { tokenManager } from "@/core/infrastructure/auth/TokenManager";
 
 export default function LoginPage() {
   const router = useRouter();
   const setUser = useAuthStore((s) => s.setUser);
   const user = useAuthStore((s) => s.user);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState("");
 
-  // Redirect to dashboard if already authenticated
+  // Redirect to dashboard if already authenticated with valid tokens
+  // Must check BOTH user exists AND token is valid (3 parts) to prevent
+  // redirecting with stale tokens that AppInitializer will clear
   useEffect(() => {
-    if (hasHydrated && user) router.replace('/dashboard');
+    if (hasHydrated && user) {
+      const token = tokenManager.getAccessToken();
+      // Only redirect if token is present and valid format
+      if (token && token.split(".").length === 3) {
+        router.replace("/dashboard");
+      }
+    }
   }, [hasHydrated, user, router]);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -28,10 +37,11 @@ export default function LoginPage() {
     try {
       const result = await authService.login({ email, password });
       setUser(result.user);
-      router.push('/dashboard');
+      router.push("/dashboard");
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: { message?: string } } } })
-        ?.response?.data?.error?.message ?? 'Login failed';
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })
+          ?.response?.data?.error?.message ?? "Login failed";
       setError(msg);
     } finally {
       setLoading(false);
@@ -43,7 +53,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-gray-200">
         <h1 className="mb-6 text-2xl font-bold">Sign In</h1>
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">{error}</div>
+          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            {error}
+          </div>
         )}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <label className="flex flex-col gap-1 text-sm font-medium">
@@ -71,11 +83,11 @@ export default function LoginPage() {
             disabled={loading}
             className="mt-2 rounded-lg bg-blue-600 px-4 py-2.5 font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition"
           >
-            {loading ? 'Signing in…' : 'Sign In'}
+            {loading ? "Signing in…" : "Sign In"}
           </button>
         </form>
         <p className="mt-4 text-center text-sm text-gray-500">
-          No account?{' '}
+          No account?{" "}
           <Link href="/register" className="text-blue-600 hover:underline">
             Register
           </Link>

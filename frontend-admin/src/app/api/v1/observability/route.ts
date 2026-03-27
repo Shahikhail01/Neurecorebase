@@ -15,7 +15,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       return unauthorized('Admin access required');
     }
 
-    const result = await apiRequest<{ data: unknown }>('/api/v1/observability', {
+    const result = await apiRequest<{ data: unknown }>('/observability', {
       headers: { Authorization: `Bearer ${await getAuthToken(request)}` },
     });
 

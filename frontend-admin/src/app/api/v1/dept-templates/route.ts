@@ -14,7 +14,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   try {
     await authenticate(request);
 
-    const result = await apiRequest<{ data: DepartmentTemplate[] }>('/api/v1/dept-templates', {
+    const result = await apiRequest<{ data: DepartmentTemplate[] }>('/dept-templates', {
       headers: { Authorization: `Bearer ${await getAuthToken(request)}` },
     });
 
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       return badRequest('Missing required fields: name, category');
     }
 
-    const result = await apiRequest<DepartmentTemplate>('/api/v1/dept-templates', {
+    const result = await apiRequest<DepartmentTemplate>('/dept-templates', {
       method: 'POST',
       body: { name, description, category, config },
       headers: { Authorization: `Bearer ${await getAuthToken(request)}` },

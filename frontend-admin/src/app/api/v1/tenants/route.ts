@@ -49,7 +49,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const input: CreateTenantInput = { name, slug, plan };
 
-    const result = await apiRequest<Tenant>('/api/v1/tenants', {
+    const result = await apiRequest<Tenant>('/tenants', {
       method: 'POST',
       body: input,
       headers: { Authorization: `Bearer ${await getAuthToken(request)}` },

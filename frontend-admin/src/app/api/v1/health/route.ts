@@ -11,7 +11,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
   try {
     // Forward to backend health check
     const result = await apiRequest<{ status: string; timestamp: string }>(
-      '/api/v1/health',
+      '/health',
       { requiresAuth: false }
     );
 

@@ -2,24 +2,25 @@
  * Database/Service Utilities
  * Single Responsibility: Handle external API calls to backend
  * Following Interface Segregation - minimal contracts
- * 
+ *
  * This abstraction allows gradual migration from external NestJS backend
  * to embedded Next.js API routes
  */
 
-import type { NextRequest } from 'next/server';
+import type { NextRequest } from "next/server";
 
-// Base URL for API - configurable for different environments
-const API_BASE_URL = process.env.API_BASE_URL || 
-  (process.env.NODE_ENV === 'production' 
-    ? 'https://api.neurecore.com' 
-    : 'http://localhost:3000');
+// Base URL for API - use NEXT_PUBLIC_API_URL for browser-accessible API
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://brain.neurecore.com/api/v1"
+    : "http://localhost:3000/api/v1");
 
 /**
  * Interface for API request options
  */
 export interface ApiRequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   headers?: Record<string, string>;
   requiresAuth?: boolean;
@@ -31,20 +32,15 @@ export interface ApiRequestOptions {
  */
 export async function apiRequest<T>(
   endpoint: string,
-  options: ApiRequestOptions = {}
+  options: ApiRequestOptions = {},
 ): Promise<T> {
-  const {
-    method = 'GET',
-    body,
-    headers = {},
-    requiresAuth = true,
-  } = options;
+  const { method = "GET", body, headers = {}, requiresAuth = true } = options;
 
   // Build fetch options
   const fetchOptions: RequestInit = {
     method,
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...headers,
     },
   };
@@ -57,7 +53,9 @@ export async function apiRequest<T>(
   const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchOptions);
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
+    const error = await response
+      .json()
+      .catch(() => ({ message: "Request failed" }));
     throw new Error(error.message || `API request failed: ${response.status}`);
   }
 
@@ -68,9 +66,11 @@ export async function apiRequest<T>(
  * Get authentication token from request
  * Used for making authenticated API calls
  */
-export async function getAuthToken(request: NextRequest): Promise<string | null> {
+export async function getAuthToken(
+  request: NextRequest,
+): Promise<string | null> {
   try {
-    const cookieHeader = request.headers.get('cookie') || '';
+    const cookieHeader = request.headers.get("cookie") || "";
     // Parse auth-token from cookies
     const match = cookieHeader.match(/auth-token=([^;]+)/);
     return match ? match[1] : null;
@@ -87,7 +87,7 @@ export async function getCurrentUser(request: NextRequest) {
   if (!token) return null;
 
   try {
-    const response = await apiRequest<{ user: unknown }>('/api/v1/auth/me', {
+    const response = await apiRequest<{ user: unknown }>("/api/v1/auth/me", {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.user;
@@ -101,20 +101,20 @@ export async function getCurrentUser(request: NextRequest) {
  * (Used when backend logic is embedded)
  */
 export const DbModels = {
-  USER: 'user',
-  TENANT: 'tenant',
-  AGENT: 'agent',
-  AGENT_TEMPLATE: 'agentTemplate',
-  DEPARTMENT: 'department',
-  DEPARTMENT_TEMPLATE: 'departmentTemplate',
-  SESSION: 'session',
-  AUDIT_LOG: 'auditLog',
-  NOTIFICATION: 'notification',
-  CONNECTOR: 'connector',
-  INVOICE: 'invoice',
-  EXPENSE: 'expense',
-  APPROVAL: 'approval',
-  MEMORY: 'memory',
+  USER: "user",
+  TENANT: "tenant",
+  AGENT: "agent",
+  AGENT_TEMPLATE: "agentTemplate",
+  DEPARTMENT: "department",
+  DEPARTMENT_TEMPLATE: "departmentTemplate",
+  SESSION: "session",
+  AUDIT_LOG: "auditLog",
+  NOTIFICATION: "notification",
+  CONNECTOR: "connector",
+  INVOICE: "invoice",
+  EXPENSE: "expense",
+  APPROVAL: "approval",
+  MEMORY: "memory",
 } as const;
 
-export type DbModel = typeof DbModels[keyof typeof DbModels];
+export type DbModel = (typeof DbModels)[keyof typeof DbModels];

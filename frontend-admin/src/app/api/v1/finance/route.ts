@@ -25,7 +25,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     const query = new URLSearchParams({ type, page: page.toString(), limit: limit.toString() });
     if (tenantId) query.set('tenantId', tenantId);
 
-    const endpoint = type === 'expenses' ? '/api/v1/finance/expenses' : '/api/v1/finance/invoices';
+    const endpoint = type === 'expenses' ? '/finance/expenses' : '/finance/invoices';
     const result = await apiRequest<{ data: Invoice[] | Expense[]; total: number }>(
       `${endpoint}?${query}`,
       { headers: { Authorization: `Bearer ${await getAuthToken(request)}` } }

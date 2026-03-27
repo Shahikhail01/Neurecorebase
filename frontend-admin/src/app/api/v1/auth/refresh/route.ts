@@ -23,7 +23,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     // Call backend API
-    const result = await apiRequest<TokenPair>('/api/v1/auth/refresh', {
+    const result = await apiRequest<TokenPair>('/auth/refresh', {
       method: 'POST',
       body: { refreshToken: body.refreshToken } as RefreshTokenInput,
       requiresAuth: false,

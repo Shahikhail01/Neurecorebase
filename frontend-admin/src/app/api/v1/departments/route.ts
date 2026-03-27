@@ -48,7 +48,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       return badRequest('Missing required fields: name, tenantId');
     }
 
-    const result = await apiRequest<Department>('/api/v1/departments', {
+    const result = await apiRequest<Department>('/departments', {
       method: 'POST',
       body: { name, tenantId, parentId },
       headers: { Authorization: `Bearer ${await getAuthToken(request)}` },

@@ -1,8 +1,99 @@
 # Active Context — Current Focus Areas
 
-**Last Updated**: March 26, 2026 (DNS Configured, CORS Updated)
-**Phase**: Phase 1 Foundation → Infrastructure Migration Complete
-**Current Status**: ✅ DNS Configured, Ready for Deployment
+**Last Updated**: March 27, 2026 (Local Prod Testing Complete)
+**Phase**: Phase 1 Foundation → Vercel Deployment Ready
+**Current Status**: ✅ Both frontends running locally and connecting to Contabo backend
+
+---
+
+## Local Production Testing (March 27, 2026)
+
+### Running Services
+
+| Service       | URL                         | Status |
+| ------------- | --------------------------- | ------ |
+| Backend API   | https://brain.neurecore.com | ✅ 200 |
+| Admin Portal  | http://localhost:3002/admin | ✅ 200 |
+| Tenant Portal | http://localhost:3001       | ✅ 200 |
+
+### Fixes Applied
+
+1. **frontend-admin/src/lib/api/database.ts** - Changed `API_BASE_URL` to use `NEXT_PUBLIC_API_URL` instead of hardcoded fallback
+2. **frontend-admin/src/app/api/v1/** - Fixed double `/api/v1` path issue in all API routes (changed `'/api/v1/auth/login'` → `'/auth/login'`)
+3. **frontend-tenant/src/shared/components/AppInitializer.tsx** - Fixed login loop by validating tokens on hydration. If stale tokens from previous backend environment exist in localStorage, they are now cleared to prevent 401 loop.
+4. **frontend-tenant/src/app/login/page.tsx** - Added token validation check before redirect to dashboard. Now checks BOTH `user` exists AND `tokenManager` has valid JWT (3 parts) before redirecting. Prevents redirect when user is persisted but tokens are stale/invalid.
+
+### Login Loop Fix Details (March 27, 2026)
+
+**Issue**: Login page was auto-submitting/looping without waiting for credential input.
+
+**Root Cause**: Race condition - login page redirected to dashboard when `hasHydrated && user` was true, but AppInitializer's token validation ran asynchronously afterward. If tokens were stale, dashboard got 401 → redirect back to login → infinite loop.
+
+**Fix in `login/page.tsx`**:
+
+```typescript
+// Before (vulnerable to race condition):
+if (hasHydrated && user) router.replace("/dashboard");
+
+// After (checks token validity):
+if (hasHydrated && user) {
+  const token = tokenManager.getAccessToken();
+  if (token && token.split(".").length === 3) {
+    router.replace("/dashboard");
+  }
+}
+```
+
+**Also Fixed**: `unwrapItem()` in `unwrap.ts` was returning `null` for login response because login response `{ user, tokens }` didn't have nested `.data.data` structure. Added fallback to return flat data object directly.
+
+**BUG FOUND AND FIXED: `unwrapItem()` was returning `null` for login response!**
+
+The [`unwrapItem()`](frontend-tenant/src/services/unwrap.ts:27) function was returning `null` for login because:
+
+- Login response: `{ status: "success", data: { user, tokens } }`
+- `data?.data` = `{ user, tokens }`
+- But `data?.data.data` = `undefined` (tokens doesn't have nested `.data`)
+- So the function returned `null` instead of the actual auth result
+
+This caused:
+
+1. Login appeared to succeed but `result?.tokens` was `undefined`
+2. `tokenManager.setTokens()` was never called with valid tokens
+3. Subsequent API calls had no auth token → 401 → redirect to login → loop
+
+**Fix in `unwrap.ts`**: Added fallback to return the flat data object directly:
+
+```javascript
+if (typeof data === "object" && data !== null && !Array.isArray(data))
+  return data;
+```
+
+**Also**: Token validation on `onFinishHydration` to clear stale tokens from previous environments.
+
+### Test Credentials (Contabo Backend)
+
+- Email: `demo@neurecore.ai`
+- Password: `Tenant@123!`
+
+### Environment Files Created
+
+- `frontend-admin/.env.production.local` - Points to brain.neurecore.com
+- `frontend-tenant/.env.production.local` - Points to brain.neurecore.com
+
+### Testing Commands
+
+```bash
+# Start admin portal
+cd frontend-admin && NEXT_PUBLIC_API_URL=https://brain.neurecore.com/api/v1 npm start
+
+# Start tenant portal
+cd frontend-tenant && NEXT_PUBLIC_API_URL=https://brain.neurecore.com/api/v1 npm start
+
+# Verify backend
+curl https://brain.neurecore.com/api/v1/health
+```
+
+---
 
 ---
 
@@ -12,7 +103,7 @@
 
 | Component         | Domain              | Platform | Status     | Notes                        |
 | ----------------- | ------------------- | -------- | ---------- | ---------------------------- |
-| **Backend API**   | brain.neurecore.com | Contabo  | ✅ Running | LiteSpeed proxy → Port 3003  |
+| **Backend API**   | brain.neurecore.com | Contabo  | ✅ Running | Nginx SSL → Port 3003        |
 | **Admin Portal**  | cc.neurecore.com    | Vercel   | ✅ DNS OK  | CNAME → Vercel               |
 | **Tenant Portal** | hq.neurecore.com    | Vercel   | ✅ DNS OK  | CNAME → Vercel               |
 | **Wildcard**      | \*.neurecore.com    | Vercel   | ✅ DNS OK  | For future tenant subdomains |
@@ -26,9 +117,14 @@
 
 - **SSH**: `ssh contabo` (configured in `~/.ssh/config`)
 - **Backend Path**: `/opt/neurecore/backend/`
-- **PM2 Process**: `neurecore-backend` (PID running)
+- **PM2 Process**: `neurecore-backend` (using ecosystem.config.js)
 - **Port**: 3003 (bound to localhost)
-- **Proxy**: LiteSpeed Web Server routes `brain.neurecore.com` → `127.0.0.1:3003`
+- **Proxy**: Nginx routes `brain.neurecore.com` → `127.0.0.1:3003`
+
+**CORS Configuration**:
+
+- Allowed Origins: `https://hq.neurecore.com`, `https://cc.neurecore.com`
+- Configured via PM2 ecosystem.config.js environment variables
 
 **PM2 Management**:
 
@@ -42,8 +138,10 @@ pm2 status neurecore-backend
 # View logs
 pm2 logs neurecore-backend --lines 50
 
-# Restart backend
-pm2 restart neurecore-backend
+# Restart backend (after .env changes)
+cd /opt/neurecore/backend
+pm2 delete neurecore-backend
+pm2 start ecosystem.config.js
 
 # Rebuild (if needed)
 cd /opt/neurecore/backend && npm run build

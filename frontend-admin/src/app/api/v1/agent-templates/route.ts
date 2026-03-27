@@ -48,7 +48,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       return badRequest('Missing required fields: name, category');
     }
 
-    const result = await apiRequest<AgentTemplate>('/api/v1/agent-templates', {
+    const result = await apiRequest<AgentTemplate>('/agent-templates', {
       method: 'POST',
       body: { name, description, category, version, config },
       headers: { Authorization: `Bearer ${await getAuthToken(request)}` },

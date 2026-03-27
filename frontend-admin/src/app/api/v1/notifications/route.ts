@@ -47,7 +47,7 @@ export async function PUT(request: NextRequest): Promise<Response> {
       return badRequest('Provide notificationIds or markAllRead: true');
     }
 
-    const result = await apiRequest<{ updated: number }>('/api/v1/notifications', {
+    const result = await apiRequest<{ updated: number }>('/notifications', {
       method: 'PUT',
       body: { userId: user.id, notificationIds, markAllRead },
       headers: { Authorization: `Bearer ${await getAuthToken(request)}` },
