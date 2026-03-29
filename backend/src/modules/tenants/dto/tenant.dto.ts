@@ -2,17 +2,19 @@ import {
   IsString,
   IsOptional,
   IsEnum,
+  IsUUID,
   MinLength,
   MaxLength,
   Matches,
+  MaxLength as MaxLengthDecorator,
 } from 'class-validator';
-import { TenantPlan, TenantStatus } from '@prisma/client';
+import { TenantStatus } from '@prisma/client';
 
 export class CreateTenantDto {
   @IsString()
   @MinLength(2)
   @MaxLength(64)
-  name: string;
+  name!: string;
 
   @IsString()
   @MinLength(2)
@@ -20,11 +22,26 @@ export class CreateTenantDto {
   @Matches(/^[a-z0-9-]+$/, {
     message: 'Slug must be lowercase alphanumeric with hyphens',
   })
-  slug: string;
+  slug!: string;
 
   @IsOptional()
-  @IsEnum(TenantPlan)
-  plan?: TenantPlan;
+  @IsUUID()
+  tierId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  logoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  website?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  industry?: string;
 }
 
 export class UpdateTenantDto {
@@ -35,10 +52,26 @@ export class UpdateTenantDto {
   name?: string;
 
   @IsOptional()
-  @IsEnum(TenantPlan)
-  plan?: TenantPlan;
-
-  @IsOptional()
   @IsEnum(TenantStatus)
   status?: TenantStatus;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  logoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  website?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  industry?: string;
+}
+
+export class ChangeTierDto {
+  @IsUUID()
+  tierId!: string;
 }

@@ -39,6 +39,7 @@ import { GoalsModule } from './modules/goals/goals.module';
 import { SecurityModule } from './modules/security/security.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { TiersModule } from './modules/tiers/tiers.module';
 import { HealthModule } from './modules/health/health.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
@@ -93,6 +94,9 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
 
     // Settings — Admin configuration
     SettingsModule,
+
+    // Tier-based Agent Pool — Platform tiers & automatic provisioning
+    TiersModule,
 
     // Health monitoring
     HealthModule,

@@ -30,6 +30,8 @@ enum TenantStatus {
   CANCELLED
 }
 
+// DEPRECATED: TenantPlan enum - use Tier model instead
+// Kept for migration compatibility only
 enum TenantPlan {
   STARTER
   GROWTH
@@ -173,20 +175,96 @@ enum BillingEventType {
   TAX_APPLIED
 }
 
+// ─── Tier (Phase 6: Unified Tier-Agent Architecture) ───────────────────────
+
+model Tier {
+  id            String   @id @default(uuid())
+  name          String   // "Free", "Starter", "Pro", "Enterprise"
+  slug          String   @unique // "free", "starter", "pro", "enterprise"
+  description   String?
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  sortOrder     Int      @default(0)
+
+  // Pricing
+  monthlyPrice  Decimal  @db.Decimal(10, 2) @default(0)
+  yearlyPrice   Decimal  @db.Decimal(10, 2) @default(0)
+  currency      String   @default("USD")
+
+  // Limits
+  maxUsers      Int      @default(2)
+  maxAgents     Int      @default(3)
+  maxStorageGB  Int      @default(1)
+  maxApiCalls   Int      @default(1000)
+  maxConversationMessages Int @default(500)
+  maxFileSizeMB Int      @default(10)
+
+  // Feature flags
+  allowCustomBranding  Boolean @default(false)
+  allowApiAccess       Boolean @default(false)
+  allowSso             Boolean @default(false)
+  allowAuditExport     Boolean @default(false)
+
+  // Relations
+  tierAgentPools TierAgentPool[]
+  tenants       Tenant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tiers")
+}
+
+// ─── TierAgentPool (Phase 6: Agent allocation per tier) ─────────────────────
+
+model TierAgentPool {
+  id         String   @id @default(uuid())
+  tierId     String
+  tier       Tier     @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  templateId String
+  template   AgentTemplate @relation(fields: [templateId], references: [id])
+
+  // Slot position in tier (1 = first available, 2 = second, etc.)
+  slot       Int      @default(1)
+
+  // Whether tenant MUST have this agent (true) or optional (false)
+  isRequired Boolean  @default(false)
+
+  // Tier-specific default config overrides
+  defaultBudgetPerDay Decimal? @db.Decimal(10, 4)
+  defaultModel       String?
+  isDefaultSelected   Boolean  @default(true) // pre-selected on tenant creation
+
+  createdAt DateTime @default(now())
+
+  // Phase 6: Agents created from this pool entry
+  agents Agent[]
+
+  @@unique([tierId, templateId])
+  @@index([tierId])
+  @@map("tier_agent_pools")
+}
+
 // ─── Tenant ────────────────────────────────────────────────────────────────
 
 model Tenant {
   id         String       @id @default(uuid())
   name       String
   slug       String       @unique
-  plan       TenantPlan   @default(STARTER)
   status     TenantStatus @default(ACTIVE)
-  agentLimit Int          @default(5)
   logoUrl    String?
   website    String?
   industry   String?
   settings   Json         @default("{}")
   metadata   Json         @default("{}")
+
+  // Tier relation (Phase 6: replaces plan + agentLimit)
+  tierId String
+  tier   Tier   @relation(fields: [tierId], references: [id])
+
+  // DEPRECATED: plan and agentLimit removed - use tier instead
+  // plan       TenantPlan   (use tier.slug)
+  // agentLimit Int          (use tier.maxAgents)
 
   // Relations
   users            User[]
@@ -367,6 +445,9 @@ model AgentTemplate {
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  // Phase 6: Link to tier agent pools
+  tierAgentPools TierAgentPool[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -399,8 +480,17 @@ model Agent {
   createdById String?
   createdBy   User?   @relation(fields: [createdById], references: [id])
 
-  templateId      String? // optionally spawned from a template
-  templateVersion String? // snapshot of template version at spawn time
+  // Phase 6: Agents are selected from tier pool, not created freely
+  tierAgentPoolId String?
+  tierAgentPool   TierAgentPool? @relation(fields: [tierAgentPoolId], references: [id])
+
+  // Template info stored for reference (template may change, agent keeps snapshot)
+  templateId      String?
+  templateVersion String?
+
+  // Whether this agent slot is active for this tenant
+  // Tenant can toggle selected agents within their tier allocation
+  isSelected      Boolean @default(true)
 
   departmentId String?
   department   Department? @relation("DepartmentAgents", fields: [departmentId], references: [id])
@@ -428,6 +518,7 @@ model Agent {
   @@index([status])
   @@index([type])
   @@index([departmentId])
+  @@index([tierAgentPoolId])
   @@map("agents")
 }
 

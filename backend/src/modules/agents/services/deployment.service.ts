@@ -60,15 +60,15 @@ export class DeploymentService {
       where: { id: dto.tenantId },
       select: {
         id: true,
-        agentLimit: true,
+        tier: { select: { maxAgents: true } },
         _count: { select: { agents: true } },
       },
     });
     if (!tenant)
       throw new NotFoundException(`Tenant ${dto.tenantId} not found`);
-    if (tenant._count.agents >= tenant.agentLimit) {
+    if (tenant._count.agents >= tenant.tier.maxAgents) {
       throw new BadRequestException(
-        `Tenant has reached its agent limit of ${tenant.agentLimit}. Increase the limit before deploying more agents.`,
+        `Tenant has reached its agent limit of ${tenant.tier.maxAgents}. Upgrade tier before deploying more agents.`,
       );
     }
 
@@ -122,16 +122,16 @@ export class DeploymentService {
       where: { id: tenantId },
       select: {
         id: true,
-        agentLimit: true,
+        tier: { select: { maxAgents: true } },
         _count: { select: { agents: true } },
       },
     });
     if (!tenant) throw new NotFoundException(`Tenant ${tenantId} not found`);
 
-    const slotsAvailable = tenant.agentLimit - tenant._count.agents;
+    const slotsAvailable = tenant.tier.maxAgents - tenant._count.agents;
     if (dto.agents.length > slotsAvailable) {
       throw new BadRequestException(
-        `Deploying ${dto.agents.length} agents would exceed the tenant agent limit. Available slots: ${slotsAvailable}.`,
+        `Deploying ${dto.agents.length} agents would exceed the tier limit of ${tenant.tier.maxAgents}. Available slots: ${slotsAvailable}.`,
       );
     }
 
@@ -204,7 +204,7 @@ export class DeploymentService {
       where: { id: tenantId },
       select: {
         id: true,
-        agentLimit: true,
+        tier: { select: { maxAgents: true } },
         _count: { select: { agents: true } },
       },
     });
@@ -281,7 +281,7 @@ export class DeploymentService {
         if (names.length > 0) return sum + names.length;
         return item.headAgentType ? sum + 1 : sum;
       }, 0);
-      const slotsAvailable = tenant.agentLimit - tenant._count.agents;
+      const slotsAvailable = tenant.tier.maxAgents - tenant._count.agents;
       if (desiredAgentCount > slotsAvailable) {
         throw new BadRequestException(
           `Deploying ${desiredAgentCount} agents would exceed the tenant agent limit. Available slots: ${slotsAvailable}.`,

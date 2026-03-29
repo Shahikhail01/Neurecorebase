@@ -2156,3 +2156,180 @@ pm2 restart neurecore-backend
 - Backend (PM2): ~500 MB
 - Total: ~1.2-1.6 GB for containers
 - Remaining for other services: ~10+ GB
+
+---
+
+# Phase 6: Unified Tier-Agent System (March 29, 2026)
+
+## Overview
+
+Implemented a unified tier system where:
+
+- Tenants are assigned to a **Tier** (not old TenantPlan enum)
+- Each tier has a **TierAgentPool** defining available agents
+- On tenant creation, agents are **automatically provisioned** from the tier pool
+- Tenants can **SELECT** agents from their tier pool (not CREATE)
+- Agent count remains fixed per tier allocation
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Tier Model                           │
+│  id, name, slug, pricing, limits, features, sortOrder     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ 1:N
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    TierAgentPool                            │
+│  id, tierId, templateId, slot, isRequired, isDefaultSelected│
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ N:1
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   AgentTemplate                             │
+│  (existing template library)                                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Files Created/Modified
+
+### Created
+
+- `backend/src/modules/tiers/interfaces/tier.interface.ts` - ITierService interface
+- `backend/src/modules/tiers/dto/tier.dto.ts` - Tier DTOs
+- `backend/src/modules/tiers/tiers.service.ts` - CRUD service
+- `backend/src/modules/tiers/tiers.controller.ts` - REST endpoints
+- `backend/src/modules/tiers/services/tier-provisioning.service.ts` - Auto-deployment
+- `backend/src/modules/tiers/services/agent-pool.service.ts` - Pool management
+- `backend/src/modules/tiers/agent-pool.controller.ts` - Pool endpoints
+- `backend/prisma/migrations/tier-agent-pool-backfill.sql` - Data migration
+
+### Modified
+
+- `backend/prisma/schema.prisma` - Added Tier, TierAgentPool models
+- `backend/src/modules/tenants/tenants.service.ts` - Integrated provisioning
+- `backend/src/modules/tenants/tenants.controller.ts` - Added changeTier endpoint
+- `backend/src/modules/tenants/dto/tenant.dto.ts` - Added ChangeTierDto
+- `backend/src/app.module.ts` - Registered TiersModule
+
+## Prisma Schema Changes
+
+```prisma
+model Tier {
+  id            String   @id @default(uuid())
+  name          String   // "Starter", "Growth", "Pro", "Enterprise"
+  slug          String   @unique
+  maxAgents     Int      @default(3)
+  monthlyPrice  Decimal  @db.Decimal(10, 2)
+  // ... limits & features
+  tierAgentPools TierAgentPool[]
+  tenants       Tenant[]
+}
+
+model TierAgentPool {
+  id         String   @id @default(uuid())
+  tierId     String
+  tier       Tier     @relation(fields: [tierId], references: [id])
+  templateId String
+  template   AgentTemplate @relation(...)
+  slot       Int      @default(1)
+  isRequired Boolean  @default(false)
+  isDefaultSelected Boolean @default(true)
+}
+
+model Tenant {
+  // ... existing fields
+  tierId String  // NEW: replaces old plan + agentLimit
+  tier   Tier    @relation(fields: [tierId], references: [id])
+}
+
+model Agent {
+  // ... existing fields
+  tierAgentPoolId String?  // NEW: link to tier pool
+  isSelected      Boolean @default(false)  // NEW: selected by tenant
+}
+```
+
+## TierProvisioningService Methods
+
+| Method                                         | Purpose                                          |
+| ---------------------------------------------- | ------------------------------------------------ |
+| `provisionAgents(tenantId)`                    | Creates agents from tier pool on tenant creation |
+| `selectAgent(tenantId, poolId)`                | Tenant selects an agent from pool                |
+| `deselectAgent(tenantId, agentId)`             | Tenant removes an agent                          |
+| `replaceAgent(tenantId, currentId, newPoolId)` | Swap agents within tier                          |
+| `getAvailableAgents(tenantId)`                 | List available pool agents                       |
+| `validateAgentCount(tenantId)`                 | Enforce tier limits                              |
+
+## SOLID Compliance
+
+- **SRP**: Separate services for tier CRUD (`TiersService`), provisioning (`TierProvisioningService`), pool management (`AgentPoolService`)
+- **DIP**: `ITierService` interface decouples consumers from implementation
+- **OCP**: New tiers/pool entries extend without modifying existing code
+
+## Tenant Isolation
+
+All tier queries include `tenantId` filter via `requestContext.getTenantId()`:
+
+```typescript
+this.prisma.agent.findMany({ where: { tenantId, ... } })
+```
+
+## Migration Instructions
+
+```bash
+# 1. Run Prisma migration
+cd backend
+npx prisma migrate dev --name unified_tier_system
+
+# 2. Execute data migration
+psql $DATABASE_URL -f prisma/migrations/tier-agent-pool-backfill.sql
+
+# 3. Generate client
+npx prisma generate
+
+# 4. Restart backend
+pm2 restart neurecore-backend
+```
+
+## Post-Migration Tasks
+
+1. ✅ Migration script created
+2. ✅ Prisma client generated (`npx prisma generate`)
+3. ✅ TypeScript errors fixed (all compilation errors resolved)
+4. ⏳ Run `npx prisma migrate dev` on Contabo (requires SSH)
+5. ⏳ Execute backfill SQL on production
+6. ⏳ Update frontend to use tierId instead of plan
+7. ⏳ Deprecate TenantPlan enum (keep for backward compat)
+
+## Migration Instructions (Contabo Server)
+
+```bash
+# SSH to Contabo
+ssh contabo
+
+# Navigate to backend
+cd /opt/neurecore/backend/backend
+
+# Pull latest changes
+git pull origin main
+
+# Install dependencies
+npm ci --legacy-peer-deps
+
+# Run Prisma migration
+npx prisma migrate deploy
+
+# Execute backfill SQL
+psql $DATABASE_URL -f prisma/migrations/tier-agent-pool-backfill.sql
+
+# Generate client
+npx prisma generate
+
+# Rebuild and restart
+npm run build
+pm2 restart neurecore-backend
+```

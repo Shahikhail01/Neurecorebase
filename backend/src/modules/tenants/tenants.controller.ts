@@ -12,7 +12,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
-import { CreateTenantDto, UpdateTenantDto } from './dto/tenant.dto';
+import {
+  CreateTenantDto,
+  UpdateTenantDto,
+  ChangeTierDto,
+} from './dto/tenant.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -76,5 +80,11 @@ export class TenantsController {
   @Roles(UserRole.SUPER_ADMIN)
   suspend(@Param('id') id: string) {
     return this.tenantsService.suspend(id);
+  }
+
+  @Patch(':id/change-tier')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN)
+  changeTier(@Param('id') id: string, @Body() dto: ChangeTierDto) {
+    return this.tenantsService.changeTier(id, dto.tierId);
   }
 }

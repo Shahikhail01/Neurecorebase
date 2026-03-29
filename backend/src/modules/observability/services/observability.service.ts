@@ -88,7 +88,7 @@ export class ObservabilityService {
     ] = await this.prisma.$transaction([
       this.prisma.tenant.count(),
       this.prisma.tenant.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.tenant.count({ where: { plan: 'STARTER' } }),
+      this.prisma.tenant.count({ where: { tier: { slug: 'starter' } } }),
       this.prisma.user.count(),
       this.prisma.agent.count(),
       this.prisma.agent.count({ where: { status: 'RUNNING' } }),
