@@ -78,11 +78,15 @@ jobs:
             set -e
 
             echo "=== Starting deployment ==="
+            # Navigate to git repo root
             cd ${{ secrets.CONTABO_BACKEND_PATH }}
 
             # Pull latest code
             echo "Pulling latest code..."
             git pull origin main
+
+            # Navigate to NestJS backend (nested in monorepo)
+            cd ${{ secrets.CONTABO_BACKEND_PATH }}/backend
 
             # Install and build
             echo "Installing dependencies..."
@@ -100,7 +104,7 @@ jobs:
 
             # Restart PM2
             echo "Restarting PM2 process..."
-            pm2 restart ${{ secrets.CONTABO_PM2_PROCESS }} || pm2 start ecosystem.config.js --env production
+            pm2 restart ${{ secrets.CONTABO_PM2_PROCESS }} || pm2 start dist/src/main.js --name neurecore-backend
 
             # Wait for health check
             sleep 10
