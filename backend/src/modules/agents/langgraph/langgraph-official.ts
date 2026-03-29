@@ -19,6 +19,8 @@ import { AgentStreamingService } from '../streaming/agent-streaming.service';
 import { StructuredToolRegistry } from '../../tools/structured-tool.registry';
 import { StreamingEventType } from '../streaming/agent-streaming.service';
 import { AgentCheckpointService } from './checkpoint.service';
+import { SecurityInterceptorService } from '../security/security-interceptor.service';
+import type { ISecurityContext } from '../security/interfaces/security.interfaces';
 
 // Node name constants to satisfy TypeScript
 const PLANNER_NODE = 'planner';
@@ -163,6 +165,7 @@ export class OfficialAgentGraph {
     private readonly streamingService: AgentStreamingService,
     private readonly toolRegistry: StructuredToolRegistry,
     private readonly checkpointService: AgentCheckpointService,
+    private readonly securityInterceptor: SecurityInterceptorService,
   ) {
     this.initializeGraph();
   }
@@ -337,7 +340,38 @@ export class OfficialAgentGraph {
             continue;
           }
 
-          const result = await tool.execute(toolCall.input);
+          // SECURITY: Validate tool call before execution
+          const securityContext: ISecurityContext = {
+            tenantId: state.tenantId,
+            agentType: state.agentId || 'default',
+            userId: state.userId,
+          };
+
+          const securityResult = await this.securityInterceptor.validate(
+            tool,
+            toolCall.input,
+            securityContext,
+          );
+
+          if (!securityResult.allowed) {
+            this.logger.warn(
+              `[tool_node] Security blocked tool=${toolCall.name}: ${securityResult.reason}`,
+            );
+            toolResults.push({
+              toolName: toolCall.name,
+              input: toolCall.input,
+              output: null,
+              error: `Security blocked: ${securityResult.reason}`,
+              durationMs: Date.now() - startTime,
+            });
+            continue;
+          }
+
+          // Use sanitized input if provided
+          const validatedInput =
+            securityResult.sanitizedInput || toolCall.input;
+
+          const result = await tool.execute(validatedInput);
           toolResults.push({
             toolName: toolCall.name,
             input: toolCall.input,

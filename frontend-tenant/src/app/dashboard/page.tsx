@@ -1,26 +1,32 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { useTenantAuth } from '@/hooks/useTenantAuth';
-import TenantShell from '@/components/TenantShell';
-import { useAgentStore } from '@/stores/agentStore';
-import { useTaskStore } from '@/stores/taskStore';
-import { useWorkflowStore } from '@/stores/workflowStore';
-import { KpiTile } from '@/components/kpi/KpiTile';
-import { AgentCard } from '@/components/agent-card/AgentCard';
-import { AreaChart } from '@/components/charts/AreaChart';
-import { DonutChart } from '@/components/charts/DonutChart';
-import { useDashboardKpis } from '@/hooks/useDashboardKpis';
-import { useChartData } from '@/hooks/useChartData';
-import { useTimeRange } from '@/hooks/useTimeRange';
-import { useInspectorStore } from '@/stores/inspectorStore';
-import { connectSocket, getSocket } from '@/services/socket';
-import api from '@/services/api';
-import { unwrapArrayOrEmpty } from '@/services/unwrap';
-import { DailyBriefingButton, DailyBriefingModal } from '@/features/dashboard/components/DailyBriefing';
-import { AIChatButton, AIChatPanel } from '@/features/ai-chat/components/AIChatPanel';
-import { OrgChartSidebar } from '@/features/org-chart/components/OrgChartSidebar';
+import { useCallback, useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { useTenantAuth } from "@/hooks/useTenantAuth";
+import TenantShell from "@/components/TenantShell";
+import { useAgentStore } from "@/stores/agentStore";
+import { useTaskStore } from "@/stores/taskStore";
+import { useWorkflowStore } from "@/stores/workflowStore";
+import { KpiTile } from "@/components/kpi/KpiTile";
+import { AgentCard } from "@/components/agent-card/AgentCard";
+import { AreaChart } from "@/components/charts/AreaChart";
+import { DonutChart } from "@/components/charts/DonutChart";
+import { useDashboardKpis } from "@/hooks/useDashboardKpis";
+import { useChartData } from "@/hooks/useChartData";
+import { useTimeRange } from "@/hooks/useTimeRange";
+import { useInspectorStore } from "@/stores/inspectorStore";
+import { connectSocket, getSocket } from "@/services/socket";
+import api from "@/services/api";
+import { unwrapArrayOrEmpty } from "@/services/unwrap";
+import {
+  DailyBriefingButton,
+  DailyBriefingModal,
+} from "@/features/dashboard/components/DailyBriefing";
+import {
+  AIChatButton,
+  AIChatPanel,
+} from "@/features/ai-chat/components/AIChatPanel";
+import { OrgChartSidebar } from "@/features/org-chart/components/OrgChartSidebar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ExecutionLog {
@@ -34,25 +40,29 @@ interface ExecutionLog {
   agent?: { name: string };
 }
 
-interface DonutSlice { name: string; value: number; color: string }
+interface DonutSlice {
+  name: string;
+  value: number;
+  color: string;
+}
 
 const STATUS_LOG_COLOR: Record<string, string> = {
-  RUNNING: 'text-status-ops',
-  COMPLETED: 'text-status-profit',
-  FAILED: 'text-status-risk',
-  CANCELLED: 'text-status-neutral',
+  RUNNING: "text-status-ops",
+  COMPLETED: "text-status-profit",
+  FAILED: "text-status-risk",
+  CANCELLED: "text-status-neutral",
 };
 
 const RANGE_OPTIONS = [
-  { label: '24 h', value: '24h' as const },
-  { label: '7 d', value: '7d' as const },
-  { label: '30 d', value: '30d' as const },
+  { label: "24 h", value: "24h" as const },
+  { label: "7 d", value: "7d" as const },
+  { label: "30 d", value: "30d" as const },
 ];
 
 const RISK_COLOR: Record<string, string> = {
-  error: 'border-l-4 border-l-red-500 bg-red-950/30 text-red-300',
-  warn: 'border-l-4 border-l-amber-500 bg-amber-950/30 text-amber-300',
-  info: 'border-l-4 border-l-blue-500 bg-blue-950/30 text-blue-300',
+  error: "border-l-4 border-l-red-500 bg-red-950/30 text-red-300",
+  warn: "border-l-4 border-l-amber-500 bg-amber-950/30 text-amber-300",
+  info: "border-l-4 border-l-blue-500 bg-blue-950/30 text-blue-300",
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -66,17 +76,21 @@ export default function DashboardPage() {
 
   const { kpis, loading: kpisLoading } = useDashboardKpis();
   const { range, setRange } = useTimeRange();
-  const { data: taskTimeSeries, loading: chartLoading } = useChartData('tasks', range);
+  const { data: taskTimeSeries, loading: chartLoading } = useChartData(
+    "tasks",
+    range,
+  );
 
   const [logs, setLogs] = useState<ExecutionLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(true);
   const [orgChartOpen, setOrgChartOpen] = useState(false);
   const [aiChatOpen, setAiChatOpen] = useState(false);
+  const [briefingOpen, setBriefingOpen] = useState(false);
 
   const fetchLogs = useCallback(async () => {
     setLogsLoading(true);
     try {
-      const res = await api.get('/observability/logs?limit=8');
+      const res = await api.get("/observability/logs?limit=8");
 
       setLogs(unwrapArrayOrEmpty(res));
     } catch {
@@ -97,45 +111,69 @@ export default function DashboardPage() {
   useEffect(() => {
     const socket = getSocket();
     connectSocket();
-    socket.on('agent:status_updated', (p: { agentId: string; status: string }) =>
-      updateAgentStatus(p.agentId, p.status as import('@/shared/types/domain.types').AgentStatus));
-    socket.on('task:completed', (p: { taskId: string; success: boolean }) => {
-      updateTaskStatus(p.taskId, p.success ? 'COMPLETED' : 'FAILED');
+    socket.on(
+      "agent:status_updated",
+      (p: { agentId: string; status: string }) =>
+        updateAgentStatus(
+          p.agentId,
+          p.status as import("@/shared/types/domain.types").AgentStatus,
+        ),
+    );
+    socket.on("task:completed", (p: { taskId: string; success: boolean }) => {
+      updateTaskStatus(p.taskId, p.success ? "COMPLETED" : "FAILED");
       void fetchLogs();
     });
-    socket.on('task:failed', (p: { taskId: string }) => {
-      updateTaskStatus(p.taskId, 'FAILED');
+    socket.on("task:failed", (p: { taskId: string }) => {
+      updateTaskStatus(p.taskId, "FAILED");
       void fetchLogs();
     });
     return () => {
-      socket.off('agent:status_updated');
-      socket.off('task:completed');
-      socket.off('task:failed');
+      socket.off("agent:status_updated");
+      socket.off("task:completed");
+      socket.off("task:failed");
       // Do not disconnect here — TenantShell owns the socket lifecycle
     };
   }, [updateAgentStatus, updateTaskStatus, fetchLogs]);
 
   // Derived data
-  const runningAgents = agents.filter((a) => a.status === 'ACTIVE').length;
+  const runningAgents = agents.filter((a) => a.status === "ACTIVE").length;
   const completedToday = tasks.filter(
     (t) =>
-      t.status === 'COMPLETED' &&
+      t.status === "COMPLETED" &&
       t.completedAt &&
       new Date(t.completedAt).toDateString() === new Date().toDateString(),
   ).length;
-  const failedTasks = tasks.filter((t) => t.status === 'FAILED').length;
+  const failedTasks = tasks.filter((t) => t.status === "FAILED").length;
 
   const taskStatusDonut: DonutSlice[] = [
-    { name: 'Completed', value: completedToday, color: '#22c55e' },
-    { name: 'Running', value: tasks.filter((t) => t.status === 'IN_PROGRESS').length, color: '#3b82f6' },
-    { name: 'Pending', value: tasks.filter((t) => t.status === 'PENDING').length, color: '#a855f7' },
-    { name: 'Failed', value: failedTasks, color: '#ef4444' },
+    { name: "Completed", value: completedToday, color: "#22c55e" },
+    {
+      name: "Running",
+      value: tasks.filter((t) => t.status === "IN_PROGRESS").length,
+      color: "#3b82f6",
+    },
+    {
+      name: "Pending",
+      value: tasks.filter((t) => t.status === "PENDING").length,
+      color: "#a855f7",
+    },
+    { name: "Failed", value: failedTasks, color: "#ef4444" },
   ].filter((s) => s.value > 0);
 
   const riskItems = [
-    failedTasks > 0 && { level: 'error', text: `${failedTasks} failed task${failedTasks > 1 ? 's' : ''} require attention` },
-    runningAgents === 0 && agents.length > 0 && { level: 'warn', text: 'No agents currently active — check agent health' },
-    agents.length === 0 && { level: 'info', text: 'No agents deployed yet — create your first agent' },
+    failedTasks > 0 && {
+      level: "error",
+      text: `${failedTasks} failed task${failedTasks > 1 ? "s" : ""} require attention`,
+    },
+    runningAgents === 0 &&
+      agents.length > 0 && {
+        level: "warn",
+        text: "No agents currently active — check agent health",
+      },
+    agents.length === 0 && {
+      level: "info",
+      text: "No agents deployed yet — create your first agent",
+    },
   ].filter(Boolean) as { level: string; text: string }[];
 
   if (!user) return null;
@@ -150,7 +188,12 @@ export default function DashboardPage() {
               Welcome back, {user.firstName}
             </h1>
             <p className="text-sm text-zinc-500 mt-0.5">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -159,12 +202,22 @@ export default function DashboardPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs text-zinc-300 transition"
               title="View Org Chart"
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                />
               </svg>
               Org Chart
             </button>
-            <DailyBriefingButton />
+            <DailyBriefingButton onClick={() => setBriefingOpen(true)} />
           </div>
         </div>
 
@@ -197,7 +250,7 @@ export default function DashboardPage() {
           />
           <KpiTile
             label="Running Tasks"
-            value={tasks.filter((t) => t.status === 'IN_PROGRESS').length}
+            value={tasks.filter((t) => t.status === "IN_PROGRESS").length}
             delta={tasks.length}
             deltaLabel="total"
             color="strategy"
@@ -226,7 +279,9 @@ export default function DashboardPage() {
           {/* Task volume area chart (spans 2 cols) */}
           <div className="lg:col-span-2 rounded-xl border border-surface-border bg-surface-raised p-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-zinc-200">Task Volume</h2>
+              <h2 className="text-sm font-semibold text-zinc-200">
+                Task Volume
+              </h2>
               <div className="flex gap-1">
                 {RANGE_OPTIONS.map((opt) => (
                   <button
@@ -234,8 +289,8 @@ export default function DashboardPage() {
                     onClick={() => setRange(opt.value)}
                     className={`px-2.5 py-1 rounded-md text-xs transition ${
                       range === opt.value
-                        ? 'bg-violet-600 text-white'
-                        : 'text-zinc-500 hover:text-zinc-300'
+                        ? "bg-violet-600 text-white"
+                        : "text-zinc-500 hover:text-zinc-300"
                     }`}
                   >
                     {opt.label}
@@ -255,12 +310,14 @@ export default function DashboardPage() {
 
           {/* Task status donut */}
           <div className="rounded-xl border border-surface-border bg-surface-raised p-4">
-            <h2 className="text-sm font-semibold text-zinc-200 mb-4">Task Status</h2>
+            <h2 className="text-sm font-semibold text-zinc-200 mb-4">
+              Task Status
+            </h2>
             <DonutChart
               data={
                 taskStatusDonut.length > 0
                   ? taskStatusDonut
-                  : [{ name: 'No data', value: 1, color: '#3f3f46' }]
+                  : [{ name: "No data", value: 1, color: "#3f3f46" }]
               }
               nameKey="name"
               valueKey="value"
@@ -275,12 +332,18 @@ export default function DashboardPage() {
           {/* Top agents */}
           <div className="rounded-xl border border-surface-border bg-surface-raised">
             <div className="px-4 py-3 border-b border-surface-border flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-zinc-200">Active Agents</h2>
-              <span className="text-xs text-zinc-500">{runningAgents} running</span>
+              <h2 className="text-sm font-semibold text-zinc-200">
+                Active Agents
+              </h2>
+              <span className="text-xs text-zinc-500">
+                {runningAgents} running
+              </span>
             </div>
             <div className="p-3 space-y-2 max-h-72 overflow-y-auto">
               {agents.length === 0 ? (
-                <p className="text-xs text-zinc-500 py-4 text-center">No agents yet</p>
+                <p className="text-xs text-zinc-500 py-4 text-center">
+                  No agents yet
+                </p>
               ) : (
                 agents.slice(0, 5).map((agent) => (
                   <AgentCard
@@ -288,10 +351,10 @@ export default function DashboardPage() {
                     agent={{
                       id: agent.id,
                       name: agent.name,
-                      type: (agent as any).type ?? 'CONVERSATIONAL',
+                      type: (agent as any).type ?? "CONVERSATIONAL",
                       status: agent.status as any,
                       department: (agent as any).department?.name,
-                      model: (agent as any).model?.name ?? 'GPT-4o',
+                      model: (agent as any).model?.name ?? "GPT-4o",
                       workload: Math.round(Math.random() * 80),
                       taskCount: 0,
                       successRate: 0,
@@ -301,7 +364,7 @@ export default function DashboardPage() {
                     }}
                     variant="compact"
                     onAction={(action, id) => {
-                      if (action === 'inspect') openInspector('agent', id);
+                      if (action === "inspect") openInspector("agent", id);
                     }}
                   />
                 ))
@@ -312,7 +375,9 @@ export default function DashboardPage() {
           {/* Recent execution logs */}
           <div className="rounded-xl border border-surface-border bg-surface-raised">
             <div className="px-4 py-3 border-b border-surface-border flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-zinc-200">Recent Activity</h2>
+              <h2 className="text-sm font-semibold text-zinc-200">
+                Recent Activity
+              </h2>
               <button
                 onClick={() => void fetchLogs()}
                 className="text-xs text-zinc-500 hover:text-zinc-300 transition"
@@ -322,15 +387,21 @@ export default function DashboardPage() {
             </div>
             <div className="overflow-x-auto max-h-72 overflow-y-auto">
               {logsLoading ? (
-                <div className="py-8 text-center text-zinc-500 text-xs">Loading…</div>
+                <div className="py-8 text-center text-zinc-500 text-xs">
+                  Loading…
+                </div>
               ) : logs.length === 0 ? (
-                <div className="py-8 text-center text-zinc-500 text-xs">No activity yet</div>
+                <div className="py-8 text-center text-zinc-500 text-xs">
+                  No activity yet
+                </div>
               ) : (
                 <table className="w-full">
                   <thead className="sticky top-0 bg-surface-raised">
                     <tr className="text-xs text-zinc-500 uppercase">
                       <th className="px-4 py-2 text-left font-medium">Agent</th>
-                      <th className="px-4 py-2 text-left font-medium">Status</th>
+                      <th className="px-4 py-2 text-left font-medium">
+                        Status
+                      </th>
                       <th className="px-4 py-2 text-left font-medium">Score</th>
                     </tr>
                   </thead>
@@ -339,12 +410,16 @@ export default function DashboardPage() {
                       <tr
                         key={log.id}
                         className="border-t border-surface-border hover:bg-surface-overlay transition cursor-pointer"
-                        onClick={() => log.taskId && openInspector('task', log.taskId)}
+                        onClick={() =>
+                          log.taskId && openInspector("task", log.taskId)
+                        }
                       >
                         <td className="px-4 py-2 text-xs text-zinc-300">
                           {log.agent?.name ?? log.agentId.slice(0, 8)}
                         </td>
-                        <td className={`px-4 py-2 text-xs font-medium ${STATUS_LOG_COLOR[log.status] ?? 'text-zinc-400'}`}>
+                        <td
+                          className={`px-4 py-2 text-xs font-medium ${STATUS_LOG_COLOR[log.status] ?? "text-zinc-400"}`}
+                        >
                           {log.status}
                         </td>
                         <td className="px-4 py-2 text-xs text-zinc-400">
@@ -352,16 +427,16 @@ export default function DashboardPage() {
                             <span
                               className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
                                 log.evaluationScore >= 0.8
-                                  ? 'bg-emerald-900 text-emerald-300'
+                                  ? "bg-emerald-900 text-emerald-300"
                                   : log.evaluationScore >= 0.5
-                                  ? 'bg-amber-900 text-amber-300'
-                                  : 'bg-red-900 text-red-300'
+                                    ? "bg-amber-900 text-amber-300"
+                                    : "bg-red-900 text-red-300"
                               }`}
                             >
                               {(log.evaluationScore * 100).toFixed(0)}%
                             </span>
                           ) : (
-                            '—'
+                            "—"
                           )}
                         </td>
                       </tr>
@@ -380,11 +455,15 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Overlay panels ── */}
-      <DailyBriefingModal />
+      <DailyBriefingModal
+        isOpen={briefingOpen}
+        onClose={() => setBriefingOpen(false)}
+      />
       <AIChatPanel isOpen={aiChatOpen} onClose={() => setAiChatOpen(false)} />
-      <OrgChartSidebar isOpen={orgChartOpen} onClose={() => setOrgChartOpen(false)} />
+      <OrgChartSidebar
+        isOpen={orgChartOpen}
+        onClose={() => setOrgChartOpen(false)}
+      />
     </TenantShell>
   );
 }
-
-

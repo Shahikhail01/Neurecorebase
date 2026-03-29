@@ -32,6 +32,12 @@ import { ConnectorsModule } from './modules/connectors/connectors.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { ReliabilityModule } from './modules/reliability/reliability.module';
 import { AgentTemplatesModule } from './modules/agent-templates/agent-templates.module';
+import { RoutinesModule } from './modules/routines/routines.module';
+import { CostsModule } from './modules/costs/costs.module';
+import { InboxModule } from './modules/inbox/inbox.module';
+import { GoalsModule } from './modules/goals/goals.module';
+import { SecurityModule } from './modules/security/security.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { HealthModule } from './modules/health/health.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -52,6 +58,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     // Infrastructure (global — no need to import elsewhere)
     DatabaseModule,
     CacheModule,
+    SecurityModule, // Centralized secret management
 
     // Feature modules
     AuthModule,
@@ -89,6 +96,21 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
 
     // Health monitoring
     HealthModule,
+
+    // Phase 5 — Paperclip Routines/Workflows
+    RoutinesModule,
+
+    // Phase 5 — Paperclip Cost Tracking
+    CostsModule,
+
+    // Phase 5 — Paperclip Unified Inbox
+    InboxModule,
+
+    // Phase 5 — Paperclip Goals
+    GoalsModule,
+
+    // Phase 5 — Paperclip Projects
+    ProjectsModule,
   ],
   providers: [
     // Global rate-limit guard

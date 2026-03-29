@@ -29,6 +29,11 @@ const PROVIDER_INFO: Record<
     icon: "🔗",
     description: "Unified API for multiple providers",
   },
+  minimax: {
+    name: "MiniMax",
+    icon: "🤖",
+    description: "MiniMax AI large language model",
+  },
 };
 
 const DEFAULT_AI_SETTINGS = {

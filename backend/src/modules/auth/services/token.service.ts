@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -6,6 +7,7 @@ import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { JwtPayload, TokenPair } from '../interfaces/token.interface';
 import { ValidatedUser } from '../interfaces/auth.interface';
+import { SecretProviderService } from '../../security/providers/secret.provider';
 import * as crypto from 'crypto';
 
 // Single Responsibility: issue, verify, store, and revoke tokens.
@@ -18,6 +20,7 @@ export class TokenService {
     private readonly config: ConfigService,
     private readonly redis: RedisService,
     private readonly prisma: PrismaService,
+    private readonly secrets: SecretProviderService,
   ) {}
 
   async issueTokenPair(user: ValidatedUser): Promise<TokenPair> {
@@ -45,10 +48,7 @@ export class TokenService {
         { sub: user.id, jti: uuidv4(), type: 'refresh' },
         {
           expiresIn: refreshExpiresIn as any,
-          secret: this.config.get(
-            'JWT_REFRESH_SECRET',
-            this.config.get('JWT_SECRET'),
-          ),
+          secret: this.secrets.getJwtSecret(),
         },
       ),
     ]);
@@ -118,10 +118,7 @@ export class TokenService {
 
   async verifyRefreshToken(token: string): Promise<{ sub: string }> {
     return this.jwt.verifyAsync(token, {
-      secret: this.config.get(
-        'JWT_REFRESH_SECRET',
-        this.config.get('JWT_SECRET'),
-      ),
+      secret: this.secrets.getJwtSecret(),
     });
   }
 

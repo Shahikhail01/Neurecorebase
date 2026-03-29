@@ -1,0 +1,176 @@
+# =============================================================================
+# NeureCore Agent Pod - Podman pod definition for agent containers
+# =============================================================================
+# Podman pod for NeureCore agents with security hardening:
+# - Resource limits per container
+# - Network isolation (no network for agents)
+# - Non-root user
+# - Ephemeral storage
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: neurecore-agents
+  labels:
+    app: neurecore
+    component: agents
+spec:
+  # Shared namespace for IPC between agent containers
+  shareNamespace:
+    - ipc
+    - uts
+
+  containers:
+    # -------------------------------------------------------------------------
+    # Finance Agent Container
+    # -------------------------------------------------------------------------
+    - name: finance-agent
+      image: localhost/neurecore/agent:latest
+      imagePullPolicy: Never
+      command:
+        - /usr/local/bin/agent-entrypoint.sh
+      env:
+        - name: AGENT_TYPE
+          value: "finance-analyst"
+        - name: AGENT_POLICY
+          value: "/workspace/policies/finance-analyst.md"
+        - name: AGENT_WORKSPACE
+          value: "/workspace/finance"
+        - name: NODE_ENV
+          value: "production"
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "512Mi"
+          cpu: "500m"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        readOnlyRootFilesystem: false
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+      volumeMounts:
+        - name: finance-workspace
+          mountPath: /workspace/finance
+        - name: agent-policies
+          mountPath: /workspace/policies
+          readOnly: true
+      stdin: true
+      stdinOnce: true
+      tty: true
+
+    # -------------------------------------------------------------------------
+    # Supply Chain Agent Container
+    # -------------------------------------------------------------------------
+    - name: supplychain-agent
+      image: localhost/neurecore/agent:latest
+      imagePullPolicy: Never
+      command:
+        - /usr/local/bin/agent-entrypoint.sh
+      env:
+        - name: AGENT_TYPE
+          value: "supply-chain-specialist"
+        - name: AGENT_POLICY
+          value: "/workspace/policies/supply-chain-specialist.md"
+        - name: AGENT_WORKSPACE
+          value: "/workspace/supplychain"
+        - name: NODE_ENV
+          value: "production"
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "512Mi"
+          cpu: "500m"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        readOnlyRootFilesystem: false
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+      volumeMounts:
+        - name: supplychain-workspace
+          mountPath: /workspace/supplychain
+        - name: agent-policies
+          mountPath: /workspace/policies
+          readOnly: true
+      stdin: true
+      stdinOnce: true
+      tty: true
+
+    # -------------------------------------------------------------------------
+    # Audit Agent Container
+    # -------------------------------------------------------------------------
+    - name: audit-agent
+      image: localhost/neurecore/agent:latest
+      imagePullPolicy: Never
+      command:
+        - /usr/local/bin/agent-entrypoint.sh
+      env:
+        - name: AGENT_TYPE
+          value: "audit-compliance-officer"
+        - name: AGENT_POLICY
+          value: "/workspace/policies/audit-compliance-officer.md"
+        - name: AGENT_WORKSPACE
+          value: "/workspace/audit"
+        - name: NODE_ENV
+          value: "production"
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "512Mi"
+          cpu: "500m"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        readOnlyRootFilesystem: false
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+      volumeMounts:
+        - name: audit-workspace
+          mountPath: /workspace/audit
+        - name: agent-policies
+          mountPath: /workspace/policies
+          readOnly: true
+      stdin: true
+      stdinOnce: true
+      tty: true
+
+  # =============================================================================
+  # Volumes - Ephemeral storage for agent workspaces
+  # =============================================================================
+  volumes:
+    - name: finance-workspace
+      emptyDir:
+        medium: Memory
+        sizeLimit: "256Mi"
+    - name: supplychain-workspace
+      emptyDir:
+        medium: Memory
+        sizeLimit: "256Mi"
+    - name: audit-workspace
+      emptyDir:
+        medium: Memory
+        sizeLimit: "256Mi"
+    - name: agent-policies
+      hostPath:
+        path: /opt/neurecore/agent-policies
+        type: Directory
+
+  # Restart policy - restart on failure
+  restartPolicy: OnFailure

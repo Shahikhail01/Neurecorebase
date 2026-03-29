@@ -1,32 +1,39 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { authService } from '@/services/auth.service';
-import { useAuthStore } from '@/stores/authStore';
-import type { AuthUser } from '@/types/auth.types';
-import { TopBar } from '@/components/layout/TopBar';
-import { ActivityStream } from '@/components/layout/ActivityStream';
-import { InspectorPanel } from '@/components/layout/InspectorPanel';
-import { CommandPalette } from '@/components/command-palette/CommandPalette';
-import { OrgTree } from '@/components/sidebar/OrgTree';
-import { ConversationPanel } from '@/components/chat/ConversationPanel';
-import { useActivityStream } from '@/hooks/useActivityStream';
-import { registerTenantCommands } from '@/services/register-commands';
+import { useEffect } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { authService } from "@/services/auth.service";
+import { useAuthStore } from "@/stores/authStore";
+import type { AuthUser } from "@/types/auth.types";
+import { TopBar } from "@/components/layout/TopBar";
+import { ActivityStream } from "@/components/layout/ActivityStream";
+import { InspectorPanel } from "@/components/layout/InspectorPanel";
+import { CommandPalette } from "@/components/command-palette/CommandPalette";
+import { OrgTree } from "@/components/sidebar/OrgTree";
+import { ConversationPanel } from "@/components/chat/ConversationPanel";
+import { useActivityStream } from "@/hooks/useActivityStream";
+import { registerTenantCommands } from "@/services/register-commands";
 
 const NAV = [
-  { label: 'Dashboard', href: '/dashboard', icon: '⬡' },
-  { label: 'Agents', href: '/agents', icon: '◈' },
-  { label: 'Departments', href: '/departments', icon: '⬟' },
-  { label: 'Tasks',    href: '/tasks',          icon: '◫' },
-  { label: 'Delegate', href: '/tasks/delegate', icon: '⬡' },
-  { label: 'Workflows', href: '/workflows', icon: '⬡' },
-  { label: 'Approvals', href: '/approvals', icon: '◻' },
-  { label: 'Analytics', href: '/analytics', icon: '◈' },
-  { label: 'Connectors', href: '/connectors', icon: '⬟' },
-  { label: 'Billing', href: '/billing', icon: '⬡' },
-  { label: 'Settings', href: '/settings', icon: '◌' },
+  { label: "Dashboard", href: "/dashboard", icon: "⬡" },
+  { label: "Agents", href: "/agents", icon: "◈" },
+  { label: "Departments", href: "/departments", icon: "⬟" },
+  { label: "Org Chart", href: "/org-chart", icon: "◎" },
+  { label: "Tasks", href: "/tasks", icon: "◫" },
+  { label: "Delegate", href: "/tasks/delegate", icon: "⬡" },
+  { label: "Workflows", href: "/workflows", icon: "⬡" },
+  { label: "Routines", href: "/routines", icon: "⚡" },
+  { label: "Goals", href: "/goals", icon: "◎" },
+  { label: "Projects", href: "/projects", icon: "⬡" },
+  { label: "Costs", href: "/costs", icon: "$" },
+  { label: "Inbox", href: "/inbox", icon: "✉" },
+  { label: "Activity", href: "/activity", icon: "◉" },
+  { label: "Approvals", href: "/approvals", icon: "◻" },
+  { label: "Analytics", href: "/analytics", icon: "◈" },
+  { label: "Connectors", href: "/connectors", icon: "⬟" },
+  { label: "Billing", href: "/billing", icon: "⬡" },
+  { label: "Settings", href: "/settings", icon: "◌" },
 ];
 
 export default function TenantShell({
@@ -51,12 +58,13 @@ export default function TenantShell({
   async function handleLogout() {
     await authService.logout();
     clearUser();
-    router.push('/login');
+    router.push("/login");
   }
 
   // Derive current page title from pathname
   const pageTitle =
-    NAV.find((n) => pathname === n.href || pathname.startsWith(n.href + '/'))?.label ?? 'Dashboard';
+    NAV.find((n) => pathname === n.href || pathname.startsWith(n.href + "/"))
+      ?.label ?? "Dashboard";
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface text-zinc-100">
@@ -74,15 +82,15 @@ export default function TenantShell({
         <nav className="py-3 flex flex-col gap-0.5 px-2">
           {NAV.map((item) => {
             const active =
-              pathname === item.href || pathname.startsWith(item.href + '/');
+              pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${
                   active
-                    ? 'bg-violet-600 text-white font-medium'
-                    : 'text-zinc-400 hover:bg-surface-overlay hover:text-white'
+                    ? "bg-violet-600 text-white font-medium"
+                    : "text-zinc-400 hover:bg-surface-overlay hover:text-white"
                 }`}
               >
                 <span className="text-xs opacity-70">{item.icon}</span>
@@ -102,7 +110,9 @@ export default function TenantShell({
           <div className="text-xs text-zinc-400 font-medium truncate mb-0.5">
             {user.firstName} {user.lastName}
           </div>
-          <div className="text-xs text-zinc-500 truncate mb-2">{user.email}</div>
+          <div className="text-xs text-zinc-500 truncate mb-2">
+            {user.email}
+          </div>
           <span className="inline-block rounded-full bg-violet-900 text-violet-300 text-xs px-2 py-0.5 font-medium mb-3">
             {user.role}
           </span>

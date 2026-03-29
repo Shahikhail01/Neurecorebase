@@ -1,125 +1,71 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
- * Security Module - Main Module
- * ═══════════════════════════════════════════════════════════════════════════
- * Comprehensive security module following SOLID principles.
- * Provides authentication, authorization, rate limiting, and security middleware.
+ * Security Module
+ *
+ * SOLID: Dependency Inversion — All dependencies are injected via constructor
+ * SOLID: Single Responsibility — This module ONLY wires security components
+ *
+ * Provides centralized secret management for the entire application.
+ *
+ * @module security
  */
 
-import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerModule } from '@nestjs/throttler';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Module, Global } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 
-import { SecurityController } from './security.controller';
-import { SecurityHeadersMiddleware } from './middleware/security-headers.middleware';
-import { RateLimitMiddleware } from './middleware/rate-limit.middleware';
-import { CsrfMiddleware } from './middleware/csrf.middleware';
-import { SanitizationMiddleware } from './middleware/sanitization.middleware';
+// Providers
+import { SecretProviderService } from './providers/secret.provider';
 
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { RolesGuard } from './guards/roles.guard';
-import { PermissionsGuard } from './guards/permissions.guard';
-import { ThrottlerGuard } from './guards/throttler.guard';
-
-import { RateLimitService } from './services/rate-limit.service';
-import { SecurityEventService } from './services/security-event.service';
-import { InputSanitizationService } from './services/input-sanitization.service';
-import { DataMaskingService } from './services/data-masking.service';
-import { TokenValidationService } from './services/token-validation.service';
-
+@Global()
 @Module({
-  imports: [
-    ThrottlerModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        throttlers: [
-          {
-            name: 'default',
-            ttl: config.get<number>('THROTTLE_TTL', 60000),
-            limit: config.get<number>('THROTTLE_LIMIT', 60),
-          },
-          {
-            name: 'auth',
-            ttl: config.get<number>('THROTTLE_TTL', 60000),
-            limit: config.get<number>('THROTTLE_AUTH_LIMIT', 10),
-          },
-          {
-            name: 'api',
-            ttl: config.get<number>('THROTTLE_TTL', 60000),
-            limit: config.get<number>('THROTTLE_API_LIMIT', 100),
-          },
-          {
-            name: 'upload',
-            ttl: config.get<number>('THROTTLE_TTL', 60000),
-            limit: config.get<number>('THROTTLE_UPLOAD_LIMIT', 5),
-          },
-        ],
-      }),
-    }),
-  ],
-  controllers: [SecurityController],
-  providers: [
-    // Global Guards
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: PermissionsGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
-    // Services
-    RateLimitService,
-    SecurityEventService,
-    InputSanitizationService,
-    DataMaskingService,
-    TokenValidationService,
-    // Guards
-    JwtAuthGuard,
-    RolesGuard,
-    PermissionsGuard,
-    ThrottlerGuard,
-  ],
-  exports: [
-    RateLimitService,
-    SecurityEventService,
-    InputSanitizationService,
-    DataMaskingService,
-    TokenValidationService,
-    JwtAuthGuard,
-    RolesGuard,
-    PermissionsGuard,
-    ThrottlerGuard,
-  ],
+  imports: [ConfigModule],
+  providers: [SecretProviderService],
+  exports: [SecretProviderService, 'ISecretProvider', 'ISecretRotator'],
 })
-export class SecurityModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    // Apply security middleware to all routes
-    consumer.apply(SecurityHeadersMiddleware).forRoutes('*');
+export class SecurityModule {}
 
-    // Apply rate limiting after security headers
-    consumer
-      .apply(RateLimitMiddleware)
-      .exclude('/health', '/healthz')
-      .forRoutes('*');
-
-    // Apply CSRF protection (only for state-changing methods)
-    consumer
-      .apply(CsrfMiddleware)
-      .exclude('/health', '/healthz', '/api/v1/auth/login')
-      .forRoutes('*');
-
-    // Apply input sanitization last
-    consumer.apply(SanitizationMiddleware).forRoutes('*');
-  }
-}
+/**
+ * Security Module Usage Guide
+ *
+ * This module provides centralized secret management.
+ *
+ * 1. Import in your module:
+ *
+ * ```typescript
+ * import { SecurityModule } from '../security/security.module';
+ *
+ * @Module({
+ *   imports: [SecurityModule],
+ * })
+ * export class MyModule {}
+ * ```
+ *
+ * 2. Inject and use:
+ *
+ * ```typescript
+ * import { SecretProviderService } from '../security/providers/secret.provider';
+ *
+ * constructor(private readonly secrets: SecretProviderService) {}
+ *
+ * // Access well-known secrets
+ * const apiKey = this.secrets.getOpenClawApiKey();
+ *
+ * // Or resolve any secret reference
+ * const value = this.secrets.resolve('env:MY_SECRET').value;
+ * ```
+ *
+ * 3. Configuration:
+ *
+ * Set cache TTL via environment variable:
+ * ```
+ * SECURITY_SECRETS_CACHE_TTL_MS=300000
+ * ```
+ *
+ * Supported environment variables:
+ * - OPENCLAW_API_KEY
+ * - JWT_SECRET
+ * - MINIMAX_API_KEY
+ * - DEEPSEEK_API_KEY
+ * - MIMO_API_KEY
+ * - DATABASE_URL
+ * - REDIS_URL
+ */

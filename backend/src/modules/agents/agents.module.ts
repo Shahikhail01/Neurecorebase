@@ -15,6 +15,7 @@ import { AgentStreamingController } from './streaming/agent-streaming.controller
 import { AgentStateMachine } from './langgraph/agent-state-machine';
 import { OfficialAgentGraph } from './langgraph/langgraph-official';
 import { AgentCheckpointService } from './langgraph/checkpoint.service';
+import { SecurityModule } from './security/security.module';
 
 /**
  * AgentsModule
@@ -28,6 +29,7 @@ import { AgentCheckpointService } from './langgraph/checkpoint.service';
     ToolsModule,
     GovernanceModule,
     ModelsModule,
+    SecurityModule, // Security interceptors for tool validation
   ],
   controllers: [
     AgentsController,

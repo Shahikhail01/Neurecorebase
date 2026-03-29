@@ -1,0 +1,175 @@
+name: Deploy Backend to Contabo
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-contabo.yml"
+  workflow_dispatch:
+    inputs:
+      rollback_to:
+        description: "Commit SHA to rollback to (optional)"
+        required: false
+        type: string
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        if: github.event.inputs.rollback_to == ''
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout specific commit (for rollback)
+        if: github.event.inputs.rollback_to != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.rollback_to }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "backend/package-lock.json"
+
+      - name: Cache pnpm modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('backend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci --legacy-peer-deps
+
+      - name: Generate Prisma Client
+        run: |
+          cd backend
+          npx prisma generate
+
+      - name: Build Backend
+        run: |
+          cd backend
+          npm run build
+
+      - name: Run Tests
+        run: |
+          cd backend
+          npm run test --if-present
+
+      - name: Deploy to Contabo via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CONTABO_HOST }}
+          port: ${{ secrets.CONTABO_PORT }}
+          username: ${{ secrets.CONTABO_USERNAME }}
+          key: ${{ secrets.CONTABO_SSH_KEY }}
+          passphrase: ${{ secrets.CONTABO_SSH_PASSPHRASE }}
+          script: |
+            set -e
+
+            echo "=== Starting deployment ==="
+            cd ${{ secrets.CONTABO_BACKEND_PATH }}
+
+            # Pull latest code
+            echo "Pulling latest code..."
+            git pull origin main
+
+            # Install and build
+            echo "Installing dependencies..."
+            npm ci --legacy-peer-deps
+
+            echo "Generating Prisma client..."
+            npx prisma generate
+
+            echo "Building..."
+            npm run build
+
+            # Run migrations if needed
+            echo "Running migrations..."
+            npx prisma migrate deploy || echo "No pending migrations"
+
+            # Restart PM2
+            echo "Restarting PM2 process..."
+            pm2 restart ${{ secrets.CONTABO_PM2_PROCESS }} || pm2 start ecosystem.config.js --env production
+
+            # Wait for health check
+            sleep 10
+
+            echo "=== Deployment complete ==="
+
+      - name: Health Check
+        run: |
+          echo "Waiting for service to be ready..."
+          sleep 5
+
+          for i in {1..5}; do
+            echo "Attempt $i..."
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://brain.neurecore.com/api/v1/health)
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Health check passed!"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Health check failed with HTTP code: $HTTP_CODE"
+          curl -v https://brain.neurecore.com/api/v1/health
+          exit 1
+
+      - name: PM2 Logs on Failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CONTABO_HOST }}
+          port: ${{ secrets.CONTABO_PORT }}
+          username: ${{ secrets.CONTABO_USERNAME }}
+          key: ${{ secrets.CONTABO_SSH_KEY }}
+          script: |
+            pm2 logs ${{ secrets.CONTABO_PM2_PROCESS }} --lines 100 --nostream
+            pm2 status
+
+  rollback:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.rollback_to != ''
+
+    steps:
+      - name: Checkout specific commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.rollback_to }}
+
+      - name: Deploy to Contabo via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CONTABO_HOST }}
+          port: ${{ secrets.CONTABO_PORT }}
+          username: ${{ secrets.CONTABO_USERNAME }}
+          key: ${{ secrets.CONTABO_SSH_KEY }}
+          script: |
+            set -e
+
+            echo "=== Starting rollback to ${{ github.event.inputs.rollback_to }} ==="
+            cd ${{ secrets.CONTABO_BACKEND_PATH }}
+
+            # Reset to specific commit
+            git reset --hard ${{ github.event.inputs.rollback_to }}
+
+            # Install and build
+            npm ci --legacy-peer-deps
+            npx prisma generate
+            npm run build
+
+            # Restart PM2
+            pm2 restart ${{ secrets.CONTABO_PM2_PROCESS }}
+
+            echo "=== Rollback complete ==="

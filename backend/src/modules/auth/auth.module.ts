@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
@@ -11,15 +12,19 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { SecretProviderService } from '../security/providers/secret.provider';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
+      inject: [ConfigService, SecretProviderService],
+      useFactory: (
+        config: ConfigService,
+        secrets: SecretProviderService,
+      ): JwtModuleOptions => ({
+        secret: secrets.getJwtSecret(),
         signOptions: {
           expiresIn: config.get<string>('JWT_ACCESS_EXPIRES', '15m') as any,
         },
@@ -30,6 +35,7 @@ import { RolesGuard } from './guards/roles.guard';
   providers: [
     AuthService,
     TokenService,
+    SecretProviderService,
     PasswordService,
     JwtStrategy,
     LocalStrategy,

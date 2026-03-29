@@ -179,10 +179,45 @@ export const emailSettingsService = {
   },
 };
 
+// ============================================
+// AUDIT LOGS
+// ============================================
+
+export const auditService = {
+  async listLogs(params?: {
+    page?: number;
+    limit?: number;
+  }): Promise<AuditLog[]> {
+    const res = await api.get("/settings/audit/logs", { params });
+    return unwrapList(res).items;
+  },
+
+  async getLog(id: string): Promise<AuditLog> {
+    const res = await api.get(`/settings/audit/logs/${id}`);
+    return unwrapItem(res);
+  },
+};
+
+// ============================================
+// PLATFORM SETTINGS
+// ============================================
+
+export const platformSettingsService = {
+  async get(): Promise<PlatformSettings> {
+    const res = await api.get("/settings/platform");
+    return unwrapItem(res);
+  },
+
+  async update(data: Partial<PlatformSettings>): Promise<PlatformSettings> {
+    const res = await api.patch("/settings/platform", data);
+    return unwrapItem(res);
+  },
+};
+
 export default {
-  ai,
-  tiers,
-  email,
-  audit,
-  platform,
+  ai: aiSettingsService,
+  tiers: tierService,
+  email: emailSettingsService,
+  audit: auditService,
+  platform: platformSettingsService,
 };

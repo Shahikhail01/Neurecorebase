@@ -176,22 +176,22 @@ enum BillingEventType {
 // ─── Tenant ────────────────────────────────────────────────────────────────
 
 model Tenant {
-  id          String       @id @default(uuid())
-  name        String
-  slug        String       @unique
-  plan        TenantPlan   @default(STARTER)
-  status      TenantStatus @default(ACTIVE)
-  agentLimit  Int          @default(5)
-  logoUrl     String?
-  website     String?
-  industry    String?
-  settings    Json         @default("{}")
-  metadata    Json         @default("{}")
+  id         String       @id @default(uuid())
+  name       String
+  slug       String       @unique
+  plan       TenantPlan   @default(STARTER)
+  status     TenantStatus @default(ACTIVE)
+  agentLimit Int          @default(5)
+  logoUrl    String?
+  website    String?
+  industry   String?
+  settings   Json         @default("{}")
+  metadata   Json         @default("{}")
 
   // Relations
-  users       User[]
-  auditLogs   AuditLog[]
-  sessions    Session[]
+  users            User[]
+  auditLogs        AuditLog[]
+  sessions         Session[]
   agents           Agent[]
   agentTemplates   AgentTemplate[]
   tasks            Task[]
@@ -216,8 +216,20 @@ model Tenant {
   billingEvents     BillingEvent[]
   quotaUsages       QuotaUsage[]
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  // Phase 5 back-relations - Routines
+  routines    Routine[]
+  routineRuns RoutineRun[]
+
+  // Phase 5 back-relations - Costs
+  costRecords   CostRecord[]
+  budgetPolicies BudgetPolicy[]
+
+  // Phase 5 back-relations - Goals & Projects
+  goals    Goal[]
+  projects Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("tenants")
 }
@@ -238,22 +250,29 @@ model User {
   metadata     Json      @default("{}")
 
   // Tenant relation — null for SUPER_ADMIN / PLATFORM_ADMIN
-  tenantId     String?
-  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Relations
-  sessions     Session[]
-  auditLogs    AuditLog[]
-  refreshTokens RefreshToken[]
-  agents       Agent[]
-  tasksCreated Task[]   @relation("TaskCreator")
+  sessions           Session[]
+  auditLogs          AuditLog[]
+  refreshTokens      RefreshToken[]
+  agents             Agent[]
+  tasksCreated       Task[]            @relation("TaskCreator")
   approvalsRequested ApprovalRequest[] @relation("ApprovalRequests")
   approvalsReviewed  ApprovalRequest[] @relation("ApprovalReviews")
   notifications      Notification[]
   apiKeys            ApiKey[]
 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  // Phase 5 back-relations - Routines
+  routines    Routine[]
+  routineRuns RoutineRun[]
+
+  // Phase 5 back-relations - Goals
+  goals Goal[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([email])
@@ -263,19 +282,19 @@ model User {
 // ─── Session ───────────────────────────────────────────────────────────────
 
 model Session {
-  id         String   @id @default(uuid())
-  userId     String
-  tenantId   String?
-  ipAddress  String?
-  userAgent  String?
-  isActive   Boolean  @default(true)
-  expiresAt  DateTime
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String?
+  ipAddress String?
+  userAgent String?
+  isActive  Boolean  @default(true)
+  expiresAt DateTime
 
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([tenantId])
@@ -285,15 +304,15 @@ model Session {
 // ─── Refresh Token ─────────────────────────────────────────────────────────
 
 model RefreshToken {
-  id         String   @id @default(uuid())
-  tokenHash  String   @unique
-  userId     String
-  isRevoked  Boolean  @default(false)
-  expiresAt  DateTime
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  isRevoked Boolean  @default(false)
+  expiresAt DateTime
 
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([tokenHash])
@@ -303,21 +322,21 @@ model RefreshToken {
 // ─── Audit Log ─────────────────────────────────────────────────────────────
 
 model AuditLog {
-  id         String   @id @default(uuid())
-  actor      String   // userId or "system"
-  action     String   // e.g. "auth.login", "agent.create"
-  resource   String?  // resource type
-  resourceId String?  // resource id
+  id         String  @id @default(uuid())
+  actor      String // userId or "system"
+  action     String // e.g. "auth.login", "agent.create"
+  resource   String? // resource type
+  resourceId String? // resource id
   tenantId   String?
   ipAddress  String?
   userAgent  String?
-  result     String   @default("success") // success | failure
-  details    Json     @default("{}")
+  result     String  @default("success") // success | failure
+  details    Json    @default("{}")
 
-  user       User?    @relation(fields: [actor], references: [id])
-  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+  user   User?   @relation(fields: [actor], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
 
-  createdAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([actor])
@@ -342,14 +361,14 @@ model AgentTemplate {
   instructions String?   @db.Text
   permissions  Json      @default("[]")
   config       Json      @default("{}")
-  isPublic     Boolean   @default(false)   // platform-wide template
+  isPublic     Boolean   @default(false) // platform-wide template
   version      String    @default("1.0.0")
 
-  tenantId     String?
-  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([type])
@@ -359,32 +378,32 @@ model AgentTemplate {
 // ─── Agent ────────────────────────────────────────────────────────────────
 
 model Agent {
-  id             String      @id @default(uuid())
-  name           String
-  description    String?
-  type           AgentType   @default(FUNCTIONAL)
-  status         AgentStatus @default(IDLE)
-  model          String      @default("gpt-4o-mini")  // LLM model ID
-  systemPrompt   String?     @db.Text
-  instructions   String?     @db.Text
-  budgetPerDay   Decimal?    @db.Decimal(10, 4)
-  totalSpend     Decimal     @default(0) @db.Decimal(10, 4)
-  permissions    Json        @default("[]")  // array of allowed actions
-  config         Json        @default("{}")
-  metadata       Json        @default("{}")
-  isActive       Boolean     @default(true)
+  id           String      @id @default(uuid())
+  name         String
+  description  String?
+  type         AgentType   @default(FUNCTIONAL)
+  status       AgentStatus @default(IDLE)
+  model        String      @default("gpt-4o-mini") // LLM model ID
+  systemPrompt String?     @db.Text
+  instructions String?     @db.Text
+  budgetPerDay Decimal?    @db.Decimal(10, 4)
+  totalSpend   Decimal     @default(0) @db.Decimal(10, 4)
+  permissions  Json        @default("[]") // array of allowed actions
+  config       Json        @default("{}")
+  metadata     Json        @default("{}")
+  isActive     Boolean     @default(true)
 
-  tenantId       String
-  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  createdById    String?
-  createdBy      User?       @relation(fields: [createdById], references: [id])
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
 
-  templateId     String?     // optionally spawned from a template
-  templateVersion String?    // snapshot of template version at spawn time
+  templateId      String? // optionally spawned from a template
+  templateVersion String? // snapshot of template version at spawn time
 
-  departmentId   String?
-  department     Department?  @relation("DepartmentAgents", fields: [departmentId], references: [id])
+  departmentId String?
+  department   Department? @relation("DepartmentAgents", fields: [departmentId], references: [id])
 
   tasks          Task[]
   memoryEntries  MemoryEntry[]
@@ -392,8 +411,18 @@ model Agent {
   expenses       Expense[]     @relation("AgentExpenses")
   quotaUsages    QuotaUsage[]  @relation("AgentQuotaUsage")
 
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  // Phase 5 back-relations - Costs
+  costRecords    CostRecord[]
+  budgetPolicies BudgetPolicy[]
+
+  // Phase 5 back-relations - Routines
+  routineRuns RoutineRun[]
+
+  // Phase 5 back-relations - Goals
+  goals Goal[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([status])
@@ -405,36 +434,36 @@ model Agent {
 // ─── Task ─────────────────────────────────────────────────────────────────
 
 model Task {
-  id             String       @id @default(uuid())
-  title          String
-  description    String?      @db.Text
-  status         TaskStatus   @default(PENDING)
-  priority       TaskPriority @default(MEDIUM)
-  input          Json         @default("{}")
-  output         Json?
-  error          String?      @db.Text
-  retryCount     Int          @default(0)
-  maxRetries     Int          @default(3)
-  scheduledAt    DateTime?
-  startedAt      DateTime?
-  completedAt    DateTime?
+  id          String       @id @default(uuid())
+  title       String
+  description String?      @db.Text
+  status      TaskStatus   @default(PENDING)
+  priority    TaskPriority @default(MEDIUM)
+  input       Json         @default("{}")
+  output      Json?
+  error       String?      @db.Text
+  retryCount  Int          @default(0)
+  maxRetries  Int          @default(3)
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
 
-  tenantId       String
-  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  agentId        String?
-  agent          Agent?       @relation(fields: [agentId], references: [id])
+  agentId String?
+  agent   Agent?  @relation(fields: [agentId], references: [id])
 
-  workflowId     String?
-  workflow       Workflow?    @relation(fields: [workflowId], references: [id])
+  workflowId String?
+  workflow   Workflow? @relation(fields: [workflowId], references: [id])
 
-  createdById    String?
-  createdBy      User?        @relation("TaskCreator", fields: [createdById], references: [id])
+  createdById String?
+  createdBy   User?   @relation("TaskCreator", fields: [createdById], references: [id])
 
-  executionLogs  ExecutionLog[]
+  executionLogs ExecutionLog[]
 
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([agentId])
@@ -451,17 +480,17 @@ model Workflow {
   name        String
   description String?        @db.Text
   status      WorkflowStatus @default(DRAFT)
-  definition  Json           @default("{}")  // DAG / step definitions
+  definition  Json           @default("{}") // DAG / step definitions
   config      Json           @default("{}")
   isTemplate  Boolean        @default(false)
 
-  tenantId    String
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  tasks       Task[]
+  tasks Task[]
 
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([status])
@@ -471,22 +500,22 @@ model Workflow {
 // ─── Memory Entry ─────────────────────────────────────────────────────────
 
 model MemoryEntry {
-  id          String     @id @default(uuid())
-  type        MemoryType @default(SHORT_TERM)
-  content     String     @db.Text
-  summary     String?    @db.Text
-  embedding   String?    @db.Text  // JSON-serialised float[] (pgvector on separate DB)
-  importance  Float      @default(0.5)
-  expiresAt   DateTime?
-  metadata    Json       @default("{}")
+  id         String     @id @default(uuid())
+  type       MemoryType @default(SHORT_TERM)
+  content    String     @db.Text
+  summary    String?    @db.Text
+  embedding  String?    @db.Text // JSON-serialised float[] (pgvector on separate DB)
+  importance Float      @default(0.5)
+  expiresAt  DateTime?
+  metadata   Json       @default("{}")
 
-  agentId     String?
-  agent       Agent?     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agentId String?
+  agent   Agent?  @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
-  tenantId    String
-  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime   @default(now())
+  createdAt DateTime @default(now())
 
   @@index([agentId])
   @@index([tenantId])
@@ -497,21 +526,21 @@ model MemoryEntry {
 // ─── Tool Integration ─────────────────────────────────────────────────────
 
 model ToolIntegration {
-  id           String       @id @default(uuid())
-  name         String
-  description  String?
-  category     ToolCategory @default(CUSTOM)
-  config       Json         @default("{}")  // endpoint, auth, schema
-  isActive     Boolean      @default(true)
-  isBuiltIn    Boolean      @default(false)
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  category    ToolCategory @default(CUSTOM)
+  config      Json         @default("{}") // endpoint, auth, schema
+  isActive    Boolean      @default(true)
+  isBuiltIn   Boolean      @default(false)
 
-  tenantId     String?      // null = platform-wide built-in
-  tenant       Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String? // null = platform-wide built-in
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   executionLogs ExecutionLog[]
 
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([category])
@@ -521,28 +550,28 @@ model ToolIntegration {
 // ─── Execution Log ────────────────────────────────────────────────────────
 
 model ExecutionLog {
-  id              String   @id @default(uuid())
-  agentId         String?
-  agent           Agent?   @relation(fields: [agentId], references: [id])
+  id      String  @id @default(uuid())
+  agentId String?
+  agent   Agent?  @relation(fields: [agentId], references: [id])
 
-  taskId          String?
-  task            Task?    @relation(fields: [taskId], references: [id])
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id])
 
-  toolId          String?
-  tool            ToolIntegration? @relation(fields: [toolId], references: [id])
+  toolId String?
+  tool   ToolIntegration? @relation(fields: [toolId], references: [id])
 
-  step            String   // e.g. "plan", "execute", "evaluate"
-  input           Json     @default("{}")
+  step            String // e.g. "plan", "execute", "evaluate"
+  input           Json    @default("{}")
   output          Json?
-  tokensUsed      Int      @default(0)
-  costUsd         Decimal  @default(0) @db.Decimal(10, 6)
-  durationMs      Int      @default(0)
-  success         Boolean  @default(true)
-  error           String?  @db.Text
-  evaluationScore Float?   // 0–1 quality score from AgentEvaluator
-  reflection      String?  @db.Text  // evaluator notes
+  tokensUsed      Int     @default(0)
+  costUsd         Decimal @default(0) @db.Decimal(10, 6)
+  durationMs      Int     @default(0)
+  success         Boolean @default(true)
+  error           String? @db.Text
+  evaluationScore Float? // 0–1 quality score from AgentEvaluator
+  reflection      String? @db.Text // evaluator notes
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([agentId])
   @@index([taskId])
@@ -565,15 +594,23 @@ model Department {
   parentId    String?
   metadata    Json             @default("{}")
 
-  tenantId    String
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   parent      Department?      @relation("DepartmentHierarchy", fields: [parentId], references: [id])
-  children    Department[]     @relation("DepartmentHierarchy")
-  agents      Agent[]          @relation("DepartmentAgents")
+  children    Department[]    @relation("DepartmentHierarchy")
+  agents      Agent[]         @relation("DepartmentAgents")
 
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  // Phase 5 back-relations - Costs
+  costRecords    CostRecord[]
+  budgetPolicies BudgetPolicy[]
+
+  // Phase 5 back-relations - Goals & Projects
+  goals    Goal[]
+  projects Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([parentId])
@@ -584,19 +621,19 @@ model Department {
 // Platform-wide blueprint (SuperAdmin managed). Tenants deploy from these.
 
 model DepartmentTemplate {
-  id          String   @id @default(uuid())
-  name        String   // e.g. "Startup Org", "E-Commerce Pack"
-  slug        String   @unique
-  description String?  @db.Text
+  id          String  @id @default(uuid())
+  name        String // e.g. "Startup Org", "E-Commerce Pack"
+  slug        String  @unique
+  description String? @db.Text
   // JSON array: [{ name, description?, type?, parentSlug? }]
   // type: "EXECUTIVE" | "CORE" | "FUNCTIONAL"
-  structure   Json     @default("[]")
-  isPublic    Boolean  @default(true)
-  category    String   @default("general") // "startup" | "enterprise" | "ecommerce" | etc.
-  tags        Json     @default("[]")
+  structure   Json    @default("[]")
+  isPublic    Boolean @default(true)
+  category    String  @default("general") // "startup" | "enterprise" | "ecommerce" | etc.
+  tags        Json    @default("[]")
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isPublic])
   @@index([category])
@@ -606,20 +643,20 @@ model DepartmentTemplate {
 // ─── Governance Rule ──────────────────────────────────────────────────────
 
 model GovernanceRule {
-  id             String               @id @default(uuid())
-  name           String
-  description    String?
-  trigger        String               // e.g. "task.cost > 10", "agent.action == 'email'"
-  actionType     GovernanceActionType @default(LOG_ONLY)
-  actionConfig   Json                 @default("{}")
-  isActive       Boolean              @default(true)
-  priority       Int                  @default(0)
+  id           String               @id @default(uuid())
+  name         String
+  description  String?
+  trigger      String // e.g. "task.cost > 10", "agent.action == 'email'"
+  actionType   GovernanceActionType @default(LOG_ONLY)
+  actionConfig Json                 @default("{}")
+  isActive     Boolean              @default(true)
+  priority     Int                  @default(0)
 
-  tenantId       String?
-  tenant         Tenant?              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([isActive])
@@ -629,32 +666,32 @@ model GovernanceRule {
 // ─── Approval Request ─────────────────────────────────────────────────────
 
 model ApprovalRequest {
-  id             String           @id @default(uuid())
-  title          String
-  description    String?          @db.Text
-  resourceType   String           // "task", "agent_action", "workflow", "budget"
-  resourceId     String?
-  payload        Json             @default("{}")
-  status         ApprovalStatus   @default(PENDING)
-  priority       ApprovalPriority @default(MEDIUM)
-  requiredRole   String?          // role required to approve
-  expiresAt      DateTime?
-  approvedAt     DateTime?
-  rejectedAt     DateTime?
-  rejectionReason String?         @db.Text
-  metadata       Json             @default("{}")
+  id              String           @id @default(uuid())
+  title           String
+  description     String?          @db.Text
+  resourceType    String // "task", "agent_action", "workflow", "budget"
+  resourceId      String?
+  payload         Json             @default("{}")
+  status          ApprovalStatus   @default(PENDING)
+  priority        ApprovalPriority @default(MEDIUM)
+  requiredRole    String? // role required to approve
+  expiresAt       DateTime?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?          @db.Text
+  metadata        Json             @default("{}")
 
-  tenantId       String
-  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  requestedById  String?
-  requestedBy    User?            @relation("ApprovalRequests", fields: [requestedById], references: [id])
+  requestedById String?
+  requestedBy   User?   @relation("ApprovalRequests", fields: [requestedById], references: [id])
 
-  reviewedById   String?
-  reviewedBy     User?            @relation("ApprovalReviews", fields: [reviewedById], references: [id])
+  reviewedById String?
+  reviewedBy   User?   @relation("ApprovalReviews", fields: [reviewedById], references: [id])
 
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([status])
@@ -665,20 +702,20 @@ model ApprovalRequest {
 // ─── Notification ─────────────────────────────────────────────────────────
 
 model Notification {
-  id         String           @id @default(uuid())
-  type       NotificationType @default(INFO)
-  title      String
-  message    String           @db.Text
-  isRead     Boolean          @default(false)
-  payload    Json             @default("{}")
+  id      String           @id @default(uuid())
+  type    NotificationType @default(INFO)
+  title   String
+  message String           @db.Text
+  isRead  Boolean          @default(false)
+  payload Json             @default("{}")
 
-  tenantId   String?
-  tenant     Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  userId     String?
-  user       User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt  DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([userId])
@@ -692,20 +729,20 @@ model ApiKey {
   id         String    @id @default(uuid())
   name       String
   keyHash    String    @unique
-  prefix     String    // first 8 chars shown in UI
+  prefix     String // first 8 chars shown in UI
   lastUsedAt DateTime?
   expiresAt  DateTime?
   isActive   Boolean   @default(true)
   scopes     Json      @default("[]")
 
-  tenantId   String?
-  tenant     Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  userId     String?
-  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([userId])
@@ -718,13 +755,13 @@ model ApiKey {
 model TenantMetric {
   id         String     @id @default(uuid())
   type       MetricType @default(GAUGE)
-  name       String     // e.g. "agent.executions", "task.completions"
+  name       String // e.g. "agent.executions", "task.completions"
   value      Float
   labels     Json       @default("{}")
   recordedAt DateTime   @default(now())
 
-  tenantId   String?
-  tenant     Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([name])
@@ -735,30 +772,30 @@ model TenantMetric {
 // ─── Phase 4 Models: Analytics & Connectors ─────────────────────────────────
 
 model AnalyticsModel {
-  id         String   @id @default(uuid())
-  name       String
-  version    String
+  id          String  @id @default(uuid())
+  name        String
+  version     String
   description String? @db.Text
-  metadata   Json     @default("{}")
+  metadata    Json    @default("{}")
 
-  tenantId   String?
-  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   analyticsFeatures AnalyticsFeature[]
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("analytics_models")
 }
 
 model AnalyticsFeature {
-  id         String   @id @default(uuid())
-  tenantId   String
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  modelId    String?
-  model      AnalyticsModel? @relation(fields: [modelId], references: [id])
+  modelId String?
+  model   AnalyticsModel? @relation(fields: [modelId], references: [id])
 
   features   Json
   recordedAt DateTime @default(now())
@@ -770,29 +807,29 @@ model AnalyticsFeature {
 }
 
 model CrmConnector {
-  id         String   @id @default(uuid())
-  name       String
-  provider   String
-  config     Json     @default("{}")
-  tenantId   String?
-  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  isActive   Boolean  @default(true)
+  id       String  @id @default(uuid())
+  name     String
+  provider String
+  config   Json    @default("{}")
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  isActive Boolean @default(true)
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@map("crm_connectors")
 }
 
 model TenantLimit {
-  id         String   @id @default(uuid())
-  tenantId   String   @unique
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  limits     Json     @default("{}")
+  id       String @id @default(uuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  limits   Json   @default("{}")
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("tenant_limits")
 }
@@ -800,19 +837,19 @@ model TenantLimit {
 // ─── Phase 4.5: Quota Usage Tracking ─────────────────────────────────────
 
 model QuotaUsage {
-  id         String   @id @default(uuid())
-  tenantId   String
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  agentId    String?
-  agent      Agent?   @relation("AgentQuotaUsage", fields: [agentId], references: [id])
-  quotaKey   String   // e.g. "agent_executions", "api_calls_per_minute", "model_scoring"
-  used       Int      @default(0)
-  limit      Int      @default(0)
-  resetAt    DateTime?  // null = never resets (lifetime quota)
-  period     String   @default("daily")  // hourly | daily | monthly | lifetime
+  id       String    @id @default(uuid())
+  tenantId String
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId  String?
+  agent    Agent?    @relation("AgentQuotaUsage", fields: [agentId], references: [id])
+  quotaKey String // e.g. "agent_executions", "api_calls_per_minute", "model_scoring"
+  used     Int       @default(0)
+  limit    Int       @default(0)
+  resetAt  DateTime? // null = never resets (lifetime quota)
+  period   String    @default("daily") // hourly | daily | monthly | lifetime
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, agentId, quotaKey, period])
   @@index([tenantId])
@@ -823,18 +860,18 @@ model QuotaUsage {
 // ─── Phase 4.3: OAuth Token Store ─────────────────────────────────────────
 
 model OAuthToken {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  provider     String   // e.g. "salesforce", "hubspot"
-  accessToken  String   @db.Text  // encrypted at application layer
-  refreshToken String?  @db.Text  // encrypted
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider     String // e.g. "salesforce", "hubspot"
+  accessToken  String    @db.Text // encrypted at application layer
+  refreshToken String?   @db.Text // encrypted
   expiresAt    DateTime?
-  scopes       Json     @default("[]")
-  metadata     Json     @default("{}")
+  scopes       Json      @default("[]")
+  metadata     Json      @default("{}")
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([tenantId, provider])
   @@index([tenantId])
@@ -844,28 +881,28 @@ model OAuthToken {
 // ─── Phase 4.4: Financial Module ──────────────────────────────────────────
 
 model Invoice {
-  id          String        @id @default(uuid())
-  number      String        @unique  // e.g. "INV-2026-001"
-  status      InvoiceStatus @default(DRAFT)
-  currency    String        @default("USD")
-  subtotal    Decimal       @db.Decimal(14, 4)
-  taxAmount   Decimal       @default(0) @db.Decimal(14, 4)
-  total       Decimal       @db.Decimal(14, 4)
-  lineItems   Json          @default("[]") // [{ description, qty, unitPrice, amount }]
-  issuedAt    DateTime?
-  dueAt       DateTime?
-  paidAt      DateTime?
-  notes       String?       @db.Text
-  metadata    Json          @default("{}")
+  id        String        @id @default(uuid())
+  number    String        @unique // e.g. "INV-2026-001"
+  status    InvoiceStatus @default(DRAFT)
+  currency  String        @default("USD")
+  subtotal  Decimal       @db.Decimal(14, 4)
+  taxAmount Decimal       @default(0) @db.Decimal(14, 4)
+  total     Decimal       @db.Decimal(14, 4)
+  lineItems Json          @default("[]") // [{ description, qty, unitPrice, amount }]
+  issuedAt  DateTime?
+  dueAt     DateTime?
+  paidAt    DateTime?
+  notes     String?       @db.Text
+  metadata  Json          @default("{}")
 
-  tenantId    String
-  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  expenses    Expense[]
+  expenses      Expense[]
   billingEvents BillingEvent[]
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([status])
@@ -880,18 +917,18 @@ model Expense {
   currency    String          @default("USD")
   metadata    Json            @default("{}")
 
-  tenantId    String
-  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  agentId     String?
-  agent       Agent?          @relation("AgentExpenses", fields: [agentId], references: [id])
+  agentId String?
+  agent   Agent?  @relation("AgentExpenses", fields: [agentId], references: [id])
 
-  invoiceId   String?
-  invoice     Invoice?        @relation(fields: [invoiceId], references: [id])
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
 
-  recordedAt  DateTime        @default(now())
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  recordedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([tenantId])
   @@index([agentId])
@@ -905,15 +942,372 @@ model BillingEvent {
   payload     Json             @default("{}")
   processedAt DateTime?
 
-  tenantId    String
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  invoiceId   String?
-  invoice     Invoice?         @relation(fields: [invoiceId], references: [id])
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
 
-  createdAt   DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([type])
   @@map("billing_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Routines Module (Paperclip Integration)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum RoutineStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+enum RoutineTriggerType {
+  SCHEDULE // Cron-based scheduling
+  WEBHOOK // HTTP webhook trigger
+  EVENT // Event-based trigger
+  MANUAL // Manual trigger only
+}
+
+enum RoutineRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Routine {
+  id          String        @id @default(uuid())
+  name        String
+  description String?       @db.Text
+  status      RoutineStatus @default(DRAFT)
+
+  // LangGraph workflow definition
+  graphDefinition Json @default("{}") // Nodes, edges, conditional logic
+
+  // Configuration
+  config   Json @default("{}") // maxIterations, timeout, retryPolicy
+  metadata Json @default("{}")
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  triggers RoutineTrigger[]
+  runs     RoutineRun[]
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("routines")
+}
+
+model RoutineTrigger {
+  id     String             @id @default(uuid())
+  type   RoutineTriggerType
+  name   String? // Optional trigger name
+  config Json               @default("{}") // cron expression, webhook secret, event filter
+
+  // Webhook specifics
+  webhookPath   String? @unique // /webhooks/routines/:id/:secret
+  webhookSecret String? // For webhook signature validation
+
+  isActive Boolean @default(true)
+
+  routineId String
+  routine   Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  lastFiredAt DateTime?
+  nextFireAt  DateTime? // For schedule triggers
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([routineId])
+  @@index([type])
+  @@index([webhookPath])
+  @@map("routine_triggers")
+}
+
+model RoutineRun {
+  id String @id @default(uuid())
+
+  // Execution state (LangGraph checkpoint)
+  state    Json? // Serialized graph state for resumption
+  threadId String // LangGraph thread identifier
+
+  // Execution results
+  status RoutineRunStatus @default(PENDING)
+  input  Json             @default("{}")
+  output Json?
+  error  String?          @db.Text
+
+  // Metrics
+  startedAt   DateTime?
+  completedAt DateTime?
+  durationMs  Int?
+
+  // Trigger info
+  triggerType RoutineTriggerType?
+  triggerId   String?
+
+  routineId String
+  routine   Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Agent execution
+  agentId String?
+  agent   Agent?  @relation(fields: [agentId], references: [id])
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([routineId])
+  @@index([tenantId])
+  @@index([status])
+  @@index([triggerType])
+  @@map("routine_runs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Cost Tracking Module (Paperclip Integration)
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum BudgetPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum BudgetScope {
+  TENANT
+  DEPARTMENT
+  AGENT
+  MODEL
+}
+
+enum BudgetAction {
+  ALERT
+  BLOCK
+  DEGRADE
+}
+
+enum BudgetIncidentStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model CostRecord {
+  id     String @id @default(uuid())
+
+  // Cost attribution
+  tenantId     String
+  tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  agentId     String?
+  agent       Agent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  // LLM Cost details
+  provider     String  // OPENAI, ANTHROPIC, MINIMAX, DEEPSEEK
+  model        String
+  inputTokens  Int     @default(0)
+  outputTokens Int     @default(0)
+  costCents    Decimal @db.Decimal(10, 4)
+
+  // Time window for aggregation
+  windowStart DateTime
+  windowEnd   DateTime
+
+  // Optional: Link to LangSmith run for traceability
+  langSmithRunId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([agentId])
+  @@index([departmentId])
+  @@index([provider])
+  @@index([model])
+  @@index([windowStart, windowEnd])
+  @@map("cost_records")
+}
+
+model BudgetPolicy {
+  id     String @id @default(uuid())
+
+  // Policy details
+  tenantId   String
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name            String
+  limitCents      Decimal @db.Decimal(12, 2)
+  period          BudgetPeriod @default(MONTHLY)
+  scope           BudgetScope @default(TENANT)
+
+  // Alert configuration
+  alertThresholds Int[]    @default([50, 75, 90]) // percentages at which to alert
+  action          BudgetAction @default(ALERT) // What to do when exceeded
+
+  enabled       Boolean @default(true)
+  currentSpendCents Decimal @default(0) @db.Decimal(12, 2)
+  resetAt       DateTime // When the budget period resets
+
+  // Scope relations - separate fields for different scope types
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  agentId String?
+  agent   Agent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  // Optional: scope by model (stored as string for flexibility)
+  modelPattern String?
+
+  incidents    BudgetIncident[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([scope])
+  @@index([departmentId])
+  @@index([agentId])
+  @@index([enabled])
+  @@index([resetAt])
+  @@map("budget_policies")
+}
+
+// ─── Phase D: Goals & Projects ───────────────────────────────────────────────
+
+enum GoalLevel {
+  COMPANY
+  DEPARTMENT
+  TEAM
+  INDIVIDUAL
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+  ARCHIVED
+}
+
+model Goal {
+  id          String     @id @default(cuid())
+  tenantId    String
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?    @db.Text
+
+  level       GoalLevel  @default(INDIVIDUAL)
+  status      GoalStatus @default(ACTIVE)
+  progress    Int        @default(0) // 0-100
+
+  // Hierarchy
+  parentId    String?
+  parent      Goal?      @relation("GoalHierarchy", fields: [parentId], references: [id])
+  children    Goal[]     @relation("GoalHierarchy")
+
+  // Ownership
+  ownerAgentId String?
+  ownerAgent   Agent?    @relation(fields: [ownerAgentId], references: [id], onDelete: SetNull)
+
+  ownerUserId  String?
+  ownerUser    User?     @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  // Linking
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  // Dates
+  targetDate   DateTime?
+  completedAt  DateTime?
+
+  // Metrics
+  metrics Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([parentId])
+  @@index([status])
+  @@index([ownerAgentId])
+  @@index([ownerUserId])
+  @@map("goals")
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model Project {
+  id           String        @id @default(cuid())
+  tenantId     String
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name         String
+  description  String?       @db.Text
+  status       ProjectStatus @default(ACTIVE)
+
+  // Linking
+  goalIds      String[]      @default([]) // Related goals
+  departmentId  String?
+  department   Department?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  // Dates
+  targetDate   DateTime?
+
+  // Metadata
+  metadata     Json          @default("{}")
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([departmentId])
+  @@map("projects")
+}
+
+model BudgetIncident {
+  id     String @id @default(uuid())
+
+  budgetPolicyId String
+  budgetPolicy   BudgetPolicy @relation(fields: [budgetPolicyId], references: [id], onDelete: Cascade)
+
+  threshold       Int // percentage that triggered this incident
+  totalCents      Decimal @db.Decimal(12, 2) // spend at time of incident
+  status          BudgetIncidentStatus @default(ACTIVE)
+
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([budgetPolicyId])
+  @@index([status])
+  @@map("budget_incidents")
 }
