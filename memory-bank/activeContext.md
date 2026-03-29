@@ -2106,14 +2106,29 @@ cat deploy_key
 | Manual `workflow_dispatch`    | Deploy with optional rollback SHA |
 | Manual rollback               | Enter commit SHA to revert        |
 
-### Next Steps (On Contabo)
+### ✅ Completed (March 29, 2026)
 
-1. Ensure `/opt/neurecore/backend` is a git clone with `origin` pointing to GitHub
-2. Test SSH connection: `ssh -i deploy_key root@109.123.248.253`
-3. Add GitHub Secrets to repository
-4. Push to `main` to trigger first deploy
+1. ✅ GitHub SSH key added to Contabo (`/root/.ssh/id_github`)
+2. ✅ SSH config set up for `git@github.com` access from Contabo
+3. ✅ Repository cloned to `/opt/neurecore/backend` (monorepo root)
+4. ✅ NestJS backend at `/opt/neurecore/backend/backend/`
+5. ✅ Dependencies installed (`npm ci --legacy-peer-deps`)
+6. ✅ Build successful (`npm run build`)
+7. ✅ PM2 process running (`neurecore-backend`)
+8. ✅ Workflow path fixed: `cd backend/backend` for npm commands
 
-### Alternative: Manual Deploy (No Auto-Update)
+### Manual Deploy Commands
+
+```bash
+ssh contabo
+cd /opt/neurecore/backend
+git pull origin main
+cd backend
+npm ci --legacy-peer-deps
+npx prisma generate
+npm run build
+pm2 restart neurecore-backend
+```
 
 ```bash
 ssh contabo
