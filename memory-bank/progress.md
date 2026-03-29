@@ -1,8 +1,8 @@
 # Progress Tracking — NeureCore Gold Phase 1
 
-**Last Updated**: March 27, 2026
+**Last Updated**: March 29, 2026
 **Current Phase**: Phase 1 Foundation
-**Overall Status**: 🟢 Phase 1 ~99% Complete - CORS Fixed, Frontend-Backend Communication Verified
+**Overall Status**: 🟢 Phase 1 ~99% Complete - GitHub-Contabo Auto-Deploy Configured
 
 ---
 
@@ -401,6 +401,34 @@ The backend includes many additional modules beyond Phase 1:
 - ✅ `progress.md` — This file
 
 **Value**: Developers understand architecture without asking questions.
+
+---
+
+### 13. GitHub Actions Auto-Deploy (95%) ✅
+
+**Completed (March 29, 2026)**:
+
+- ✅ `.github/workflows/deploy-contabo.yml` — Auto-deploy workflow
+- ✅ SSH key configured on Contabo for GitHub access
+- ✅ Repository cloned to `/opt/neurecore/backend` on Contabo
+- ✅ NestJS backend path: `/opt/neurecore/backend/backend/`
+- ✅ Workflow path fixed: `cd backend/backend` for npm commands
+
+**GitHub Secrets Required**:
+
+| Secret                 | Value                    |
+| ---------------------- | ------------------------ |
+| `CONTABO_HOST`         | `109.123.248.253`        |
+| `CONTABO_PORT`         | `22`                     |
+| `CONTABO_USERNAME`     | `root`                   |
+| `CONTABO_SSH_KEY`      | Private SSH key          |
+| `CONTABO_BACKEND_PATH` | `/opt/neurecore/backend` |
+| `CONTABO_PM2_PROCESS`  | `neurecore-backend`      |
+
+**Remaining**:
+
+- [ ] Add GitHub Secrets to repository
+- [ ] Trigger first auto-deploy
 
 ---
 
