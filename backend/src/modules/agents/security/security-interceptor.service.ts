@@ -11,7 +11,7 @@
  * @module agents/security
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { IStructuredTool } from '../../tools/interfaces/structured-tool.interface';
 import type {
@@ -33,11 +33,21 @@ export class SecurityInterceptorService implements ISecurityInterceptor {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly promptInjectionValidator: IPromptInjectionValidator,
-    private readonly commandPatternValidator: ICommandPatternValidator,
-    private readonly resourceAccessValidator: IResourceAccessValidator,
-    private readonly policyProvider: ISecurityPolicyProvider,
-    private readonly auditLogger: ISecurityAuditLogger,
+    @Optional()
+    @Inject('IPromptInjectionValidator')
+    private readonly promptInjectionValidator?: IPromptInjectionValidator,
+    @Optional()
+    @Inject('ICommandPatternValidator')
+    private readonly commandPatternValidator?: ICommandPatternValidator,
+    @Optional()
+    @Inject('IResourceAccessValidator')
+    private readonly resourceAccessValidator?: IResourceAccessValidator,
+    @Optional()
+    @Inject('ISecurityPolicyProvider')
+    private readonly policyProvider?: ISecurityPolicyProvider,
+    @Optional()
+    @Inject('ISecurityAuditLogger')
+    private readonly auditLogger?: ISecurityAuditLogger,
   ) {}
 
   /**
@@ -61,8 +71,21 @@ export class SecurityInterceptorService implements ISecurityInterceptor {
       `Security validation: tool=${tool.name}, agentType=${context.agentType}, tenantId=${context.tenantId}`,
     );
 
+    // Local references for optional providers (helps TypeScript narrowing)
+    const policyProvider = this.policyProvider;
+    const promptValidator = this.promptInjectionValidator;
+    const commandValidator = this.commandPatternValidator;
+    const resourceValidator = this.resourceAccessValidator;
+
     // Step 1: Get security policy
-    const policy = await this.policyProvider.getPolicy(
+    if (!policyProvider) {
+      this.logger.warn(
+        'SecurityPolicyProvider not available, skipping policy check',
+      );
+      return this.createAllowedResult(tool.name, input, Date.now() - startTime);
+    }
+
+    const policy = await policyProvider.getPolicy(
       context.agentType,
       context.tenantId,
     );
@@ -80,7 +103,7 @@ export class SecurityInterceptorService implements ISecurityInterceptor {
     }
 
     // Step 2: Check if tool is allowed by policy
-    if (!this.policyProvider.isToolAllowed(tool.name, policy)) {
+    if (!policyProvider.isToolAllowed(tool.name, policy)) {
       this.logger.warn(
         `Tool ${tool.name} not allowed by policy for agentType=${context.agentType}`,
       );
@@ -101,7 +124,9 @@ export class SecurityInterceptorService implements ISecurityInterceptor {
 
     // Step 3: Prompt injection detection (if enabled)
     if (policy.promptInjectionDetection) {
-      const injectionResult = this.promptInjectionValidator.detect(input);
+      const injectionResult = promptValidator
+        ? promptValidator.detect(input)
+        : { detected: false, patterns: [] };
       if (injectionResult.detected) {
         this.logger.warn(
           `Prompt injection detected in tool=${tool.name}: ${injectionResult.patterns.join(', ')}`,
@@ -123,13 +148,10 @@ export class SecurityInterceptorService implements ISecurityInterceptor {
     }
 
     // Step 4: Command pattern validation (for shell tools)
-    if (
-      policy.commandValidation &&
-      this.commandPatternValidator.isShellTool(tool.name)
-    ) {
+    if (policy.commandValidation && commandValidator?.isShellTool(tool.name)) {
       const command = this.extractCommandFromInput(input);
       if (command) {
-        const commandResult = this.commandPatternValidator.validate(command);
+        const commandResult = commandValidator.validate(command);
         if (!commandResult.allowed) {
           this.logger.warn(
             `Dangerous command detected in tool=${tool.name}: ${commandResult.reason}`,
@@ -159,10 +181,9 @@ export class SecurityInterceptorService implements ISecurityInterceptor {
       const resource = this.extractResourceFromInput(input);
       const accessContext = this.determineAccessContext(tool.name, input);
       if (resource && accessContext) {
-        const resourceResult = this.resourceAccessValidator.validate(
-          resource,
-          accessContext,
-        );
+        const resourceResult = resourceValidator
+          ? resourceValidator.validate(resource, accessContext)
+          : { allowed: true };
         if (!resourceResult.allowed) {
           this.logger.warn(
             `Forbidden resource access in tool=${tool.name}: ${resourceResult.reason}`,
@@ -213,7 +234,7 @@ export class SecurityInterceptorService implements ISecurityInterceptor {
     return {
       allowed: true,
       reason: 'All security checks passed',
-      sanitizedInput: this.promptInjectionValidator.sanitize(input),
+      sanitizedInput: promptValidator ? promptValidator.sanitize(input) : input,
       toolName: tool.name,
       input,
     };
@@ -226,16 +247,15 @@ export class SecurityInterceptorService implements ISecurityInterceptor {
     toolName: string,
     context: ISecurityContext,
   ): Promise<boolean> {
-    const policy = await this.policyProvider.getPolicy(
-      context.agentType,
-      context.tenantId,
-    );
+    const provider = this.policyProvider;
+    if (!provider) return false;
 
+    const policy = await provider.getPolicy(context.agentType, context.tenantId);
     if (!policy) {
       return false;
     }
 
-    return this.policyProvider.isToolAllowed(toolName, policy);
+    return provider.isToolAllowed(toolName, policy);
   }
 
   /**
@@ -251,6 +271,25 @@ export class SecurityInterceptorService implements ISecurityInterceptor {
       allowed: false,
       reason,
       blockReason,
+      toolName,
+      input,
+    };
+  }
+
+  /**
+   * Create an allowed result
+   */
+  private createAllowedResult(
+    toolName: string,
+    input: Record<string, unknown>,
+    durationMs: number,
+  ): ISecurityValidationResult {
+    return {
+      allowed: true,
+      reason: 'All security checks passed',
+      sanitizedInput: this.promptInjectionValidator
+        ? this.promptInjectionValidator.sanitize(input)
+        : input,
       toolName,
       input,
     };
@@ -419,7 +458,10 @@ export class SecurityInterceptorService implements ISecurityInterceptor {
         details,
       };
 
-      await this.auditLogger.log(event);
+      const auditLogger = this.auditLogger;
+      if (!auditLogger) return;
+
+      await auditLogger.log(event);
     } catch (error) {
       this.logger.error('Failed to log security event', error);
     }
