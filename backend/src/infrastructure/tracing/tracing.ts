@@ -1,9 +1,5 @@
-/// <reference path="../../types/opentelemetry.d.ts" />
-
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-construction */
+// OpenTelemetry types are declared in ../../types/opentelemetry.d.ts
+// No runtime import needed - uses dynamic imports below
 
 /**
  * OpenTelemetry instrumentation bootstrap — Phase 4.6

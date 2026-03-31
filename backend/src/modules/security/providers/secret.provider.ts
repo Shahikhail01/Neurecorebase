@@ -12,7 +12,7 @@
  * @module security/providers
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
   ISecretProvider,
@@ -61,6 +61,8 @@ export class SecretProviderService implements ISecretProvider {
 
   constructor(
     private readonly configService: ConfigService,
+    @Optional()
+    @Inject('AUDIT_LOGGER')
     private readonly auditLogger?: ISecretAuditLogger,
   ) {
     // Allow TTL to be configured via environment

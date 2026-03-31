@@ -3,19 +3,36 @@ import {
   NotFoundException,
   ConflictException,
   Logger,
+  Optional,
+  Inject,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { CreateTenantDto, UpdateTenantDto } from './dto/tenant.dto';
 import { TenantStatus } from '@prisma/client';
-import type { TierProvisioningService } from '../tiers/services/tier-provisioning.service';
+import { TierProvisioningService } from '../tiers/services/tier-provisioning.service';
 
 @Injectable()
 export class TenantsService {
   private readonly logger = new Logger(TenantsService.name);
+  private readonly driftSafeTenantSelect = {
+    id: true,
+    name: true,
+    slug: true,
+    status: true,
+    logoUrl: true,
+    website: true,
+    industry: true,
+    settings: true,
+    metadata: true,
+    createdAt: true,
+    updatedAt: true,
+  } as const;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly provisioningService: TierProvisioningService,
+    @Optional()
+    @Inject('TIER_PROVISIONING')
+    private readonly provisioningService?: TierProvisioningService,
   ) {}
 
   async findAll(page = 1, limit = 20, search?: string) {
@@ -29,26 +46,63 @@ export class TenantsService {
       ];
     }
 
-    const [items, total] = await Promise.all([
-      this.prisma.tenant.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: { tier: true },
-      }),
-      this.prisma.tenant.count({ where }),
-    ]);
-    return { items, total, page, limit };
+    try {
+      const [items, total] = await Promise.all([
+        this.prisma.tenant.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          include: { tier: true },
+        }),
+        this.prisma.tenant.count({ where }),
+      ]);
+      return { items, total, page, limit };
+    } catch (error) {
+      this.logger.warn(
+        `Tenants.findAll relation include failed, retrying without relations: ${(error as Error).message}`,
+      );
+      // If DB is missing relation/backfilled columns, retry with a projection
+      // that avoids selecting drifted fields (e.g. tierId).
+      if (this.isMissingColumnError(error)) {
+        const [items, total] = await Promise.all([
+          this.prisma.tenant.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+            select: this.driftSafeTenantSelect,
+          }),
+          this.prisma.tenant.count({ where }),
+        ]);
+        return { items, total, page, limit };
+      }
+      throw error;
+    }
   }
 
   async findOne(id: string) {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id },
-      include: { tier: true },
-    });
-    if (!tenant) throw new NotFoundException(`Tenant ${id} not found`);
-    return tenant;
+    try {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id },
+        include: { tier: true },
+      });
+      if (!tenant) throw new NotFoundException(`Tenant ${id} not found`);
+      return tenant;
+    } catch (error) {
+      this.logger.warn(
+        `Tenants.findOne relation include failed, retrying without relations: ${(error as Error).message}`,
+      );
+      if (this.isMissingColumnError(error)) {
+        const tenant = await this.prisma.tenant.findUnique({
+          where: { id },
+          select: this.driftSafeTenantSelect,
+        });
+        if (!tenant) throw new NotFoundException(`Tenant ${id} not found`);
+        return tenant;
+      }
+      throw error;
+    }
   }
 
   async create(dto: CreateTenantDto) {
@@ -90,21 +144,23 @@ export class TenantsService {
     });
 
     // Auto-provision agents based on tier
-    try {
-      const result = await this.provisioningService.provisionAgents(
-        tenant.id,
-        tenant.tierId,
-      );
-      this.logger.log(
-        `Tenant ${tenant.slug} provisioned with ${result.agentsProvisioned} agents`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to provision agents for tenant ${tenant.id}: ${error.message}`,
-        error.stack,
-      );
-      // Don't fail tenant creation if provisioning fails
-      // Admin can manually provision later
+    if (this.provisioningService) {
+      try {
+        const result = await this.provisioningService.provisionAgents(
+          tenant.id,
+          tenant.tierId,
+        );
+        this.logger.log(
+          `Tenant ${tenant.slug} provisioned with ${result.agentsProvisioned} agents`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to provision agents for tenant ${tenant.id}: ${(error as Error).message}`,
+          (error as Error).stack,
+        );
+        // Don't fail tenant creation if provisioning fails
+        // Admin can manually provision later
+      }
     }
 
     this.logger.log(`Tenant created: ${tenant.slug} on tier ${tier.name}`);
@@ -153,8 +209,10 @@ export class TenantsService {
       include: { tier: true },
     });
 
+    const oldTierName =
+      (tenant as any).tier?.name ?? (tenant as any).tierId ?? 'unknown';
     this.logger.log(
-      `Tenant ${tenant.slug} changed from tier ${tenant.tier.name} to ${newTier.name}`,
+      `Tenant ${tenant.slug} changed from tier ${oldTierName} to ${newTier.name}`,
     );
     return updated;
   }
@@ -165,5 +223,11 @@ export class TenantsService {
       where: { id },
       data: { status: TenantStatus.SUSPENDED },
     });
+  }
+
+  private isMissingColumnError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    const code = (error as { code?: string }).code;
+    return code === 'P2022' || error.message.includes('does not exist');
   }
 }

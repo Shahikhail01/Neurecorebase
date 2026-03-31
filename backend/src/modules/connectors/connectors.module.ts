@@ -43,7 +43,6 @@ export class ConnectorsModule implements OnModuleInit {
   onModuleInit(): void {
     // Guard against missing registry during early init (defensive for local dev/emulator)
     if (!this.registry || typeof this.registry.register !== 'function') {
-      // eslint-disable-next-line no-console
       console.warn(
         'ConnectorsModule: ConnectorRegistry unavailable during onModuleInit — skipping adapter registration',
       );

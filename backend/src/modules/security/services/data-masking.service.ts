@@ -56,6 +56,10 @@ export class DataMaskingService {
       return '';
     }
 
+    if (typeof value === 'object') {
+      return '[object]';
+    }
+
     const stringValue = String(value);
     const length = stringValue.length;
 

@@ -71,7 +71,9 @@ describe('SpendingCapService', () => {
     await service.setSoftCap('tenant-1', 500);
     expect(mockPrisma.tenantLimit.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: expect.objectContaining({ limits: { spending_soft_cap_usd: 500 } }),
+        update: expect.objectContaining({
+          limits: { spending_soft_cap_usd: 500 },
+        }),
       }),
     );
   });

@@ -32,6 +32,9 @@ export class CalculatorTool implements ITool {
     }
 
     try {
+      // Using Function here to evaluate a sanitized arithmetic expression.
+      // This is intentionally limited to numbers and operators; disable the implied-eval rule for this line.
+
       const result = Function(
         `"use strict"; return (${expression})`,
       )() as unknown;

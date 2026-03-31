@@ -7,6 +7,8 @@
  * @version 1.0.0
  */
 
+/* eslint-disable @typescript-eslint/no-namespace */
+
 /**
  * Custom matcher: toBeValidUUID
  * Validates that a string is a valid UUID v4

@@ -173,7 +173,7 @@ export class OfficialAgentGraph {
   /**
    * Initialize the LangGraph graph
    */
-  /* eslint-disable @typescript-eslint/no-unsafe-argument */
+
   private buildGraph() {
     // Define the workflow graph with proper typing
     const workflow = new StateGraph(AgentStateAnnotation);
@@ -212,7 +212,6 @@ export class OfficialAgentGraph {
 
     return workflow;
   }
-  /* eslint-enable @typescript-eslint/no-unsafe-argument */
 
   private initializeGraph() {
     try {
@@ -513,7 +512,7 @@ export class OfficialAgentGraph {
   /**
    * Emit node event for streaming
    */
-  /* eslint-disable @typescript-eslint/no-unsafe-argument */
+
   private emitNodeEvent(
     node: string,
     agentId: string,
@@ -530,7 +529,6 @@ export class OfficialAgentGraph {
       this.logger.warn(`Failed to emit node event: ${error}`);
     }
   }
-  /* eslint-enable @typescript-eslint/no-unsafe-argument */
 
   /**
    * Run the agent graph with the given input

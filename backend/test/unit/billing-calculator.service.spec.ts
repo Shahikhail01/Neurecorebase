@@ -33,7 +33,11 @@ describe('BillingCalculatorService', () => {
       { category: ExpenseCategory.MODEL_INFERENCE, amountUsd: '2.50' },
     ]);
 
-    const result = await service.calculatePeriod('tenant-1', new Date('2026-02-01'), new Date('2026-02-28'));
+    const result = await service.calculatePeriod(
+      'tenant-1',
+      new Date('2026-02-01'),
+      new Date('2026-02-28'),
+    );
 
     expect(result.grandTotal).toBeCloseTo(17.5);
     expect(result.totalAgentExecutionCost).toBeCloseTo(10);
@@ -43,7 +47,11 @@ describe('BillingCalculatorService', () => {
   it('returns zero totals when no expenses exist', async () => {
     mockPrisma.expense.findMany.mockResolvedValue([]);
 
-    const result = await service.calculatePeriod('tenant-1', new Date('2026-02-01'), new Date('2026-02-28'));
+    const result = await service.calculatePeriod(
+      'tenant-1',
+      new Date('2026-02-01'),
+      new Date('2026-02-28'),
+    );
 
     expect(result.grandTotal).toBe(0);
     expect(result.totalAgentExecutionCost).toBe(0);
@@ -66,7 +74,12 @@ describe('BillingCalculatorService', () => {
     const stub = { id: 'exp-1', category: 'API_CALL', amountUsd: '0.05' };
     mockPrisma.expense.create.mockResolvedValue(stub);
 
-    const result = await service.recordExpense('tenant-1', 'API_CALL', 'OpenAI call', 0.05);
+    const result = await service.recordExpense(
+      'tenant-1',
+      'API_CALL',
+      'OpenAI call',
+      0.05,
+    );
     expect(result).toEqual(stub);
     expect(mockPrisma.expense.create).toHaveBeenCalledTimes(1);
   });

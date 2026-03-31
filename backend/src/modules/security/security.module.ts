@@ -18,8 +18,16 @@ import { SecretProviderService } from './providers/secret.provider';
 @Global()
 @Module({
   imports: [ConfigModule],
-  providers: [SecretProviderService],
-  exports: [SecretProviderService, 'ISecretProvider', 'ISecretRotator'],
+  providers: [
+    SecretProviderService,
+    {
+      provide: 'AUDIT_LOGGER',
+      useValue: {
+        log: () => {},
+      },
+    },
+  ],
+  exports: [SecretProviderService, 'AUDIT_LOGGER'],
 })
 export class SecurityModule {}
 

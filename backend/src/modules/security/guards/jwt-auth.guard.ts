@@ -5,7 +5,11 @@
  * Re-exports and enhances the JWT auth guard from auth module.
  */
 
-import { Injectable, ExecutionContext } from '@nestjs/common';
+import {
+  Injectable,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
@@ -40,7 +44,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
    */
   handleRequest<TUser = unknown>(err: Error | null, user: TUser): TUser {
     if (err) throw err;
-    if (!user) throw new (require('@nestjs/common').UnauthorizedException)();
+    if (!user) throw new UnauthorizedException();
     return user;
   }
 }

@@ -126,7 +126,7 @@ export class RoutineGraph {
   /**
    * Build the LangGraph workflow from a definition
    */
-  /* eslint-disable @typescript-eslint/no-unsafe-argument */
+
   buildGraphFromDefinition(
     definition: RoutineGraphDefinition,
     config: RoutineConfig = {},
@@ -163,7 +163,6 @@ export class RoutineGraph {
 
     return workflow;
   }
-  /* eslint-enable @typescript-eslint/no-unsafe-argument */
 
   /**
    * Create a node function based on node type
@@ -503,7 +502,7 @@ export class RoutineGraph {
   /**
    * Build the base graph structure
    */
-  /* eslint-disable @typescript-eslint/no-unsafe-argument */
+
   private buildGraph() {
     const workflow = new StateGraph(RoutineStateAnnotation);
 
@@ -513,7 +512,6 @@ export class RoutineGraph {
 
     return workflow;
   }
-  /* eslint-enable @typescript-eslint/no-unsafe-argument */
 
   /**
    * Execute a routine with the given definition

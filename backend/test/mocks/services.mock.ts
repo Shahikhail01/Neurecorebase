@@ -70,7 +70,7 @@ export function createMockPrismaClient() {
       delete: jest.fn(),
     },
     // Transaction support
-    $transaction: jest.fn((fn: Function) => fn()),
+    $transaction: jest.fn((fn: (...args: any[]) => any) => fn()),
     $connect: jest.fn(),
     $disconnect: jest.fn(),
   };

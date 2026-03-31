@@ -1,30 +1,30 @@
 # Progress Tracking — NeureCore Gold Phase 1
 
-**Last Updated**: March 29, 2026
+**Last Updated**: March 30, 2026
 **Current Phase**: Phase 1 Foundation
-**Overall Status**: 🟢 Phase 1 ~99% Complete - GitHub-Contabo Auto-Deploy Configured
+**Overall Status**: 🟢 Phase 1 ~99% Complete - Contabo Migration Plan Created
 
 ---
 
 ## High-Level Status Summary
 
-| Component                  | Status       | % Complete | Notes                                                   |
-| -------------------------- | ------------ | :--------: | ------------------------------------------------------- |
-| **Backend (Contabo)**      | 🟢 Running   |    100%    | Running on Contabo VPS, Nginx proxy to port 3003        |
-| **Admin Portal (Vercel)**  | 🟢 DNS Ready |    98%     | CNAME configured → cname.vercel-dns.com                 |
-| **Tenant Portal (Vercel)** | 🟢 DNS Ready |    98%     | CNAME configured → cname.vercel-dns.com                 |
-| **Wildcard Subdomain**     | 🟢 DNS Ready |    100%    | \*.neurecore.com → Vercel (Phase 3+ SaaS)               |
-| **Database (Neon)**        | 🟢 Cloud     |    100%    | Cloud PostgreSQL - connected via Contabo                |
-| **Redis (Contabo)**        | 🟢 Local     |    100%    | Using local Redis on Contabo                            |
-| **CORS Configuration**     | 🟢 Fixed     |    100%    | ✅ Verified: hq.neurecore.com, cc.neurecore.com allowed |
-| **Auth Module**            | 🟢 Complete  |    100%    | Full auth with token rotation                           |
-| **Tenants Module**         | 🟢 Complete  |    100%    | Full CRUD with role guards                              |
-| **Users Module**           | 🟢 Complete  |    100%    | Full CRUD with tenantId filtering                       |
-| **Health Module**          | 🟢 Complete  |    100%    | /health routes (public)                                 |
-| **Events (WebSocket)**     | 🟡 Complete  |    90%     | JWT auth, tenant namespacing                            |
-| **Guard & Filter Layer**   | 🟢 Complete  |    100%    | Global guards, filters, interceptors                    |
-| **Testing**                | 🔴 To Do     |    10%     | Integration testing needed                              |
-| **Documentation**          | 🟢 Complete  |    100%    | This memory-bank ✅                                     |
+| Component                  | Status       | % Complete | Notes                                                          |
+| -------------------------- | ------------ | :--------: | -------------------------------------------------------------- |
+| **Backend (Contabo)**      | 🟢 Running   |    100%    | Running on Contabo VPS, Nginx proxy to port 3003               |
+| **Admin Portal (Vercel)**  | 🟢 DNS Ready |    98%     | CNAME configured → cname.vercel-dns.com                        |
+| **Tenant Portal (Vercel)** | 🟢 DNS Ready |    98%     | CNAME configured → cname.vercel-dns.com                        |
+| **Wildcard Subdomain**     | 🟢 DNS Ready |    100%    | \*.neurecore.com → Vercel (Phase 3+ SaaS)                      |
+| **Database (Neon)**        | 🟡 Migration |    50%     | Contabo Migration Plan created — see CONTABO_MIGRATION_PLAN.md |
+| **Redis (Contabo)**        | 🟡 Pending   |    50%     | Needs password + AOF hardening (see migration plan)            |
+| **CORS Configuration**     | 🟢 Fixed     |    100%    | ✅ Verified: hq.neurecore.com, cc.neurecore.com allowed        |
+| **Auth Module**            | 🟢 Complete  |    100%    | Full auth with token rotation                                  |
+| **Tenants Module**         | 🟢 Complete  |    100%    | Full CRUD with role guards                                     |
+| **Users Module**           | 🟢 Complete  |    100%    | Full CRUD with tenantId filtering                              |
+| **Health Module**          | 🟢 Complete  |    100%    | /health routes (public)                                        |
+| **Events (WebSocket)**     | 🟡 Complete  |    90%     | JWT auth, tenant namespacing                                   |
+| **Guard & Filter Layer**   | 🟢 Complete  |    100%    | Global guards, filters, interceptors                           |
+| **Testing**                | 🔴 To Do     |    10%     | Integration testing needed                                     |
+| **Documentation**          | 🟢 Complete  |    100%    | This memory-bank ✅                                            |
 
 ---
 
@@ -52,14 +52,21 @@
 
 ## Component-Level Breakdown
 
-### 1. Docker Infrastructure (Local Dev Only)
+### 1. Docker Infrastructure → Contabo Migration
 
-**Completed**:
+**Current Status**: Contabo Migration Plan created (see `docs/CONTABO_MIGRATION_PLAN.md`)
 
-- ✅ docker-compose.yml with postgres 16, pgvector, redis 7
-- ✅ Volume definitions for persistence
-- ✅ Health check endpoints defined
-- ✅ All 3 services have proper port mappings
+**New Architecture**:
+
+- Backend: Local dev machine → Contabo PostgreSQL + Redis
+- Database: Contabo `neurecore_prod` (PostgreSQL 16) — merge from `neurecore_dev` (36 tables)
+- Cache: Contabo Redis 7 — with password + AOF hardening
+- Neon: Development branching only (dev experiments)
+- Upstash: To be replaced by Contabo Redis
+
+**Pending**:
+
+- Docker containers to be removed after Contabo is fully tested (Phase 6 of migration plan)
 
 **Note**: Production uses Neon (cloud) and Upstash (cloud). Docker is for local development only.
 
@@ -398,6 +405,21 @@ The backend includes many additional modules beyond Phase 1:
 - ✅ `systemPatterns.md` — SOLID, tenant isolation, auth strategies
 - ✅ `productContext.md` — All Phase 1 API endpoints
 - ✅ `activeContext.md` — Current focus + blockers
+
+---
+
+## Recent Local Debugging — 2026-03-30
+
+- **What I did:** Restored `backend/prisma/schema.prisma`, fixed a TypeScript bug, and restarted the backend and both frontends locally to reproduce issues.
+- **Current state:** Backend health endpoint and admin login succeed, but `GET /api/v1/tenants` and `GET /api/v1/agents` return INTERNAL_ERROR (Prisma errors about missing columns `tenants.tierId` and `agents.tierAgentPoolId`).
+- **Actions taken:** Temporarily hardened `TenantsService` and `AgentsService` to retry queries without relation includes; executed idempotent DDL to create `tiers` and `tier_agent_pools`, add missing columns if absent, and seed default tiers in the local DB.
+- **Suspected cause:** Prisma client and database schema are out of sync, or the running backend is connecting to a different database/schema than the one inspected. The migration may not be recorded in `_prisma_migrations` for the DB used by the process.
+- **Next steps (priority):**
+  1.  Verify `_prisma_migrations` rows and `current_database()`/`current_schema()` for the DB used by the running backend.
+  2.  Run `pnpm prisma generate` in `backend/` and restart the backend so the runtime uses an up-to-date Prisma client.
+  3.  Re-test tenants/agents endpoints with an admin token and capture full server log stack traces (use requestIds to locate logs).
+  4.  If migrations are missing, run `pnpm prisma migrate deploy` (against the correct `DATABASE_URL`) or apply the migration SQL to the correct DB.
+- **Notes:** Keep manual DDL idempotent. Use requestIds to map API errors to detailed server logs when investigating stack traces.
 - ✅ `progress.md` — This file
 
 **Value**: Developers understand architecture without asking questions.
@@ -1169,3 +1191,135 @@ All features from `plans/IMPLEMENTATION-REFERENCE.md` are now complete:
 - Phase C (3 features): Projects, Org Chart, Activity ✅
 
 **TypeScript Status**: 0 errors in both backend and frontend ✅
+
+---
+
+## ✅ LOCAL DEVELOPMENT ENVIRONMENT (March 30, 2026)
+
+### Services Running Locally
+
+| Service                       | URL                       | Port | Status     |
+| ----------------------------- | ------------------------- | ---- | ---------- |
+| **Backend** (NestJS)          | http://localhost:3000/api | 3000 | ✅ Healthy |
+| **frontend-tenant** (Next.js) | http://localhost:3001     | 3001 | ✅ Ready   |
+| **frontend-admin** (Next.js)  | http://localhost:3002     | 3002 | ✅ Ready   |
+
+### Infrastructure
+
+- **PostgreSQL** (Docker): Running on port 5432
+- **Redis** (Docker): Running on port 6379
+
+### Access URLs
+
+- **Tenant Portal**: http://localhost:3001
+- **Admin Portal**: http://localhost:3002
+- **Admin Login**: http://localhost:3002/login
+- **API Health**: http://localhost:3000/api/v1/health
+
+### Dependency Fixes Applied
+
+## Contabo Migration Status (March 30, 2026)
+
+### ✅ PHASE 1: Security Hardening — COMPLETE
+
+- Redis password set + AOF enabled
+- pg_hba.conf hardened (removed 0.0.0.0/0, IP whitelist)
+- PostgreSQL ownership transferred to `neurecore_app` (no superuser)
+- WAL archiving + PITR enabled
+- Pre-migration backup created
+
+### ✅ PHASE 2: Database Merge — COMPLETE
+
+- `neurecore_dev` (36 tables) merged → `neurecore_prod`
+- `neurecore_dev` dropped from Contabo
+- All tables owned by `neurecore_app`
+
+### ✅ PHASE 3: Backend Configuration — COMPLETE
+
+- Created `backend/.env.contabo` with SSH tunnel ports
+- Created `backend/scripts/ssh-tunnel.sh` for tunnel management
+- PostgreSQL: `localhost:15433` → Contabo:5432 (via SSH)
+- Redis: `localhost:16380` → Contabo:6379 (via SSH)
+- Prisma schema synced to Contabo PostgreSQL ✓
+
+### ⏳ PHASE 4: Neon Dev Branching — PENDING (as-is, no changes needed)
+
+- Leave Neon for development branching convenience
+
+### ⏳ PHASE 5: Production Cutover — PENDING
+
+- Configure Vercel direct connection to Contabo
+- Update pg_hba.conf for Vercel IP ranges
+
+### ⏳ PHASE 6: Docker Cleanup — PENDING
+
+- Remove local containers after full Contabo testing
+
+### SSH Tunnel Usage
+
+```bash
+./backend/scripts/ssh-tunnel.sh start   # Before backend start
+cp backend/.env.contabo backend/.env    # Use Contabo config
+cd backend && npm run start:dev
+```
+
+### ✅ Backend Live Test (March 30, 2026)
+
+- **Health**: `GET /api/v1/health` → 200 OK ✓
+- **Auth**: `GET /api/v1/tenants` → 401 (requires JWT, DB query working) ✓
+- **Redis**: Using Upstash REST client (connected via tunnel) ✓
+- **Status**: NeureCore backend running on Contabo databases ✓
+
+---
+
+## 🆕 NEXT: Agent Tool Connectors (March 31, 2026) — IDENTIFIED
+
+### Status: 🔴 PENDING
+
+**From Competitive Analysis** (`docs/COMPETITIVE_ANALYSIS.md`):
+
+> NeureCore agents require Tool Layer capabilities to be effective "digital employees".
+
+### Required Agent Capabilities
+
+| Capability                | Priority     | Description                                      |
+| ------------------------- | ------------ | ------------------------------------------------ |
+| **Email (SMTP/IMAP)**     | 🔴 Critical  | Send/receive emails, client communications       |
+| **Document Creation**     | 🔴 Critical  | Reports, proposals, contracts generation         |
+| **Spreadsheet**           | 🔴 Critical  | Financial analysis, data processing              |
+| **File Storage**          | 🔴 Critical  | Centralized content repository (S3/Google Drive) |
+| **Social/Marketing APIs** | 🔴 Critical  | Meta, LinkedIn, Twitter, YouTube for marketing   |
+| **Web/Scraping**          | 🟡 Important | Data collection, website interaction             |
+
+### Reference Architecture
+
+```
+Tool Layer (Pluggable per Agent)
+├── EmailConnector (Gmail API, SMTP, Exchange)
+├── DocumentConnector (Google Docs API, Office 365)
+├── SpreadsheetConnector (Sheets API, Excel API)
+├── StorageConnector (S3, Google Drive)
+├── SocialConnectors (Meta Business, LinkedIn, Twitter API)
+└── WebConnector (Playwright, scraping APIs)
+```
+
+### Implementation Notes
+
+- Follow existing [`docs/connectors.md`](docs/connectors.md) SOLID design
+- OAuth credentials stored per-tenant, encrypted
+- Expand [`backend/src/modules/connectors/`](backend/src/modules/connectors) module
+- Reference: Artisan.co, ServiceNow, Zapier (400+ connectors)
+
+### Files to Create/Modify
+
+```
+backend/src/modules/connectors/
+├── connectors.module.ts           # Expand
+├── email/                         # NEW - Email connector
+├── documents/                     # NEW - Document connector
+├── storage/                      # NEW - Storage connector
+└── social/                        # NEW - Social media connectors
+
+frontend-tenant/src/
+└── app/agents/[id]/tools/       # NEW - Agent tool configuration UI
+```

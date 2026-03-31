@@ -221,6 +221,119 @@ Access to fetch at 'https://api...' has been blocked by CORS policy
 2. Verify `NEXT_PUBLIC_SOCKET_URL` is correct
 3. Check firewall rules
 
+### Contabo Backend Issues
+
+#### Issue: 502 Bad Gateway from brain.neurecore.com
+
+**Symptoms:**
+
+- HTTPS requests to `https://brain.neurecore.com/api/*` return HTTP 502
+- Nginx logs show `connect() failed (111: Connection refused) while connecting to upstream`
+
+**Diagnostics:**
+
+1. Check if backend is running:
+   ```bash
+   ssh contabo
+   pm2 list
+   ```
+2. Verify Nginx upstream configuration:
+   ```bash
+   cat /etc/nginx/sites-available/brain.neurecore.com
+   ```
+3. Test backend directly (bypass Nginx):
+   ```bash
+   curl -v http://localhost:3003/api/v1/health
+   ```
+4. Check Nginx error logs:
+   ```bash
+   tail -f /var/log/nginx/error.log
+   ```
+
+**Solutions:**
+
+1. Restart backend via PM2:
+   ```bash
+   pm2 restart neurecore-backend
+   ```
+2. If backend is not running, start it:
+   ```bash
+   cd /opt/neurecore/backend/backend
+   npm run build
+   pm2 start dist/src/main.js --name neurecore-backend
+   ```
+3. Verify Nginx upstream points to correct port (default 3003):
+   ```nginx
+   location /api/ {
+       proxy_pass http://127.0.0.1:3003;
+   }
+   ```
+4. Reload Nginx after configuration changes:
+   ```bash
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+
+#### Issue: PM2 process missing or crashed
+
+**Symptoms:**
+
+- `pm2 list` shows no `neurecore-backend` process
+- Backend logs are empty
+
+**Solutions:**
+
+1. Navigate to backend directory and start:
+   ```bash
+   cd /opt/neurecore/backend/backend
+   pm2 start dist/src/main.js --name neurecore-backend
+   ```
+2. Save PM2 process list for automatic restart:
+   ```bash
+   pm2 save
+   pm2 startup
+   ```
+3. Enable PM2 logs:
+   ```bash
+   pm2 logs neurecore-backend --lines 100
+   ```
+
+#### Issue: Database connection failures
+
+**Symptoms:**
+
+- Backend logs show `PrismaClientInitializationError`
+- `Error: connect ECONNREFUSED` for Neon PostgreSQL
+
+**Solutions:**
+
+1. Verify `DATABASE_URL` environment variable is set in `/opt/neurecore/backend/backend/.env`
+2. Test database connectivity:
+   ```bash
+   psql $DATABASE_URL -c "SELECT 1"
+   ```
+3. Ensure Neon allows Contabo IP (`109.123.248.253`) in firewall rules
+4. Restart backend after fixing environment variables
+
+#### Issue: Pending Prisma migrations
+
+**Symptoms:**
+
+- New features missing database tables
+- API returns `P2021` (table does not exist) errors
+
+**Solutions:**
+
+1. Run migrations on Contabo:
+   ```bash
+   cd /opt/neurecore/backend/backend
+   npx prisma migrate deploy
+   ```
+2. Generate Prisma client:
+   ```bash
+   npx prisma generate
+   ```
+3. Restart backend after migration
+
 ### Performance Issues
 
 #### Issue: Slow page load

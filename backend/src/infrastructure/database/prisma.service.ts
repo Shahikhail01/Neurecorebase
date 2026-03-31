@@ -21,7 +21,7 @@ export class PrismaService
 
   $transaction(...args: any[]): any {
     // Call the base class implementation without illegal `super` casting.
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+
     return (PrismaClient.prototype.$transaction as any).apply(this, args);
   }
 

@@ -3,10 +3,6 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { PrismaOAuthTokenStore } from './oauth-token.service';
 import { CryptoService } from './crypto.service';
 
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 export type OAuthProvider = 'hubspot' | 'salesforce' | 'pipedrive';
 
 export interface OAuthAuthorizeResult {

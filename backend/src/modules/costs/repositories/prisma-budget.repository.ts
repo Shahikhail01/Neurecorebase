@@ -120,10 +120,11 @@ export class PrismaBudgetPolicyRepository implements IBudgetPolicyRepository {
     switch (period) {
       case 'DAILY':
         return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-      case 'WEEKLY':
+      case 'WEEKLY': {
         const nextWeek = new Date(now);
         nextWeek.setDate(nextWeek.getDate() + (7 - nextWeek.getDay()));
         return nextWeek;
+      }
       case 'MONTHLY':
         return new Date(now.getFullYear(), now.getMonth() + 1, 1);
     }

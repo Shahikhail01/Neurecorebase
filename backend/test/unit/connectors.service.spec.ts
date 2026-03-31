@@ -21,10 +21,26 @@ function buildMocks(provider = 'salesforce') {
   const prisma: any = {
     crmConnector: {
       findMany: jest.fn().mockResolvedValue([
-        { id: SF_ID, name: 'sf-demo', provider, isActive: true, tenantId: TENANT },
+        {
+          id: SF_ID,
+          name: 'sf-demo',
+          provider,
+          isActive: true,
+          tenantId: TENANT,
+        },
       ]),
-      create: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ id: 'new-id', ...data })),
-      findFirst: jest.fn().mockResolvedValue({ id: SF_ID, name: 'sf-demo', provider, isActive: true, tenantId: TENANT }),
+      create: jest
+        .fn()
+        .mockImplementation(({ data }: any) =>
+          Promise.resolve({ id: 'new-id', ...data }),
+        ),
+      findFirst: jest.fn().mockResolvedValue({
+        id: SF_ID,
+        name: 'sf-demo',
+        provider,
+        isActive: true,
+        tenantId: TENANT,
+      }),
       update: jest.fn().mockResolvedValue({}),
       delete: jest.fn().mockResolvedValue({}),
     },
@@ -47,7 +63,9 @@ describe('ConnectorRegistry', () => {
     r.register(new SalesforceConnector());
     r.register(new HubSpotConnector());
     r.register(new PipedriveConnector());
-    expect(r.list()).toEqual(expect.arrayContaining(['salesforce', 'hubspot', 'pipedrive']));
+    expect(r.list()).toEqual(
+      expect.arrayContaining(['salesforce', 'hubspot', 'pipedrive']),
+    );
   });
 });
 
@@ -89,7 +107,11 @@ describe('ConnectorService', () => {
   it('syncLeads() resolves for hubspot', async () => {
     const { svc, prisma } = buildMocks('hubspot');
     prisma.crmConnector.findFirst.mockResolvedValue({
-      id: SF_ID, name: 'hs-demo', provider: 'hubspot', isActive: true, tenantId: TENANT,
+      id: SF_ID,
+      name: 'hs-demo',
+      provider: 'hubspot',
+      isActive: true,
+      tenantId: TENANT,
     });
     await expect(svc.syncLeads(SF_ID, TENANT)).resolves.not.toThrow();
   });

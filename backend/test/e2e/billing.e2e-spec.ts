@@ -1,6 +1,10 @@
 import * as request from 'supertest';
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+  VersioningType,
+} from '@nestjs/common';
 import { AppModule } from '../../src/app.module';
 
 /**
@@ -30,7 +34,9 @@ describe('Billing Golden Path (e2e)', () => {
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api');
     app.enableVersioning({ type: VersioningType.URI });
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     await app.init();
   });
 
@@ -54,7 +60,9 @@ describe('Billing Golden Path (e2e)', () => {
       .post('/api/v1/finance/invoices/generate')
       .set('Authorization', `Bearer ${authToken}`)
       .send({
-        lineItems: [{ description: 'Agent execution credits', qty: 100, unitPrice: 0.5 }],
+        lineItems: [
+          { description: 'Agent execution credits', qty: 100, unitPrice: 0.5 },
+        ],
       })
       .expect(201);
 
@@ -108,7 +116,10 @@ describe('Billing Golden Path (e2e)', () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/finance/report')
       .set('Authorization', `Bearer ${authToken}`)
-      .query({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })
+      .query({
+        year: new Date().getFullYear(),
+        month: new Date().getMonth() + 1,
+      })
       .expect(200);
 
     expect(res.body.data).toMatchObject({ tenantId, currency: 'USD' });
@@ -118,7 +129,11 @@ describe('Billing Golden Path (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/finance/expenses')
       .set('Authorization', `Bearer ${authToken}`)
-      .send({ category: 'API_CALL', description: 'OpenAI call', amountUsd: 0.02 })
+      .send({
+        category: 'API_CALL',
+        description: 'OpenAI call',
+        amountUsd: 0.02,
+      })
       .expect(201);
 
     expect(res.body.data.category).toBe('API_CALL');

@@ -10,8 +10,7 @@ import type UpstashRedisType from '@upstash/redis';
 let UpstashRedis: typeof UpstashRedisType | null = null;
 try {
   // dynamically require so projects without the package won't crash at import time
-
-  // @ts-ignore
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   UpstashRedis = require('@upstash/redis').Redis;
 } catch (e) {
   UpstashRedis = null;
@@ -71,7 +70,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     // Prefer Upstash REST client in serverless (Vercel) environments when provided
     if (upstashRestUrl && upstashRestToken && UpstashRedis) {
       this.logger.log('Using Upstash REST client for Redis');
-      // @ts-ignore - Upstash client typing imported dynamically
+      // @ts-expect-error - Upstash client typing imported dynamically
       this.upstashClient = new UpstashRedis({
         url: upstashRestUrl,
         token: upstashRestToken,
@@ -115,18 +114,20 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         this.upstashClient &&
         typeof this.upstashClient.disconnect === 'function'
       ) {
-        // @ts-ignore
         this.upstashClient.disconnect();
       }
-    } catch {}
+    } catch {
+      /* ignore teardown errors */
+    }
     try {
       if (this.client) this.client.quit();
-    } catch {}
+    } catch {
+      /* ignore teardown errors */
+    }
   }
 
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
     if (this.upstashClient) {
-      // @ts-ignore
       if (ttlSeconds)
         await this.upstashClient.set(key, value, { ex: ttlSeconds });
       else await this.upstashClient.set(key, value);
@@ -141,7 +142,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async get(key: string): Promise<string | null> {
     if (this.upstashClient) {
-      // @ts-ignore
       const res = await this.upstashClient.get(key);
       // Upstash returns null or string
       return res as string | null;
@@ -151,7 +151,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async del(key: string): Promise<void> {
     if (this.upstashClient) {
-      // @ts-ignore
       await this.upstashClient.del(key);
       return;
     }
@@ -160,7 +159,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async exists(key: string): Promise<boolean> {
     if (this.upstashClient) {
-      // @ts-ignore
       const v = await this.upstashClient.get(key);
       return v !== null && v !== undefined;
     }

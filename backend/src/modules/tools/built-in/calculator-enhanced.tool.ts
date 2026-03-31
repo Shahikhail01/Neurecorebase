@@ -64,7 +64,7 @@ export class CalculatorEnhancedTool extends BaseStructuredTool {
   /**
    * Implementation of the calculator logic
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
+
   protected async executeImpl(
     input: CalculatorInput,
     context?: Partial<ToolExecutionContext>,
@@ -148,7 +148,6 @@ export class CalculatorEnhancedTool extends BaseStructuredTool {
         throw new Error('Invalid characters in expression');
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval,@typescript-eslint/no-unsafe-call
       const result = new Function(
         `"use strict"; return (${processed})`,
       )() as number;

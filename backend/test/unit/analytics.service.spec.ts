@@ -10,22 +10,33 @@ import { HttpModelRunner } from '../../src/modules/analytics/services/modelRunne
 function buildMocks() {
   const prisma: any = {
     analyticsModel: {
-      findMany: jest.fn().mockResolvedValue([
-        { id: 'model-1', name: 'demo', version: 'v1', createdAt: new Date() },
-      ]),
+      findMany: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'model-1', name: 'demo', version: 'v1', createdAt: new Date() },
+        ]),
     },
   };
 
   const featureStore: Partial<PrismaFeatureStore> = {
     save: jest.fn().mockResolvedValue(undefined),
-    getLatest: jest.fn().mockResolvedValue({ features: { a: 1 }, timestamp: new Date().toISOString() }),
-    list: jest.fn().mockResolvedValue([{ features: { a: 1 }, timestamp: new Date().toISOString() }]),
+    getLatest: jest.fn().mockResolvedValue({
+      features: { a: 1 },
+      timestamp: new Date().toISOString(),
+    }),
+    list: jest
+      .fn()
+      .mockResolvedValue([
+        { features: { a: 1 }, timestamp: new Date().toISOString() },
+      ]),
   };
 
   const modelRunner: Partial<HttpModelRunner> = {
     runModel: jest.fn().mockResolvedValue({ modelId: 'model-1', score: 0.75 }),
     forecast: jest.fn().mockResolvedValue({ forecast: [] }),
-    detectAnomalies: jest.fn().mockResolvedValue({ labels: [0, 1], scores: [-0.1, 0.3] }),
+    detectAnomalies: jest
+      .fn()
+      .mockResolvedValue({ labels: [0, 1], scores: [-0.1, 0.3] }),
     embed: jest.fn().mockResolvedValue({ vectors: [[0.1, 0.2]] }),
   };
 
@@ -42,8 +53,14 @@ describe('AnalyticsService', () => {
   it('score() saves features and calls model runner', async () => {
     const { svc, featureStore, modelRunner } = buildMocks();
     const result = await svc.score('tenant-1', { revenue: 200, users: 50 });
-    expect(featureStore.save).toHaveBeenCalledWith('tenant-1', { revenue: 200, users: 50 });
-    expect(modelRunner.runModel).toHaveBeenCalledWith('model-1', { revenue: 200, users: 50 });
+    expect(featureStore.save).toHaveBeenCalledWith('tenant-1', {
+      revenue: 200,
+      users: 50,
+    });
+    expect(modelRunner.runModel).toHaveBeenCalledWith('model-1', {
+      revenue: 200,
+      users: 50,
+    });
     expect(result).toMatchObject({ score: 0.75 });
   });
 
@@ -56,8 +73,14 @@ describe('AnalyticsService', () => {
 
   it('detectAnomalies() returns labels and scores', async () => {
     const { svc, modelRunner } = buildMocks();
-    const result = await svc.detectAnomalies('tenant-1', [[1, 2, 3, 4], [5, 6, 7, 8]]);
-    expect(modelRunner.detectAnomalies).toHaveBeenCalledWith([[1, 2, 3, 4], [5, 6, 7, 8]]);
+    const result = await svc.detectAnomalies('tenant-1', [
+      [1, 2, 3, 4],
+      [5, 6, 7, 8],
+    ]);
+    expect(modelRunner.detectAnomalies).toHaveBeenCalledWith([
+      [1, 2, 3, 4],
+      [5, 6, 7, 8],
+    ]);
     expect(result).toMatchObject({ labels: [0, 1] });
   });
 

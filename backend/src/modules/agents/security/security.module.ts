@@ -40,6 +40,17 @@ import { SecurityAuditLoggerService } from './security-audit-logger.service';
     // Core Services
     SecurityInterceptorService,
     SecurityAuditLoggerService,
+
+    // Interface token providers (for DI)
+    {
+      provide: 'IPromptInjectionValidator',
+      useClass: PromptInjectionValidator,
+    },
+    { provide: 'ICommandPatternValidator', useClass: CommandPatternValidator },
+    { provide: 'IResourceAccessValidator', useClass: ResourceAccessValidator },
+    { provide: 'ISecurityPolicyProvider', useClass: SecurityPolicyProvider },
+    { provide: 'ISecurityInterceptor', useClass: SecurityInterceptorService },
+    { provide: 'ISecurityAuditLogger', useClass: SecurityAuditLoggerService },
   ],
   exports: [
     // Export validators for direct use if needed

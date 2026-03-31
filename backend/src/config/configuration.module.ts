@@ -11,6 +11,24 @@ import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { validate } from './env.loader';
 import { ConfigurationService } from './configuration.service';
 
+const resolveEnvFilePaths = (): string[] => {
+  // Allow explicit env-file override for local troubleshooting.
+  if (process.env.ENV_FILE) {
+    return [process.env.ENV_FILE];
+  }
+
+  const nodeEnv = process.env.NODE_ENV;
+  if (nodeEnv === 'production') {
+    return ['.env.production', '.env'];
+  }
+  if (nodeEnv === 'test') {
+    return ['.env.test', '.env'];
+  }
+
+  // In local development, avoid accidentally loading production credentials.
+  return ['.env', '.env.development'];
+};
+
 /**
  * Configuration Module
  * Import this once in AppModule with isGlobal: true
@@ -21,7 +39,7 @@ import { ConfigurationService } from './configuration.service';
     NestConfigModule.forRoot({
       isGlobal: true,
       validate,
-      envFilePath: ['.env.production', '.env.development', '.env'],
+      envFilePath: resolveEnvFilePaths(),
       // Load from process.env for Vercel deployment
       ignoreEnvFile: process.env.VERCEL === 'true',
     }),

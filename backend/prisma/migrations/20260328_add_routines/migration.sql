@@ -56,8 +56,8 @@ CREATE TABLE "routine_runs" (
     "triggerId" UUID,
     "routineId" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
-    "agentId" UUID,
-    "createdById" UUID,
+    "agentId" TEXT,
+    "createdById" TEXT,
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT "routine_runs_pkey" PRIMARY KEY ("id")
@@ -71,7 +71,7 @@ ALTER TABLE "routine_runs" ADD CONSTRAINT "routine_runs_routineId_fkey"
     FOREIGN KEY ("routineId") REFERENCES "routines"("id") ON DELETE CASCADE;
 
 ALTER TABLE "routine_runs" ADD CONSTRAINT "routine_runs_agentId_fkey"
-    FOREIGN KEY ("agentId") REFERENCES "agents"("id") ON DELETE SET NULL;
+    FOREIGN KEY ("agentId") REFERENCES "agents"("id") ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED;
 
 -- Add indexes
 CREATE INDEX "routines_tenantId_idx" ON "routines"("tenantId");

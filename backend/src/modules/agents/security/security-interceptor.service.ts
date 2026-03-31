@@ -250,7 +250,10 @@ export class SecurityInterceptorService implements ISecurityInterceptor {
     const provider = this.policyProvider;
     if (!provider) return false;
 
-    const policy = await provider.getPolicy(context.agentType, context.tenantId);
+    const policy = await provider.getPolicy(
+      context.agentType,
+      context.tenantId,
+    );
     if (!policy) {
       return false;
     }

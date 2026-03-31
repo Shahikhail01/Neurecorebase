@@ -65,7 +65,7 @@ export interface CreateTierInput {
   allowAuditExport?: boolean;
 }
 
-export interface UpdateTierInput extends Partial<CreateTierInput> {}
+export type UpdateTierInput = Partial<CreateTierInput>;
 
 export interface ITierService {
   // Read operations

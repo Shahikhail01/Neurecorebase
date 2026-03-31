@@ -116,7 +116,6 @@ export abstract class BaseStructuredTool implements IStructuredTool {
 
     // For ZodObject schemas, we can extract shape
     if (this.inputSchema instanceof z.ZodObject) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const shape: Record<string, z.ZodTypeAny> = (
         this.inputSchema as z.ZodObject<any>
       ).shape;

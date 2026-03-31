@@ -54,7 +54,13 @@ export class AgentTemplatesService {
       return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
     } catch (err) {
       this.logger.warn('Database error in findAll: ' + String(err));
-      return { data: [], total: 0, page: opts?.page ?? 1, limit: opts?.limit ?? 20, totalPages: 0 };
+      return {
+        data: [],
+        total: 0,
+        page: opts?.page ?? 1,
+        limit: opts?.limit ?? 20,
+        totalPages: 0,
+      };
     }
   }
 
@@ -86,7 +92,13 @@ export class AgentTemplatesService {
       return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
     } catch (err) {
       this.logger.warn('Database error in findAllPlatform: ' + String(err));
-      return { data: [], total: 0, page: opts?.page ?? 1, limit: opts?.limit ?? 20, totalPages: 0 };
+      return {
+        data: [],
+        total: 0,
+        page: opts?.page ?? 1,
+        limit: opts?.limit ?? 20,
+        totalPages: 0,
+      };
     }
   }
 
@@ -95,7 +107,8 @@ export class AgentTemplatesService {
       const template = await this.prisma.agentTemplate.findFirst({
         where: { id, OR: [{ tenantId }, { isPublic: true, tenantId: null }] },
       });
-      if (!template) throw new NotFoundException(`Agent template ${id} not found`);
+      if (!template)
+        throw new NotFoundException(`Agent template ${id} not found`);
       return template;
     } catch (err) {
       this.logger.warn('Database error in findOne: ' + String(err));
