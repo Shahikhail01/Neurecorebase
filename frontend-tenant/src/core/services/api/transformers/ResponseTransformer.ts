@@ -25,14 +25,26 @@ export class ResponseTransformer {
       };
     }
 
-    const raw = response.data as Record<string, unknown>;
+    const raw = response.data as unknown;
 
-    // Backend may return: { data: T[], total, page, limit, totalPages }
-    // or directly: { items: T[], total, page, limit }
-    const items = (raw['data'] ?? raw['items'] ?? []) as T[];
-    const total = (raw['total'] ?? 0) as number;
-    const page  = (raw['page']  ?? 1) as number;
-    const limit = (raw['limit'] ?? 20) as number;
+    // Shape A: response.data IS the array directly (current backend shape for /departments)
+    if (Array.isArray(raw)) {
+      return {
+        items: raw as T[],
+        total: (raw as unknown[]).length,
+        page: 1,
+        limit: (raw as unknown[]).length,
+      };
+    }
+
+    // Shape B: response.data is an object wrapper
+    //   - { data: T[], total, page, limit }
+    //   - { items: T[], total, page, limit }
+    const obj = raw as Record<string, unknown>;
+    const items = (obj['data'] ?? obj['items'] ?? []) as T[];
+    const total = (obj['total'] ?? 0) as number;
+    const page  = (obj['page']  ?? 1) as number;
+    const limit = (obj['limit'] ?? 20) as number;
 
     return { items, total, page, limit };
   }
