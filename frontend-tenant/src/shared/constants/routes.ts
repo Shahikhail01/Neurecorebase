@@ -8,7 +8,7 @@ export const ROUTES = {
   REGISTER: '/register',
 
   // Authenticated
-  DASHBOARD: '/dashboard',
+  DASHBOARD: '/command-center',
   AGENTS: {
     ROOT: '/agents',
     DETAIL: (id: string) => `/agents/${id}`,

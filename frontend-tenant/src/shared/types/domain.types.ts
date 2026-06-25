@@ -52,7 +52,7 @@ export interface Tenant {
 
 // ─── Agent ────────────────────────────────────────────────────────────────────
 
-export type AgentStatus = 'ACTIVE' | 'INACTIVE' | 'TRAINING' | 'ERROR' | 'PAUSED';
+export type AgentStatus = 'ACTIVE' | 'INACTIVE' | 'TRAINING' | 'ERROR' | 'PAUSED' | 'RUNNING' | 'IDLE' | 'TERMINATED' | 'ARCHIVED' | 'DEPRECATED';
 export type AgentMood = 'busy' | 'idle' | 'optimistic' | 'stressed' | 'offline';
 
 export interface AgentPerformance {
@@ -91,6 +91,7 @@ export type TaskStatus =
   | 'PENDING'
   | 'ASSIGNED'
   | 'IN_PROGRESS'
+  | 'RUNNING'
   | 'COMPLETED'
   | 'FAILED'
   | 'CANCELLED';

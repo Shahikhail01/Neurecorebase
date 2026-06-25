@@ -13,9 +13,9 @@ export default function RegisterPage() {
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '' });
 
-  // Redirect to dashboard if already authenticated
+  // Redirect to command-center if already authenticated
   useEffect(() => {
-    if (hasHydrated && user) router.replace('/dashboard');
+    if (hasHydrated && user) router.replace('/command-center');
   }, [hasHydrated, user, router]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -30,7 +30,7 @@ export default function RegisterPage() {
     try {
       const result = await authService.register(form);
       setUser(result.user);
-      router.push('/dashboard');
+      router.push('/command-center');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })
         ?.response?.data?.error?.message ?? 'Registration failed';

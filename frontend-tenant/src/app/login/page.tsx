@@ -14,7 +14,7 @@ export default function LoginPage() {
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const [email, setEmail] = useState("");
 
-  // Redirect to dashboard if already authenticated with valid tokens
+  // Redirect to command-center if already authenticated with valid tokens
   // Must check BOTH user exists AND token is valid (3 parts) to prevent
   // redirecting with stale tokens that AppInitializer will clear
   useEffect(() => {
@@ -22,7 +22,7 @@ export default function LoginPage() {
       const token = tokenManager.getAccessToken();
       // Only redirect if token is present and valid format
       if (token && token.split(".").length === 3) {
-        router.replace("/dashboard");
+        router.replace("/command-center");
       }
     }
   }, [hasHydrated, user, router]);
@@ -37,7 +37,7 @@ export default function LoginPage() {
     try {
       const result = await authService.login({ email, password });
       setUser(result.user);
-      router.push("/dashboard");
+      router.push("/command-center");
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })

@@ -11,8 +11,15 @@ export function registerTenantCommands(router: AppRouterInstance): () => void {
   const unregister = commandRegistry.registerMany([
     // ── Navigation ──────────────────────────────────────────────────────────
     {
+      id: 'nav:command-center',
+      label: 'Go to Command Center',
+      group: 'Navigate',
+      shortcut: 'G C',
+      action: () => router.push('/command-center'),
+    },
+    {
       id: 'nav:dashboard',
-      label: 'Go to Dashboard',
+      label: 'Go to Dashboard (legacy)',
       group: 'Navigate',
       shortcut: 'G D',
       action: () => router.push('/dashboard'),

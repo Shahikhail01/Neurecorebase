@@ -15,7 +15,7 @@ export default function TenantBillingPage() {
     setLoading(true);
     try {
       const result = await financeService.listInvoices({ page: 1, limit: 20 });
-      setInvoices(result?.data ?? []);
+      setInvoices(result?.items ?? []);
     } catch {
       setInvoices([]);
     } finally {
@@ -62,7 +62,7 @@ export default function TenantBillingPage() {
                       <td className="py-2 pr-4 font-mono text-xs text-zinc-300">{inv.number}</td>
                       <td className="py-2 pr-4">{inv.status}</td>
                       <td className="py-2 pr-4">${Number(inv.total).toFixed(2)}</td>
-                      <td className="py-2">{new Date(inv.createdAt).toLocaleDateString()}</td>
+                      <td className="py-2">{inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
