@@ -1,9 +1,5 @@
 /** @type {import('next').NextConfig} */
-const path = require("path");
-
 const nextConfig = {
-  // Ensure Next infers the repository root for output tracing
-  outputFileTracingRoot: path.join(__dirname, ".."),
   typescript: {
     ignoreBuildErrors: true,
   },
