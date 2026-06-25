@@ -57,3 +57,4 @@ docker-volumes/
 .env.sentry-build-plugin
 .vercel
 .env*.local
+.env*

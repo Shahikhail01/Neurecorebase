@@ -9,3 +9,4 @@ playwright/.cache/
 # Build outputs
 .next/
 node_modules/
+.env*
