@@ -258,6 +258,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     code: ErrorCodeType,
     originalMessage: string,
   ): string {
+    // Surface validation error details to clients (user-input related, not sensitive)
+    if (
+      code === ErrorCode.INVALID_REQUEST &&
+      Array.isArray((exception as any)?.response?.message)
+    ) {
+      return (exception as any).response.message.join('; ');
+    }
+
     // If not in production, include original message for debugging
     if (!this.isProduction()) {
       return originalMessage;
