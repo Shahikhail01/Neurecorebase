@@ -61,30 +61,36 @@ export class ConversationalAIService implements IConversationalAIService {
         })),
       });
 
-      if (response.data) {
-        this.conversationId = response.data.conversationId;
+      // Backend wraps as { status, data: { reply, conversationId, ... }, meta }
+      const payload =
+        (response as { data?: { data?: { reply: string; conversationId?: string } } })
+          ?.data ?? response;
+      const innerData = payload?.data ?? payload;
+
+      if (innerData?.reply) {
+        this.conversationId = innerData.conversationId ?? this.conversationId;
+        const reply = innerData.reply;
+        const rawMeta = innerData as
+          | Record<string, unknown>
+          | null
+          | undefined;
+        const { cleanedReply, ...metadata } = this._parseMetadata(
+          reply,
+          rawMeta ?? null,
+        );
+        const assistantMsg: ChatMessage = {
+          id: genId(),
+          role: "assistant",
+          content: cleanedReply,
+          timestamp: new Date().toISOString(),
+          metadata,
+        };
+        this.history.push(assistantMsg);
+        return assistantMsg;
       }
 
-      const reply = response.data?.reply ?? this._fallbackReply(message);
-      const rawMeta = response.data as
-        | Record<string, unknown>
-        | null
-        | undefined;
-      const { cleanedReply, ...metadata } = this._parseMetadata(
-        reply,
-        rawMeta ?? null,
-      );
-
-      const assistantMsg: ChatMessage = {
-        id: genId(),
-        role: "assistant",
-        content: cleanedReply,
-        timestamp: new Date().toISOString(),
-        metadata,
-      };
-
-      this.history.push(assistantMsg);
-      return assistantMsg;
+      // Empty reply — fall through to rule-based fallback
+      throw new Error("Empty reply from chat backend");
     } catch {
       // Graceful fallback: simple rule-based responses
       const fallback = this._fallbackReply(message);

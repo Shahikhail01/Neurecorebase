@@ -34,7 +34,22 @@ const chatService: IChatService = {
   async sendMessage(req: ChatRequest): Promise<ChatResponse> {
     try {
       const res = await api.post<{ data: ChatResponse }>('/chat/messages', req);
-      return (res as any).data?.data ?? fallbackResponse(req.query);
+      const backendData = (res as any).data?.data;
+      // Backend /api/v1/chat/messages returns
+      //   { status, data: { reply, conversationId, tokens, model, provider }, meta }
+      if (backendData && typeof backendData.reply === 'string') {
+        return {
+          id: makeId(),
+          type: 'assistant',
+          message: backendData.reply,
+          conversationId: backendData.conversationId,
+          tokens: backendData.tokens,
+          model: backendData.model,
+          provider: backendData.provider,
+          timestamp: new Date().toISOString(),
+        };
+      }
+      return fallbackResponse(req.query);
     } catch {
       return fallbackResponse(req.query);
     }
@@ -74,12 +89,12 @@ const chatService: IChatService = {
   },
 };
 
-/** Graceful degradation when backend chat endpoint is not yet live */
+/** Graceful degradation only used when the backend returns nothing usable */
 function fallbackResponse(query: string): ChatResponse {
   return {
     id: makeId(),
     type: 'info',
-    message: `I received your query: *"${query}"*\n\nThe chat backend is not yet connected. Once the \`/api/chat\` endpoint is deployed, I will answer with live data from your agents and tasks.`,
+    message: `I received your query: *"${query}"*. The chat backend is reachable but returned an empty response. The MiniMax assistant should reply here — please retry.`,
     tokens: { input: 0, output: 0 },
     timestamp: new Date().toISOString(),
   };

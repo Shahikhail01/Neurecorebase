@@ -26,6 +26,7 @@ import { DepartmentsModule } from './modules/departments/departments.module';
 import { DepartmentTemplatesModule } from './modules/department-templates/department-templates.module';
 import { ModelsModule } from './modules/models/models.module';
 import { AIGatewayModule } from './modules/ai-gateway/ai-gateway.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { ConnectorsModule } from './modules/connectors/connectors.module';
@@ -81,6 +82,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     DepartmentTemplatesModule,
     ModelsModule,
     AIGatewayModule,
+    ChatModule,
 
     // Phase 4 — Analytics Engine, CRM Connectors, Financial Module & Reliability
     AnalyticsModule,
