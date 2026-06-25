@@ -19,6 +19,8 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProjectsService } from './projects.service';
@@ -28,15 +30,33 @@ import {
   ListProjectsDto,
 } from './dto/project.dto';
 
-@Controller('projects')
+/**
+ * Phase 1 Gap 6 — added URI versioning (`/api/v1/projects`) and
+ * `resolveTenantId()` helper for SUPER_ADMIN cross-tenant access.
+ */
+@Controller({ path: 'projects', version: '1' })
 @UseGuards(JwtAuthGuard)
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
+  private resolveTenantId(
+    user: { tenantId?: string; role?: string },
+    tenantId?: string,
+  ): string {
+    if (user.role === 'SUPER_ADMIN') {
+      if (!tenantId) {
+        throw new BadRequestException('tenantId is required for SUPER_ADMIN');
+      }
+      return tenantId;
+    }
+    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
+    return user.tenantId;
+  }
+
   @Post()
   async create(
     @Body() dto: CreateProjectDto,
-    @Req() req: { user: { tenantId: string } },
+    @Req() req: { user: { tenantId: string; role?: string } },
   ) {
     return this.projectsService.create(req.user.tenantId, {
       tenantId: req.user.tenantId,
@@ -51,26 +71,35 @@ export class ProjectsController {
   @Get()
   async findAll(
     @Query() query: ListProjectsDto,
-    @Req() req: { user: { tenantId: string } },
+    @Req() req: { user: { tenantId: string; role?: string } },
+    @Query('tenantId') tenantId?: string,
   ) {
-    return this.projectsService.findAll(req.user.tenantId, {
-      status: query.status,
-      departmentId: query.departmentId,
-      search: query.search,
-      page: query.page ? Number(query.page) : undefined,
-      limit: query.limit ? Number(query.limit) : undefined,
-    });
+    return this.projectsService.findAll(
+      this.resolveTenantId(req.user, tenantId),
+      {
+        status: query.status,
+        departmentId: query.departmentId,
+        search: query.search,
+        page: query.page ? Number(query.page) : undefined,
+        limit: query.limit ? Number(query.limit) : undefined,
+      },
+    );
   }
 
   @Get('stats')
-  async getStats(@Req() req: { user: { tenantId: string } }) {
-    return this.projectsService.getProjectStats(req.user.tenantId);
+  async getStats(
+    @Req() req: { user: { tenantId: string; role?: string } },
+    @Query('tenantId') tenantId?: string,
+  ) {
+    return this.projectsService.getProjectStats(
+      this.resolveTenantId(req.user, tenantId),
+    );
   }
 
   @Get('department/:departmentId')
   async findByDepartment(
     @Param('departmentId') departmentId: string,
-    @Req() req: { user: { tenantId: string } },
+    @Req() req: { user: { tenantId: string; role?: string } },
   ) {
     return this.projectsService.findByDepartment(
       departmentId,

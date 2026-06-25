@@ -38,7 +38,14 @@ export class AgentTemplatesController {
   // ─── Platform (SUPER_ADMIN) ──────────────────────────────────────────────
 
   @Get('platform')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN, UserRole.SUPPORT)
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.PLATFORM_ADMIN,
+    UserRole.SUPPORT,
+    UserRole.OWNER,
+    UserRole.ADMIN,
+    UserRole.USER,
+  )
   findAllPlatform(
     @Query('type') type?: AgentType,
     @Query('page') page = '1',
@@ -52,7 +59,14 @@ export class AgentTemplatesController {
   }
 
   @Get('platform/:id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN, UserRole.SUPPORT)
+  @Roles(
+    UserRole.SUPER_ADMIN,
+    UserRole.PLATFORM_ADMIN,
+    UserRole.SUPPORT,
+    UserRole.OWNER,
+    UserRole.ADMIN,
+    UserRole.USER,
+  )
   findOnePlatform(@Param('id', ParseUUIDPipe) id: string) {
     return this.templatesService.findOnePlatform(id);
   }
@@ -113,6 +127,20 @@ export class AgentTemplatesController {
   ) {
     if (!user.tenantId) throw new ForbiddenException('Tenant context required');
     return this.templatesService.findOne(id, user.tenantId);
+  }
+
+  /**
+   * Phase 1 Gap 8 — Template version history + drift detection.
+   * Returns deprecation status, supersession chain, and agents with
+   * outdated template versions.
+   */
+  @Get(':id/changelog')
+  getChangelog(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
+    return this.templatesService.getChangelog(id, user.tenantId);
   }
 
   // ─── Instantiate template → agent create payload ──────────────────────────

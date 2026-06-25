@@ -45,7 +45,24 @@ export class DeploymentService {
     templateId: string,
     dto: SpawnAgentFromTemplateDto,
     actorId: string,
+    actorTenantId: string | null,
+    actorRole: string,
   ) {
+    // Tenant scope enforcement: non-SUPER_ADMIN actors can only spawn into
+    // their own tenant. Prevents cross-tenant privilege escalation.
+    if (actorRole !== 'SUPER_ADMIN') {
+      if (!actorTenantId) {
+        throw new BadRequestException(
+          'Tenant context required to spawn agents',
+        );
+      }
+      if (dto.tenantId !== actorTenantId) {
+        throw new BadRequestException(
+          'Cannot spawn agents for a different tenant',
+        );
+      }
+    }
+
     // Resolve the platform template
     const template = await this.prisma.agentTemplate.findFirst({
       where: { id: templateId, isPublic: true, tenantId: null },
@@ -94,14 +111,15 @@ export class DeploymentService {
         departmentId: dto.departmentId ?? null,
         // Store authority level inside config override
         metadata: {
-          spawnedByAdmin: true,
+          spawnedByAdmin: actorRole === 'SUPER_ADMIN',
+          spawnedByOwner: actorRole === 'OWNER' || actorRole === 'ADMIN',
           authorityLevel: dto.authorityLevel ?? 'RECOMMENDATION',
         } as never,
       },
     });
 
     this.logger.log(
-      `Spawned agent "${agent.name}" (${agent.id}) for tenant ${dto.tenantId} from template ${templateId}`,
+      `Spawned agent "${agent.name}" (${agent.id}) for tenant ${dto.tenantId} from template ${templateId} by ${actorRole}`,
     );
     this.events.emitAgentStatusUpdated(dto.tenantId, agent.id, 'IDLE');
 

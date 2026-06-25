@@ -213,6 +213,28 @@ export class AgentsService implements IAgentService {
     return agent;
   }
 
+  /**
+   * Phase 1 Gap 7 — Lifecycle: archive / deprecate / restore.
+   * Sets agent.status to the requested enum value.
+   * Used by PATCH /agents/:id/archive, /deprecate, /restore.
+   */
+  async setStatus(
+    id: string,
+    tenantId: string,
+    status: AgentStatus,
+  ): Promise<unknown> {
+    await this.assertOwnership(id, tenantId);
+    const agent = await this.prisma.agent.update({
+      where: { id },
+      data: { status },
+    });
+    this.events.emitAgentStatusUpdated(tenantId, id, status);
+    this.logger.log(
+      `Agent ${id} (tenant ${tenantId}) status set to ${status}`,
+    );
+    return agent;
+  }
+
   // ───────────────────────────────────────────────────────────
   // Private helpers
   // ───────────────────────────────────────────────────────────

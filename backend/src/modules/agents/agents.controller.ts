@@ -207,6 +207,55 @@ export class AgentsController {
     return this.agentsService.remove(id, this.resolveTenantId(user, tenantId));
   }
 
+  // ─── Phase 1 Gap 7 — Lifecycle: archive + deprecate ──────
+  //
+  // Soft-delete operations preserving audit trail.
+  //   archive    = hidden from active lists (ARCHIVED status)
+  //   deprecate  = still listed but flagged (DEPRECATED status)
+  // Both tenant-scoped via resolveTenantId; OWNER/ADMIN allowed.
+
+  @Patch(':id/archive')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.OWNER, UserRole.ADMIN)
+  archive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Query('tenantId') tenantId?: string,
+  ) {
+    return this.agentsService.setStatus(
+      id,
+      this.resolveTenantId(user, tenantId),
+      'ARCHIVED',
+    );
+  }
+
+  @Patch(':id/deprecate')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.OWNER, UserRole.ADMIN)
+  deprecate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Query('tenantId') tenantId?: string,
+  ) {
+    return this.agentsService.setStatus(
+      id,
+      this.resolveTenantId(user, tenantId),
+      'DEPRECATED',
+    );
+  }
+
+  @Patch(':id/restore')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.OWNER, UserRole.ADMIN)
+  restore(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Query('tenantId') tenantId?: string,
+  ) {
+    return this.agentsService.setStatus(
+      id,
+      this.resolveTenantId(user, tenantId),
+      'IDLE',
+    );
+  }
+
   // ─── Dispatch task to agent ──────────────────────────────
 
   @Post(':id/dispatch')

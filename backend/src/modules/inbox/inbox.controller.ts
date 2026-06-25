@@ -16,6 +16,8 @@ import {
   Query,
   UseGuards,
   Req,
+  BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { InboxService } from './inbox.service';
@@ -56,10 +58,28 @@ class SendNotificationDto {
   actionUrl?: string;
 }
 
-@Controller('inbox')
+/**
+ * Phase 1 Gap 6 — added URI versioning (`/api/v1/inbox`) and
+ * `resolveTenantId()` helper for SUPER_ADMIN cross-tenant access.
+ */
+@Controller({ path: 'inbox', version: '1' })
 @UseGuards(JwtAuthGuard)
 export class InboxController {
   constructor(private readonly inboxService: InboxService) {}
+
+  private resolveTenantId(
+    user: { tenantId?: string; role?: string },
+    tenantId?: string,
+  ): string {
+    if (user.role === 'SUPER_ADMIN') {
+      if (!tenantId) {
+        throw new BadRequestException('tenantId is required for SUPER_ADMIN');
+      }
+      return tenantId;
+    }
+    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
+    return user.tenantId;
+  }
 
   /**
    * Get all inbox items for current user
@@ -67,18 +87,23 @@ export class InboxController {
    */
   @Get()
   async getInbox(
-    @Req() req: { user: { tenantId: string; id: string } },
+    @Req() req: { user: { tenantId: string; id: string; role?: string } },
     @Query('status') status?: 'UNREAD' | 'READ' | 'ARCHIVED',
     @Query('kind') kind?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('tenantId') tenantId?: string,
   ) {
-    return this.inboxService.getInbox(req.user.tenantId, req.user.id, {
-      status,
-      kind,
-      limit: limit ? parseInt(limit, 10) : undefined,
-      offset: offset ? parseInt(offset, 10) : undefined,
-    });
+    return this.inboxService.getInbox(
+      this.resolveTenantId(req.user, tenantId),
+      req.user.id,
+      {
+        status,
+        kind,
+        limit: limit ? parseInt(limit, 10) : undefined,
+        offset: offset ? parseInt(offset, 10) : undefined,
+      },
+    );
   }
 
   /**
@@ -87,9 +112,13 @@ export class InboxController {
    */
   @Get('summary')
   async getInboxSummary(
-    @Req() req: { user: { tenantId: string; id: string } },
+    @Req() req: { user: { tenantId: string; id: string; role?: string } },
+    @Query('tenantId') tenantId?: string,
   ) {
-    return this.inboxService.getInboxSummary(req.user.tenantId, req.user.id);
+    return this.inboxService.getInboxSummary(
+      this.resolveTenantId(req.user, tenantId),
+      req.user.id,
+    );
   }
 
   /**
@@ -130,8 +159,14 @@ export class InboxController {
    * POST /api/v1/inbox/mark-all-read
    */
   @Post('mark-all-read')
-  async markAllRead(@Req() req: { user: { tenantId: string; id: string } }) {
-    return this.inboxService.markAllRead(req.user.tenantId, req.user.id);
+  async markAllRead(
+    @Req() req: { user: { tenantId: string; id: string; role?: string } },
+    @Query('tenantId') tenantId?: string,
+  ) {
+    return this.inboxService.markAllRead(
+      this.resolveTenantId(req.user, tenantId),
+      req.user.id,
+    );
   }
 
   /**
@@ -141,17 +176,22 @@ export class InboxController {
   @Post('send')
   async sendNotification(
     @Body() dto: SendNotificationDto,
-    @Req() req: { user: { tenantId: string } },
+    @Req() req: { user: { tenantId: string; role?: string } },
+    @Query('tenantId') tenantId?: string,
   ) {
-    return this.inboxService.sendNotification(req.user.tenantId, dto.userId, {
-      kind: dto.kind,
-      title: dto.title,
-      body: dto.body,
-      priority: dto.priority,
-      entityType: dto.entityType,
-      entityId: dto.entityId,
-      actionUrl: dto.actionUrl,
-    });
+    return this.inboxService.sendNotification(
+      this.resolveTenantId(req.user, tenantId),
+      dto.userId,
+      {
+        kind: dto.kind,
+        title: dto.title,
+        body: dto.body,
+        priority: dto.priority,
+        entityType: dto.entityType,
+        entityId: dto.entityId,
+        actionUrl: dto.actionUrl,
+      },
+    );
   }
 
   /**
@@ -161,10 +201,11 @@ export class InboxController {
   @Post('broadcast')
   async broadcastNotification(
     @Body() body: { userIds: string[]; notification: SendNotificationDto },
-    @Req() req: { user: { tenantId: string } },
+    @Req() req: { user: { tenantId: string; role?: string } },
+    @Query('tenantId') tenantId?: string,
   ) {
     return this.inboxService.broadcastNotification(
-      req.user.tenantId,
+      this.resolveTenantId(req.user, tenantId),
       body.userIds,
       {
         kind: body.notification.kind,

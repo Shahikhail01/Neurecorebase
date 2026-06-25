@@ -297,6 +297,10 @@ export interface ListRoutinesOptions {
   offset?: number;
   orderBy?: 'createdAt' | 'updatedAt' | 'name';
   order?: 'asc' | 'desc';
+  /** Phase 1 Gap 1 — filter by single owner agent */
+  ownerAgentId?: string;
+  /** Phase 1 Gap 1 — filter by multiple owner agents (workspace tab passes dept agents) */
+  ownerAgentIds?: string[];
 }
 
 export interface ListRunsOptions {

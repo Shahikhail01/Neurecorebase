@@ -18,15 +18,34 @@ import {
   Query,
   Req,
   UseGuards,
+  BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GoalsService } from './goals.service';
 import { CreateGoalDto, UpdateGoalDto, ListGoalsDto } from './dto/goal.dto';
 
-@Controller('goals')
+@Controller({ path: 'goals', version: '1' })
 @UseGuards(JwtAuthGuard)
 export class GoalsController {
   constructor(private readonly goalsService: GoalsService) {}
+
+  /**
+   * Phase 1 Gap 6 — resolve target tenant based on caller role.
+   */
+  private resolveTenantId(
+    user: { tenantId?: string; role?: string },
+    tenantId?: string,
+  ): string {
+    if (user.role === 'SUPER_ADMIN') {
+      if (!tenantId) {
+        throw new BadRequestException('tenantId is required for SUPER_ADMIN');
+      }
+      return tenantId;
+    }
+    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
+    return user.tenantId;
+  }
 
   /**
    * Create a new goal
@@ -35,7 +54,7 @@ export class GoalsController {
   @Post()
   async create(
     @Body() dto: CreateGoalDto,
-    @Req() req: { user: { tenantId: string } },
+    @Req() req: { user: { tenantId: string; role?: string } },
   ) {
     return this.goalsService.create(req.user.tenantId, {
       tenantId: req.user.tenantId,
@@ -57,10 +76,12 @@ export class GoalsController {
   @Get()
   async findAll(
     @Query() query: ListGoalsDto,
-    @Req() req: { user: { tenantId: string } },
+    @Req() req: { user: { tenantId: string; role?: string } },
+    @Query('tenantId') tenantId?: string,
   ) {
+    const tenant = this.resolveTenantId(req.user, tenantId);
     return this.goalsService.findAll({
-      tenantId: req.user.tenantId,
+      tenantId: tenant,
       ...query,
     });
   }
@@ -70,8 +91,13 @@ export class GoalsController {
    * GET /api/v1/goals/tree
    */
   @Get('tree')
-  async getTree(@Req() req: { user: { tenantId: string } }) {
-    return this.goalsService.getGoalTree(req.user.tenantId);
+  async getTree(
+    @Req() req: { user: { tenantId: string; role?: string } },
+    @Query('tenantId') tenantId?: string,
+  ) {
+    return this.goalsService.getGoalTree(
+      this.resolveTenantId(req.user, tenantId),
+    );
   }
 
   /**
@@ -79,8 +105,13 @@ export class GoalsController {
    * GET /api/v1/goals/roots
    */
   @Get('roots')
-  async findRoots(@Req() req: { user: { tenantId: string } }) {
-    return this.goalsService.findRootGoals(req.user.tenantId);
+  async findRoots(
+    @Req() req: { user: { tenantId: string; role?: string } },
+    @Query('tenantId') tenantId?: string,
+  ) {
+    return this.goalsService.findRootGoals(
+      this.resolveTenantId(req.user, tenantId),
+    );
   }
 
   /**
@@ -90,7 +121,7 @@ export class GoalsController {
   @Get(':id')
   async findOne(
     @Param('id') id: string,
-    @Req() req: { user: { tenantId: string } },
+    @Req() req: { user: { tenantId: string; role?: string } },
   ) {
     return this.goalsService.findById(id, req.user.tenantId);
   }

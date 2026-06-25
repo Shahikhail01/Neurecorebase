@@ -116,6 +116,80 @@ export class AgentTemplatesService {
     }
   }
 
+  /**
+   * Phase 1 Gap 8 — Get template version history + deprecation status.
+   * Returns current version, deprecation info, supersession chain,
+   * and any agent instances still running this template (drift detection).
+   */
+  async getChangelog(id: string, tenantId: string) {
+    const template = await this.findOne(id, tenantId);
+
+    // Drift detection: agents spawned from this template
+    const spawnedAgents = await this.prisma.agent.findMany({
+      where: { templateId: id, tenantId },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        templateVersion: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Supersession chain — find any template this is superseded by
+    const supersededBy = template.supersededByTemplateId
+      ? await this.prisma.agentTemplate.findUnique({
+          where: { id: template.supersededByTemplateId },
+          select: {
+            id: true,
+            name: true,
+            version: true,
+            deprecatedAt: true,
+          },
+        })
+      : null;
+
+    // Reverse chain — what templates superseded this one
+    const supersededTemplates = await this.prisma.agentTemplate.findMany({
+      where: { supersededByTemplateId: id },
+      select: { id: true, name: true, version: true },
+    });
+
+    const driftCount = spawnedAgents.filter(
+      (a) => a.templateVersion && a.templateVersion !== template.version,
+    ).length;
+
+    return {
+      template: {
+        id: template.id,
+        name: template.name,
+        version: template.version,
+        deprecatedAt: template.deprecatedAt,
+        type: template.type,
+      },
+      lifecycle: {
+        isDeprecated: !!template.deprecatedAt,
+        supersededBy,
+        supersedes: supersededTemplates,
+      },
+      drift: {
+        totalSpawned: spawnedAgents.length,
+        driftedCount: driftCount,
+        driftedAgents: spawnedAgents
+          .filter((a) => a.templateVersion !== template.version)
+          .map((a) => ({
+            id: a.id,
+            name: a.name,
+            status: a.status,
+            agentVersion: a.templateVersion,
+            templateVersion: template.version,
+          })),
+      },
+    };
+  }
+
   async findOnePlatform(id: string) {
     try {
       const template = await this.prisma.agentTemplate.findFirst({

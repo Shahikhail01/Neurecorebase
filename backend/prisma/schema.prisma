@@ -47,6 +47,8 @@ enum AgentStatus {
   PAUSED
   ERROR
   TERMINATED
+  ARCHIVED  // Phase 1 Gap 7 — soft-delete preserving audit trail
+  DEPRECATED // Phase 1 Gap 7 — flagged for replacement, still listed
 }
 
 enum AgentType {
@@ -448,11 +450,19 @@ model AgentTemplate {
   // Phase 6: Link to tier agent pools
   tierAgentPools TierAgentPool[]
 
+  // Phase 1 Gap 8 — template lifecycle / deprecation
+  deprecatedAt          DateTime?
+  supersededByTemplateId String?
+  supersededByTemplate   AgentTemplate? @relation("TemplateSupersession", fields: [supersededByTemplateId], references: [id], onDelete: SetNull)
+  supersedesTemplates   AgentTemplate[] @relation("TemplateSupersession")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([tenantId])
   @@index([type])
+  @@index([deprecatedAt])
+  @@index([supersededByTemplateId])
   @@map("agent_templates")
 }
 
@@ -506,7 +516,9 @@ model Agent {
   budgetPolicies BudgetPolicy[]
 
   // Phase 5 back-relations - Routines
-  routineRuns RoutineRun[]
+  routineRuns   RoutineRun[]
+  // Phase 1 — Routines owned by this agent (back-relation)
+  ownedRoutines Routine[]      @relation("RoutineOwner")
 
   // Phase 5 back-relations - Goals
   goals Goal[]
@@ -1088,6 +1100,11 @@ model Routine {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  // Owner agent — the agent that executes this routine (Gap 1, Phase 1)
+  // Nullable for backward compatibility with routines created before Phase 1.
+  ownerAgentId String?
+  ownerAgent   Agent? @relation("RoutineOwner", fields: [ownerAgentId], references: [id], onDelete: SetNull)
+
   // Relations
   triggers RoutineTrigger[]
   runs     RoutineRun[]
@@ -1100,6 +1117,7 @@ model Routine {
 
   @@index([tenantId])
   @@index([status])
+  @@index([ownerAgentId])
   @@map("routines")
 }
 

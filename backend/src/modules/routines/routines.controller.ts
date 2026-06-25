@@ -38,7 +38,11 @@ import {
   PrismaRoutineRunRepository,
 } from './repositories/prisma-routine.repository';
 
-@Controller('routines')
+/**
+ * Phase 1 Gap 6 — added URI versioning (`/api/v1/routines`) and
+ * `resolveTenantId()` helper for SUPER_ADMIN cross-tenant access.
+ */
+@Controller({ path: 'routines', version: '1' })
 @UseGuards(JwtAuthGuard)
 export class RoutinesController {
   constructor(
@@ -83,6 +87,11 @@ export class RoutinesController {
       offset: query.offset,
       orderBy: query.orderBy,
       order: query.order,
+      // Phase 1 Gap 1 — owner agent filter passthrough
+      ownerAgentId: query.ownerAgentId,
+      ownerAgentIds: query.ownerAgentIds
+        ? query.ownerAgentIds.split(',').map((s) => s.trim()).filter(Boolean)
+        : undefined,
     });
 
     return {

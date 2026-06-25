@@ -71,6 +71,13 @@ export class PrismaRoutineRepository implements IRoutineRepository {
       where.status = options.status;
     }
 
+    // Phase 1 Gap 1 — owner agent filter (single or multiple)
+    if (options?.ownerAgentId) {
+      where.ownerAgentId = options.ownerAgentId;
+    } else if (options?.ownerAgentIds && options.ownerAgentIds.length > 0) {
+      where.ownerAgentId = { in: options.ownerAgentIds };
+    }
+
     return this.prisma.routine.findMany({
       where,
       orderBy: { [options?.orderBy || 'createdAt']: options?.order || 'desc' },

@@ -357,6 +357,17 @@ export class ListRoutinesQueryDto {
   @IsEnum(['asc', 'desc'])
   @IsOptional()
   order?: 'asc' | 'desc';
+
+  // Phase 1 Gap 1 — filter routines by owner agent (used by workspace tab)
+  @IsUUID()
+  @IsOptional()
+  ownerAgentId?: string;
+
+  // Phase 1 Gap 1 — filter by multiple owner agents (e.g. all agents in a dept)
+  // Comma-separated UUID list; repository splits and uses `IN` clause.
+  @IsString()
+  @IsOptional()
+  ownerAgentIds?: string;
 }
 
 export class ListRunsQueryDto {

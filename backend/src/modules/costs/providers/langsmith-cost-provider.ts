@@ -3,6 +3,13 @@
  *
  * Implements ICostAggregationProvider using LangSmith tracing data
  * Following SOLID: Single Responsibility, Dependency Inversion
+ *
+ * Phase 1 Gap 6a — fixed ExecutionLog relation filter that previously
+ * tried `where: { agent: { tenantId } }`. Prisma's WhereInput for the
+ * `agent` relation on ExecutionLog does NOT expose `tenantId` as a
+ * direct filter argument. The fix is a two-step query: first resolve
+ * the tenant's agent IDs, then filter ExecutionLogs by `agentId IN (...)`.
+ * This also handles the null-tenantId case for SUPER_ADMIN safely.
  */
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -21,6 +28,19 @@ export class LangSmithCostProvider implements ICostAggregationProvider {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Resolve agent IDs for a tenant. Returns [] if tenant has no agents.
+   * Used as the safe filter for ExecutionLog queries (Gap 6a fix).
+   */
+  private async resolveTenantAgentIds(tenantId: string | null): Promise<string[]> {
+    if (!tenantId) return [];
+    const agents = await this.prisma.agent.findMany({
+      where: { tenantId },
+      select: { id: true },
+    });
+    return agents.map((a) => a.id);
+  }
+
+  /**
    * Get aggregated cost summary for a tenant
    *
    * Uses ExecutionLog records which contain costUsd from LLM calls
@@ -31,9 +51,21 @@ export class LangSmithCostProvider implements ICostAggregationProvider {
     startDate: Date,
     endDate: Date,
   ): Promise<CostSummary> {
+    const agentIds = await this.resolveTenantAgentIds(tenantId);
+    if (agentIds.length === 0) {
+      return {
+        totalCostCents: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        recordCount: 0,
+        byModel: {},
+        byProvider: {},
+      };
+    }
+
     const records = await this.prisma.executionLog.findMany({
       where: {
-        agent: { tenantId },
+        agentId: { in: agentIds },
         createdAt: {
           gte: startDate,
           lte: endDate,
@@ -48,7 +80,7 @@ export class LangSmithCostProvider implements ICostAggregationProvider {
 
     const agentRecords = await this.prisma.executionLog.findMany({
       where: {
-        agent: { tenantId },
+        agentId: { in: agentIds },
         createdAt: {
           gte: startDate,
           lte: endDate,
@@ -105,10 +137,23 @@ export class LangSmithCostProvider implements ICostAggregationProvider {
     startDate: Date,
     endDate: Date,
   ): Promise<CostSummary> {
+    // Phase 1 Gap 6a — verify agent belongs to tenant (defense in depth)
+    const agent = await this.prisma.agent.findFirst({
+      where: { id: agentId, tenantId },
+      select: { id: true, model: true },
+    });
+    if (!agent) {
+      return {
+        totalCostCents: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        recordCount: 0,
+      };
+    }
+
     const records = await this.prisma.executionLog.findMany({
       where: {
         agentId,
-        agent: { tenantId },
         createdAt: {
           gte: startDate,
           lte: endDate,
@@ -152,12 +197,24 @@ export class LangSmithCostProvider implements ICostAggregationProvider {
     startDate: Date,
     endDate: Date,
   ): Promise<CostSummary> {
+    // Phase 1 Gap 6a — two-step: resolve tenant agent IDs, then filter
+    const tenantAgents = await this.prisma.agent.findMany({
+      where: { tenantId, model },
+      select: { id: true },
+    });
+    const agentIds = tenantAgents.map((a) => a.id);
+    if (agentIds.length === 0) {
+      return {
+        totalCostCents: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        recordCount: 0,
+      };
+    }
+
     const records = await this.prisma.executionLog.findMany({
       where: {
-        agent: {
-          tenantId,
-          model,
-        },
+        agentId: { in: agentIds },
         createdAt: {
           gte: startDate,
           lte: endDate,
@@ -202,9 +259,21 @@ export class LangSmithCostProvider implements ICostAggregationProvider {
     };
 
     const patterns = providerModelPatterns[provider.toUpperCase()] ?? [];
+
+    // Phase 1 Gap 6a — pre-fetch tenant agent IDs (handles null tenantId safely)
+    const agentIds = await this.resolveTenantAgentIds(tenantId);
+    if (agentIds.length === 0) {
+      return {
+        totalCostCents: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        recordCount: 0,
+      };
+    }
+
     const agentRecords = await this.prisma.executionLog.findMany({
       where: {
-        agent: { tenantId },
+        agentId: { in: agentIds },
         createdAt: {
           gte: startDate,
           lte: endDate,
