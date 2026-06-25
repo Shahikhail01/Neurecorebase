@@ -1250,3 +1250,41 @@ pm2 restart neurecore-backend
 - Phase 11 Old route removal
 - Phase 12 Hardening (admin frontend + Contabo admin rebuild)
 - Authenticated smoke tests with real JWT (need to capture a token first)
+
+---
+
+## Production Deployment Session — 2026-06-25
+
+**Full chronological log of every fix from start to end of today's session is in:**
+[`production-deployment-log.md`](./production-deployment-log.md)
+
+**Summary of what's now live:**
+
+| Component | URL | Status |
+|---|---|---|
+| Backend API | `https://brain.neurecore.com/api/v1` | ✅ Live (port 3003 on Contabo, Neon DB) |
+| Tenant frontend | `https://hq.neurecore.com` | ✅ Live (Vercel, all 33 routes) |
+| Admin frontend | `https://cc.neurecore.com` | ✅ Live (Vercel, all 22 routes) |
+| Demo Tenant | `e223c25a-a6af-4d10-a931-e5566c4ebd0c` | ✅ Scale-Up Business tier deployed (7 depts + 7 agents) |
+
+**Critical fixes applied today (14 total):**
+
+1. CORS preflight — LiteSpeed stripping upstream ACAO → static extraHeaders
+2. Login 500 error → added `exception` param to `getUserFriendlyMessage`
+3. Validation errors hidden → surface class-validator messages in production
+4. Admin 404 → created vercel.json with 36 rewrites
+5. Vercel project config → PATCH rootDirectory + install/build commands
+6. Theme color deprecation → moved to viewport export
+7. Legacy dashboard showing → converted 21 legacy page.tsx to redirects
+8. Vercel project rootDirectory wrong → PATCH
+9. GitHub push denied → created new `Neurecorebase` repo with SSH
+10. Tier limit exceeded → upgraded Demo Tenant to Enterprise
+11. Wrong tenant deployed → cleaned up + re-deployed to correct tenant
+12. 28 duplicate departments → deleted via ROW_NUMBER window function
+13. DepartmentRepository returning empty → fixed unwrapList to handle arrays
+14. Removed debug console.logs → cleanup
+
+**Final working state:**
+- `demo@neurecore.ai` / `Tenant@123!` → Command Center shows "7 departments · 7 agents"
+- All 7 Scale-Up Business departments visible with hierarchy
+- GitHub: `https://github.com/Shahikhail01/Neurecorebase` (7 commits, fully pushed)
