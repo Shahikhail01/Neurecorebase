@@ -257,6 +257,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   private getUserFriendlyMessage(
     code: ErrorCodeType,
     originalMessage: string,
+    exception?: unknown,
   ): string {
     // Surface validation error details to clients (user-input related, not sensitive)
     if (
