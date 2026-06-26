@@ -1,7 +1,7 @@
 # Implementation Plan: AI Agent Tool Calling for NeureCore
 
 **Date:** 2026-06-26
-**Status:** PLANNING
+**Status:** PHASES 1-4 COMPLETED, DEPLOYED
 **Goal:** Enable users to instruct AI agents to perform actions (create projects, tasks, etc.) via chat
 
 ---
@@ -69,7 +69,7 @@ text reply ToolRegistry
 
 ## 3. Implementation Phases
 
-### Phase 1: MiniMax Tool Calling Support
+### ✅ Phase 1: MiniMax Tool Calling Support (COMPLETED)
 
 #### 1.1 Add `invokeWithTools()` to MiniMaxClient
 **File:** `backend/src/modules/models/services/minimax-client.service.ts`
@@ -125,7 +125,7 @@ Delegate to MiniMax client (or DeepSeek/OpenAI as fallbacks).
 
 ---
 
-### Phase 2: NeureCore-Specific Tools
+### ✅ Phase 2: NeureCore-Specific Tools (COMPLETED)
 
 #### 2.1 Create Tool Definitions
 **New File:** `backend/src/modules/tools/built-in/neurecore-tools.ts`
@@ -207,7 +207,7 @@ Add new `NeureCoreToolsModule` that registers all action tools.
 
 ---
 
-### Phase 3: Wire LangGraph to LLM + Tools
+### ✅ Phase 3: Wire LangGraph to LLM + Tools (COMPLETED)
 
 #### 3.1 Rewrite OfficialAgentGraph plannerNode
 **File:** `backend/src/modules/agents/langgraph/langgraph-official.ts`
@@ -276,7 +276,7 @@ constructor(
 
 ---
 
-### Phase 4: Chat Route → LangGraph
+### ✅ Phase 4: Chat Route → LangGraph (COMPLETED)
 
 #### 4.1 Add Intent Detection to ChatService
 **File:** `backend/src/modules/chat/chat.service.ts`
@@ -321,7 +321,7 @@ if (intent === 'action') {
 
 ---
 
-### Phase 5: Consolidate State Machines (Optional)
+### ⏸ Phase 5: Consolidate State Machines (DEFERRED)
 
 **Decision:** Keep `langgraph-official.ts` as canonical. Deprecate `agent-state-machine.ts` but keep for reference.
 
@@ -400,3 +400,32 @@ if (intent === 'action') {
 2. **Fallback provider**: If MiniMax doesn't support tools, fall back to DeepSeek or OpenAI?
 3. **Tool scope**: Which actions should be tool-enabled? (Start with: createTask, createProject, listAgents, pauseAgent, getTenantSnapshot)
 4. **Approval flow**: If user asks "Pause all agents", should this require approval before execution?
+
+---
+
+## 8. Deployment Notes (2026-06-26)
+
+### Deployed to Contabo
+- Backend built and restarted on `brain.neurecore.com` (Contabo)
+- Files synced via rsync to `/opt/neurecore/backend/backend/`
+- Build: `npm run build` (NestJS)
+- Process: `pm2 restart neurecore-backend`
+
+### Issues Fixed During Deploy
+1. **TS2403 duplicate interface**: `DeepSeekClientService` and `MiMoClientService` needed `invokeWithTools()` stub implementations to satisfy `ILLMClient` interface
+2. **TS2322 TaskPriority.URGENT**: Changed to `CRITICAL` (Prisma enum only has LOW/MEDIUM/HIGH/CRITICAL)
+3. **TS2322 tools array type mismatch**: Cast filter result as `IStructuredTool[]`
+
+### Post-Deploy Verification
+- Health check: `GET /api/v1/health` returns 200 ✅
+- Backend is running under PM2 (pid 333009)
+
+---
+
+## 9. Open Questions / Future Work
+
+1. **Approval flow**: If user asks "Pause all agents", should this require approval before execution?
+2. **Phase 5**: Consolidate state machines - keep `langgraph-official.ts` canonical, deprecate `agent-state-machine.ts`
+3. **ListProjects tool**: Schema exists but tool class not fully wired in registry
+4. **Unit tests**: Write tests for `detectIntent()` and tool execution
+

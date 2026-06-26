@@ -2,9 +2,26 @@
 
 ## Last Updated
 
-2026-06-26T13:18:00Z (Session 5 — MiniMax M2.5 deployed)
+2026-06-26T16:08:00Z (Session 6 — AI Tool Calling deployed)
 
-## Most Recent Operations (Session 5 — 2026-06-26)
+## Most Recent Operations (Session 6 — 2026-06-26)
+
+**AI Tool Calling** ✅ Deployed to production
+- `neurecore-base/neurecore` (git): commit `7708523b` — feat(agents): AI tool calling - MiniMax function calling + NeureCore tools
+- Contabo `/opt/neurecore/backend/backend/`: synced via rsync, built with `npm run build`
+- 8 tools implemented: createTask, createProject, listDepartments, listAgents, pauseAgent, resumeAgent, listTasks, getTenantSnapshot
+- `OfficialAgentGraph.plannerNode` now calls `LLMFactory.invokeWithTools()` with tool definitions
+- `ChatService.send()` routes action requests to LangGraph via `detectIntent()`
+- Backend restarted (pid 333009), healthy — `GET /api/v1/health` returns 200
+
+### Deploy Issues Fixed
+- Added `invokeWithTools()` stubs to `DeepSeekClientService` and `MiMoClientService` (satisfy `ILLMClient` interface)
+- Changed `TaskPriority.URGENT` → `CRITICAL` in neurecore-tools.ts (Prisma enum)
+- Fixed type predicate in tools.module.ts (cast filter result as `IStructuredTool[]`)
+
+See `memory-bank/ai-tool-calling-implementation-plan.md` for full details.
+
+## Previous Operations (Session 5 — 2026-06-26)
 
 **MiniMax M2.5 Upgrade** ✅ Deployed to production
 - `neurecore-base/neurecore` (git): `minimax-client.service.ts` + `model-routing.service.ts` updated
