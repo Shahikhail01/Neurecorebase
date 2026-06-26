@@ -411,3 +411,102 @@ cp /usr/local/lsws/conf/vhosts/brain.neurecore.com/vhost.conf.bak-cors-fix \
    /usr/local/lsws/conf/vhosts/brain.neurecore.com/vhost.conf
 /usr/local/lsws/bin/lswsctrl restart
 ```
+
+---
+
+## Session 2 — MiniMax AI Wiring (2026-06-25/26)
+
+**Issue:** Ask AI on Command Center showed "I received your query... The chat backend is not yet connected. Once the `/api/chat` endpoint is deployed..." and agents replied "I'm currently offline. Please check your connection and try again."
+
+**Root causes:**
+1. No `/api/v1/chat/messages` or `/api/v1/ai/chat` backend endpoint existed
+2. `MINIMAX_API_KEY` empty in production `.env`
+3. Frontend chat services had stub fallback messages
+
+**User provided:** API key + base URL: `https://api.minimax.io/v1`
+
+### Fixes applied
+
+#### Fix 15: New `ChatModule` with two endpoints
+
+Created `backend/src/modules/chat/`:
+- `chat.module.ts` — imports `ModelsModule` for `MiniMaxClient`
+- `chat.service.ts` — composes system + history + user message into single prompt, returns `{ reply, conversationId, tokens, model, provider }`
+- `chat.controller.ts` — exposes `POST /api/v1/chat/messages` (Ask AI on Command Center) + `POST /api/v1/ai/chat` (ConversationalAIService) + stub `chat/history`, `chat/suggestions` for frontend compat
+- `dto/chat.dto.ts` — `SendChatMessageDto` with validation decorators
+
+Wired `ChatModule` into `AppModule`.
+
+#### Fix 16: `@Controller({ version: '1' })` for URI versioning
+
+Initial deploy used `@Controller()` (no params). Routes mapped as `/api/chat/messages` instead of `/api/v1/chat/messages` → 404. Fixed with explicit `version: '1'`.
+
+#### Fix 17: TypeScript strict null checks
+
+`response.usage.totalTokens` triggered TS18048 "possibly undefined". Wrapped in `response.usage ? ... : {0,0,0}` fallback.
+
+#### Fix 18: Frontend chat service response unwrap
+
+`chat.service.sendMessage` and `ConversationalAIService.sendMessage` previously unwrapped `res.data?.data` directly. Backend returns `{ status, data: { reply, ... }, meta }`, so the unwrap target is `payload?.data?.data` (or `payload?.data` for the simpler shape).
+
+Updated fallback message from "The chat backend is not yet connected" to "The chat backend is reachable but returned an empty response" — accurate if backend is up.
+
+#### Fix 19: Production `.env` MiniMax config
+
+Added to `/opt/neurecore/backend/backend/.env`:
+```
+MINIMAX_API_KEY=sk-cp-uIHDBUPhYE4x5rr1R3kR1OoEVe5i_cuigLDc-XBhk0FLd4O2sYsru4aor1RmsdVR2Rg_xjdI28ykWr9AtQqTxJqGPul1ELJrIcT5HwUw2JUSXtdIQrjpzs0
+MINIMAX_BASE_URL=https://api.minimax.io/v1
+MINIMAX_MODEL=MiniMax-Text-01
+LLM_PROVIDER=minimax
+DEFAULT_MODEL=MiniMax-Text-01
+```
+
+### Verified end-to-end
+
+Backend direct test (Python):
+```python
+POST /api/v1/chat/messages {message: 'What is 2+2?'}
+→ {"reply":"Four","conversationId":"conv_1782413228915_5mxvjs",
+   "tokens":{"input":756,"output":1,"total":757},
+   "model":"MiniMax-Text-01","provider":"minimax"}
+
+POST /api/v1/ai/chat {message: 'Say hello in 2 words'}
+→ {"reply":"Hello there!","tokens":{"input":751,"output":3,"total":754}}
+```
+
+Browser test (Playwright):
+- Open https://hq.neurecore.com → login as demo@neurecore.ai → click "Ask AI" button → type "How many agents are running?" → press Enter
+- Frontend POSTs to https://brain.neurecore.com/api/v1/ai/chat → 200 OK with MiniMax reply
+- Chat panel shows user message + AI reply with chart data suggestion + follow-up actions
+
+### Files created
+
+```
+backend/src/modules/chat/chat.module.ts          (new)
+backend/src/modules/chat/chat.service.ts         (new)
+backend/src/modules/chat/chat.controller.ts       (new)
+backend/src/modules/chat/dto/chat.dto.ts          (new)
+backend/src/modules/chat/index.ts                (new)
+backend/src/app.module.ts                        (modified — import ChatModule)
+```
+
+### Files modified
+
+```
+frontend-tenant/src/services/chat.service.ts                (unwrap + updated fallback)
+frontend-tenant/src/core/services/ConversationalAIService.ts (unwrap nested)
+```
+
+### Commits
+
+```
+d70c19bf feat(ai): wire MiniMax API for Ask AI + agent chat
+```
+
+### Lessons learned
+
+- `@Controller()` with empty parens skips URI versioning. Always use `@Controller({ path: ..., version: '1' })` for explicit control.
+- NestJS `enableVersioning` is global — controllers WITHOUT explicit `version` get NO version prefix at all, not the default version.
+- Frontend response unwrappers must match the backend's `{ status, data: <payload>, meta }` envelope exactly. When adding new endpoints, audit all places that call them.
+- LLM clients that return "stub responses" when API key missing are a footgun — they look like success but produce useless output. Either fail-fast or return a clearly distinguishable error marker.
