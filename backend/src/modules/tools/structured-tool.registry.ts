@@ -3,9 +3,10 @@
  *
  * Registry for managing and discovering structured tools.
  * Provides dependency injection support via NestJS.
+ * Auto-registers tools via OnModuleInit.
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import {
   IStructuredTool,
   ToolDefinition,
@@ -16,10 +17,29 @@ import {
  * Registry for managing IStructuredTool instances
  */
 @Injectable()
-export class StructuredToolRegistry {
+export class StructuredToolRegistry implements OnModuleInit {
   private readonly logger = new Logger(StructuredToolRegistry.name);
   private readonly tools: Map<string, IStructuredTool> = new Map();
   private readonly categoryIndex: Map<ToolCategory, Set<string>> = new Map();
+  private injectedTools: IStructuredTool[] = [];
+
+  constructor() {}
+
+  /**
+   * Inject tools programmatically (for NeureCore tools registration)
+   */
+  setTools(tools: IStructuredTool[]): void {
+    this.injectedTools = tools;
+  }
+
+  onModuleInit(): void {
+    for (const tool of this.injectedTools) {
+      if (tool && tool.name) {
+        this.register(tool);
+      }
+    }
+    this.logger.log(`Auto-registered ${this.tools.size} tools`);
+  }
 
   /**
    * Register a structured tool

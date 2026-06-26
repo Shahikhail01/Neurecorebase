@@ -21,6 +21,7 @@ import { StreamingEventType } from '../streaming/agent-streaming.service';
 import { AgentCheckpointService } from './checkpoint.service';
 import { SecurityInterceptorService } from '../security/security-interceptor.service';
 import type { ISecurityContext } from '../security/interfaces/security.interfaces';
+import { LLMFactory } from '../../models/services/llm-factory.service';
 
 // Node name constants to satisfy TypeScript
 const PLANNER_NODE = 'planner';
@@ -161,6 +162,7 @@ export class OfficialAgentGraph {
   > | null = null;
 
   constructor(
+    private readonly llmFactory: LLMFactory,
     private readonly config: ConfigService,
     private readonly streamingService: AgentStreamingService,
     private readonly toolRegistry: StructuredToolRegistry,
@@ -226,7 +228,7 @@ export class OfficialAgentGraph {
   }
 
   /**
-   * Planner node - creates execution plan
+   * Planner node - creates execution plan using LLM with tool calling
    */
   private plannerNode: AgentNodeFunction = async (state) => {
     this.logger.debug(`[planner] Creating plan for goal: ${state.goal}`);
@@ -235,33 +237,83 @@ export class OfficialAgentGraph {
       // Emit event for streaming
       this.emitNodeEvent(PLANNER_NODE, state.agentId, { status: 'started' });
 
-      // Simple plan creation (in real impl, would call LLM)
-      const plan = {
-        steps: [
-          {
-            id: 'step-1',
-            description: 'Analyze goal and determine required tools',
-            toolId: null,
-            input: { goal: state.goal },
-            dependsOn: [],
-          },
-        ],
-        currentStepIndex: 0,
-      };
+      // Get available tools for LLM
+      const toolDefs = this.toolRegistry.getFunctionDefinitions();
 
-      // Async for future LLM integration
-      await Promise.resolve();
+      if (toolDefs.length === 0) {
+        // No tools available, respond with text
+        return {
+          messages: [
+            ...state.messages,
+            { role: 'assistant' as const, content: `I understand you want: ${state.goal}. However, no tools are available to execute this action.`, timestamp: Date.now() },
+          ],
+          currentNode: PLANNER_NODE,
+          shouldContinue: false,
+        };
+      }
 
+      const systemPrompt = `You are an AI operations assistant for NeureCore.
+You have access to tools to perform actions on behalf of the user.
+
+Available tools:
+${toolDefs.map(t => `- ${t.function.name}: ${t.function.description}`).join('\n')}
+
+When the user asks to CREATE, ADD, LIST, SHOW, GET, PAUSE, RESUME, or any ACTION:
+→ Use the appropriate tool.
+
+When the user asks a QUESTION (not an action):
+→ Respond directly with your knowledge.
+
+Keep responses concise. Use tools whenever the user asks for an action.`;
+
+      const messages = [
+        ...state.messages,
+        { role: 'user' as const, content: state.goal, timestamp: Date.now() },
+      ];
+
+      const result = await this.llmFactory.invokeWithTools(
+        [{ role: 'system', content: systemPrompt }, { role: 'user', content: state.goal }],
+        toolDefs,
+        0.3,
+        2048,
+      );
+
+      // Check if LLM returned tool calls
+      if (result.toolCalls && result.toolCalls.length > 0) {
+        this.logger.log(`[planner] LLM returned ${result.toolCalls.length} tool call(s): ${result.toolCalls.map(t => t.name).join(', ')}`);
+
+        const toolCalls: ToolCall[] = result.toolCalls.map((tc, i) => ({
+          name: tc.name,
+          input: tc.arguments,
+        }));
+
+        return {
+          toolCalls,
+          messages: [
+            ...state.messages,
+            { role: 'user' as const, content: state.goal, timestamp: Date.now() },
+          ],
+          currentNode: TOOL_NODE,
+          iteration: 1,
+          shouldContinue: true,
+        };
+      }
+
+      // No tool calls - LLM responded directly with text
       return {
-        plan,
+        messages: [
+          ...state.messages,
+          { role: 'assistant' as const, content: result.content ?? 'I understand. How can I help?', timestamp: Date.now() },
+        ],
         currentNode: PLANNER_NODE,
-        iteration: 1,
+        shouldContinue: false,
       };
     } catch (error) {
       this.logger.error('[planner] Error creating plan', error);
       return {
         error: error instanceof Error ? error.message : 'Planning failed',
         currentNode: PLANNER_NODE,
+        shouldContinue: false,
       };
     }
   };
@@ -370,7 +422,13 @@ export class OfficialAgentGraph {
           const validatedInput =
             securityResult.sanitizedInput || toolCall.input;
 
-          const result = await tool.execute(validatedInput);
+          const toolContext = {
+            tenantId: state.tenantId,
+            agentId: state.agentId,
+            userId: state.userId,
+          };
+
+          const result = await tool.execute(validatedInput, toolContext);
           toolResults.push({
             toolName: toolCall.name,
             input: toolCall.input,
@@ -389,21 +447,49 @@ export class OfficialAgentGraph {
         }
       }
 
+      // Format result message
+      const successCount = toolResults.filter(r => !r.error).length;
+      const failCount = toolResults.filter(r => r.error).length;
+
+      let responseMessage = '';
+      if (failCount === 0) {
+        responseMessage = `Successfully executed ${successCount} tool(s): `;
+        responseMessage += toolResults.map(r => `${r.toolName}`).join(', ');
+        // Add key result data
+        for (const r of toolResults) {
+          if (r.output && typeof r.output === 'object' && !Array.isArray(r.output)) {
+            const output = r.output as Record<string, unknown>;
+            if (output.taskId) responseMessage += `. Created ${output.title ?? 'task'} with ID ${output.taskId}`;
+            if (output.projectId) responseMessage += `. Created project with ID ${output.projectId}`;
+            if (output.agentId) responseMessage += `. Agent ${output.name ?? output.agentId} is now ${output.newStatus ?? 'updated'}`;
+          }
+        }
+      } else {
+        responseMessage = `Executed ${successCount} tool(s) successfully, ${failCount} failed.`;
+      }
+
       return {
         toolResults,
-        currentNode: TOOL_NODE,
+        messages: [
+          ...state.messages,
+          { role: 'assistant' as const, content: responseMessage, timestamp: Date.now() },
+        ],
+        toolCalls: [], // Clear tool calls after execution
+        currentNode: EVALUATOR_NODE,
+        shouldContinue: false, // Done after execution
       };
     } catch (error) {
       this.logger.error('[tool_node] Error executing tools', error);
       return {
         error: error instanceof Error ? error.message : 'Tool execution failed',
         currentNode: TOOL_NODE,
+        shouldContinue: false,
       };
     }
   };
 
   /**
-   * Evaluator node - evaluates execution results
+   * Evaluator node - generates final response after tool execution
    */
   private evaluatorNode: AgentNodeFunction = async (state) => {
     this.logger.debug(`[evaluator] Evaluating results`);
@@ -469,26 +555,25 @@ export class OfficialAgentGraph {
 
   /**
    * Conditional edge: determine if we should execute a tool or end
+   * After planner, check if LLM returned tool calls
    */
   private shouldExecuteTool(state: AgentGraphState): string {
     if (state.error) {
       return END as string;
     }
 
-    if (!state.plan) {
-      return END as string;
+    // If LLM returned tool calls, execute them
+    if (state.toolCalls && state.toolCalls.length > 0) {
+      return TOOL_NODE;
     }
 
-    // If we have a current step with a tool, go to executor
-    if (state.currentStep?.toolId) {
-      return EXECUTOR_NODE;
-    }
-
+    // No tool calls - LLM responded with text, we're done
     return END as string;
   }
 
   /**
    * Conditional edge: determine if we should continue or end
+   * After tool execution + evaluation
    */
   private shouldContinue(state: AgentGraphState): string {
     // Check if we should continue
@@ -501,12 +586,12 @@ export class OfficialAgentGraph {
       return END as string;
     }
 
-    // Check if plan is complete
-    if (state.plan && state.plan.currentStepIndex >= state.plan.steps.length) {
-      return END as string;
+    // If LLM returned more tool calls, execute them
+    if (state.toolCalls && state.toolCalls.length > 0) {
+      return TOOL_NODE;
     }
 
-    return EXECUTOR_NODE;
+    return END as string;
   }
 
   /**

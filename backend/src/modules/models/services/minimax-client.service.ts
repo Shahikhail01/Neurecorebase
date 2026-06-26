@@ -11,6 +11,8 @@ import { z } from 'zod';
 import {
   LLMResponse,
   LLMStreamResponse,
+  LLMWithToolsResponse,
+  LLMToolCall,
 } from '../interfaces/llm-client.interface';
 
 /**
@@ -219,6 +221,70 @@ export class MiniMaxClient {
       yield { content: '', done: true };
     } catch (error) {
       Logger.error(`MiniMax stream failed: ${error}`, MiniMaxClient.name);
+      throw error;
+    }
+  }
+
+  async invokeWithTools(
+    messages: Array<{ role: string; content: string }>,
+    tools: Array<{
+      type: 'function';
+      function: {
+        name: string;
+        description: string;
+        parameters: {
+          type: 'object';
+          properties: Record<string, unknown>;
+          required: string[];
+        };
+      };
+    }>,
+    temperature = 0.3,
+    maxTokens = 2048,
+  ): Promise<LLMWithToolsResponse> {
+    if (!this.isConfigured()) {
+      return {
+        content: 'MiniMax is not configured.',
+        toolCalls: [],
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        finishReason: 'stop',
+      };
+    }
+
+    try {
+      const response = await this.makeRequest({
+        model: this.model,
+        messages,
+        tools,
+        tool_choice: 'auto',
+        temperature,
+        max_tokens: maxTokens,
+      } as Record<string, unknown>);
+
+      const choice = response.choices[0];
+      const usage = response.usage;
+
+      const toolCalls: LLMToolCall[] = [];
+      const rawToolCalls = (choice.message as any).tool_calls ?? [];
+      for (const tc of rawToolCalls) {
+        toolCalls.push({
+          name: tc.function?.name ?? tc.name ?? '',
+          arguments: JSON.parse(tc.function?.arguments ?? '{}'),
+        });
+      }
+
+      return {
+        content: choice.message.content || undefined,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+        usage: {
+          inputTokens: usage.prompt_tokens,
+          outputTokens: usage.completion_tokens,
+          totalTokens: usage.total_tokens,
+        },
+        finishReason: choice.finish_reason,
+      };
+    } catch (error) {
+      Logger.error(`MiniMax invokeWithTools failed: ${error}`, MiniMaxClient.name);
       throw error;
     }
   }

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { MiniMaxClient } from '../models/services/minimax-client.service';
+import { OfficialAgentGraph } from '../agents/langgraph/langgraph-official';
 import { SendChatMessageDto } from './dto/chat.dto';
 
 /**
@@ -24,6 +25,7 @@ export class ChatService {
   constructor(
     private readonly minimax: MiniMaxClient,
     private readonly prisma: PrismaService,
+    private readonly agentGraph: OfficialAgentGraph,
   ) {}
 
   async send(
@@ -58,12 +60,57 @@ export class ChatService {
       (dto.context?.['tenantId'] as string | undefined) ??
       null;
 
+    // Detect if this is an action request or a query
+    const intent = this.detectIntent(dto.message);
+
     // Fetch live tenant data so the model answers with real numbers
     const liveData = tenantId
       ? await this.fetchTenantSnapshot(tenantId)
       : { note: 'no tenant context available' };
 
-    // Compose the prompt: system + live data + history + user message
+    // ACTION: Route to OfficialAgentGraph for tool execution
+    if (intent === 'action' && tenantId) {
+      try {
+        this.logger.log(`[chat] Routing action request to agent graph: ${dto.message}`);
+
+        const result = await this.agentGraph.run({
+          goal: dto.message,
+          agentId: 'ai-assistant',
+          tenantId,
+          userId: 'user',
+          sessionId: conversationId,
+        });
+
+        // Extract reply from final message or tool results
+        const messages = result.messages ?? [];
+        const finalMessage = messages[messages.length - 1];
+        const reply = finalMessage?.content ??
+          (result.toolResults?.length > 0
+            ? `Executed ${result.toolResults.length} tool(s).`
+            : 'Action completed.');
+
+        return {
+          reply,
+          conversationId,
+          tokens: { input: 0, output: 0, total: 0 },
+          model: 'MiniMax-Text-01',
+          provider: 'minimax',
+          liveData,
+        };
+      } catch (err) {
+        this.logger.error(`[chat] Agent graph failed: ${(err as Error).message}`);
+        return {
+          reply: `I tried to execute that action but encountered an error: ${(err as Error).message}`,
+          conversationId,
+          tokens: { input: 0, output: 0, total: 0 },
+          model: 'MiniMax-Text-01',
+          provider: 'minimax',
+          liveData,
+        };
+      }
+    }
+
+    // QUERY: Use MiniMax for natural language response
     const systemPrompt =
       dto.systemPrompt ??
       'You are HeadQuarter, the AI assistant inside the NeureCore platform. ' +
@@ -123,6 +170,21 @@ export class ChatService {
         liveData,
       };
     }
+  }
+
+  /**
+   * Detect if user message is an action request or a query
+   */
+  private detectIntent(message: string): 'action' | 'query' {
+    const actionKeywords = [
+      'create', 'add', 'new', 'make',
+      'pause', 'stop', 'resume', 'start', 'activate',
+      'list', 'show', 'get', 'find',
+      'assign', 'delegate', 'set',
+      'delete', 'remove', 'archive',
+    ];
+    const lower = message.toLowerCase();
+    return actionKeywords.some(k => lower.includes(k)) ? 'action' : 'query';
   }
 
   /**

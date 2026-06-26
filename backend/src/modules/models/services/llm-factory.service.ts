@@ -10,6 +10,7 @@ import { z } from 'zod';
 import {
   LLMResponse,
   LLMStreamResponse,
+  LLMWithToolsResponse,
 } from '../interfaces/llm-client.interface';
 import { ModelRoutingService, ModelSpec } from './model-routing.service';
 import { MiMoClientService } from './mimo-client.service';
@@ -403,6 +404,114 @@ export class LLMFactory {
       yield { content: '', done: true };
     } catch (error) {
       this.logger.error(`LLM stream failed: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Invoke LLM with tool/function calling support
+   */
+  async invokeWithTools(
+    messages: Array<{ role: string; content: string }>,
+    tools: Array<{
+      type: 'function';
+      function: {
+        name: string;
+        description: string;
+        parameters: {
+          type: 'object';
+          properties: Record<string, unknown>;
+          required: string[];
+        };
+      };
+    }>,
+    temperature = 0.3,
+    maxTokens = 2048,
+  ): Promise<LLMWithToolsResponse> {
+    const provider = this.getDefaultProvider();
+    const selected = this.selectModel('execution');
+    const modelId = selected.model.id;
+
+    const apiKey =
+      provider === 'minimax'
+        ? (this.config.get<string>('MINIMAX_API_KEY') ?? '')
+        : (this.config.get<string>('OPENAI_API_KEY') ?? '');
+    const baseUrl =
+      provider === 'minimax'
+        ? (this.config.get<string>('MINIMAX_BASE_URL') ??
+          'https://api.minimax.chat/v1')
+        : 'https://api.openai.com/v1';
+
+    if (!apiKey) {
+      return {
+        content: `Stub: tools unavailable (no API key)`,
+        toolCalls: [],
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        finishReason: 'stop',
+      };
+    }
+
+    try {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: modelId,
+          messages,
+          tools,
+          tool_choice: 'auto',
+          temperature,
+          max_tokens: maxTokens,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`${provider} API error: ${response.status} ${error}`);
+      }
+
+      const data = (await response.json()) as {
+        choices: Array<{
+          message: {
+            content: string | null;
+            tool_calls?: Array<{
+              id: string;
+              type: string;
+              function: { name: string; arguments: string };
+            }>;
+          };
+          finish_reason: string;
+        }>;
+        usage: {
+          prompt_tokens: number;
+          completion_tokens: number;
+          total_tokens: number;
+        };
+      };
+
+      const choice = data.choices[0];
+      const usage = data.usage;
+
+      const toolCalls = (choice.message.tool_calls ?? []).map((tc) => ({
+        name: tc.function.name,
+        arguments: JSON.parse(tc.function.arguments) as Record<string, unknown>,
+      }));
+
+      return {
+        content: choice.message.content ?? undefined,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+        usage: {
+          inputTokens: usage.prompt_tokens,
+          outputTokens: usage.completion_tokens,
+          totalTokens: usage.total_tokens,
+        },
+        finishReason: choice.finish_reason,
+      };
+    } catch (error) {
+      this.logger.error(`LLM invokeWithTools failed: ${error}`);
       throw error;
     }
   }

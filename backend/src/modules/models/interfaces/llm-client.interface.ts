@@ -43,6 +43,22 @@ export interface LLMStreamResponse {
   };
 }
 
+export interface LLMToolCall {
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface LLMWithToolsResponse {
+  content?: string;
+  toolCalls?: LLMToolCall[];
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  finishReason?: string;
+}
+
 export interface ILLMClient {
   readonly provider: string;
   readonly model: string;
@@ -65,4 +81,22 @@ export interface ILLMClient {
     schema: T,
     config?: Partial<LLMConfig>,
   ): AsyncIterable<LLMStreamResponse>;
+
+  invokeWithTools(
+    messages: Array<{ role: string; content: string }>,
+    tools: Array<{
+      type: 'function';
+      function: {
+        name: string;
+        description: string;
+        parameters: {
+          type: 'object';
+          properties: Record<string, unknown>;
+          required: string[];
+        };
+      };
+    }>,
+    temperature?: number,
+    maxTokens?: number,
+  ): Promise<LLMWithToolsResponse>;
 }
