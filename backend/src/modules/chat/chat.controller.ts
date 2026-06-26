@@ -7,9 +7,20 @@ import {
   HttpStatus,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { SendChatMessageDto } from './dto/chat.dto';
 import { ChatService } from './chat.service';
+
+interface JwtPayload {
+  sub: string;
+  tenantId?: string;
+  role: string;
+}
+
+interface AuthedRequest {
+  user: JwtPayload;
+}
 
 /**
  * Chat Controller
@@ -18,7 +29,10 @@ import { ChatService } from './chat.service';
  *   - POST /api/v1/chat/messages — used by Command Center Ask AI
  *   - POST /api/v1/ai/chat       — used by core/services/ConversationalAIService
  *
- * Both return the same shape: { reply, conversationId, tokens, model, provider }.
+ * Both return the same shape: { reply, conversationId, tokens, model, provider, liveData }.
+ *
+ * The caller's tenantId is taken from the JWT (set by JwtAuthGuard) so the
+ * LLM is grounded in real tenant data instead of hallucinating.
  */
 @Controller({ version: '1' })
 export class ChatController {
@@ -27,15 +41,15 @@ export class ChatController {
   /** Command Center "Ask AI" entry point */
   @Post('chat/messages')
   @HttpCode(HttpStatus.OK)
-  async sendMessage(@Body() dto: SendChatMessageDto) {
-    return this.chat.send(dto);
+  async sendMessage(@Body() dto: SendChatMessageDto, @Req() req: AuthedRequest) {
+    return this.chat.send(dto, req.user?.tenantId);
   }
 
   /** Core ConversationalAIService entry point */
   @Post('ai/chat')
   @HttpCode(HttpStatus.OK)
-  async aiChat(@Body() dto: SendChatMessageDto) {
-    return this.chat.send(dto);
+  async aiChat(@Body() dto: SendChatMessageDto, @Req() req: AuthedRequest) {
+    return this.chat.send(dto, req.user?.tenantId);
   }
 
   /** Stub history endpoint — keeps existing frontend integration stable */
