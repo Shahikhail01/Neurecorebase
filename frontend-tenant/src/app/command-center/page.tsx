@@ -67,7 +67,7 @@ import { useDashboardKpis } from '@/hooks/useDashboardKpis';
 import { useChartData } from '@/hooks/useChartData';
 import { useTimeRange } from '@/hooks/useTimeRange';
 import { connectSocket, getSocket } from '@/services/socket';
-import api from '@/services/api';
+import { commandCenterService } from '@/services/command-center.service';
 import { unwrapArrayOrEmpty, unwrapList, unwrapItem } from '@/services/unwrap';
 import {
   DailyBriefingButton,
@@ -117,10 +117,10 @@ export default function CommandCenterPage() {
   const router = useRouter();
   const openInspector = useInspectorStore((s) => s.openInspector);
 
-  const { agents, fetchAgents, updateAgentStatus } = useAgentStore();
-  const { tasks, fetchTasks, updateTaskStatus } = useTaskStore();
-  const { workflows, fetchWorkflows } = useWorkflowStore();
-  const { departments, fetchDepartments } = useDepartmentStore();
+  const { agents, fetchAgents, setAgents, updateAgentStatus } = useAgentStore();
+  const { tasks, fetchTasks, setTasks, updateTaskStatus } = useTaskStore();
+  const { workflows, fetchWorkflows, setWorkflows } = useWorkflowStore();
+  const { departments, fetchDepartments, setDepartments } = useDepartmentStore();
 
   const { kpis, loading: kpisLoading } = useDashboardKpis();
   const { range, setRange } = useTimeRange();
@@ -136,53 +136,67 @@ export default function CommandCenterPage() {
   const [agentInboxCount, setAgentInboxCount] = useState<number | null>(null);
 
   // ── Data fetchers ────────────────────────────────────────────────────
-  const fetchLogs = useCallback(async () => {
+  // Performance fix: a single /command-center/summary call replaces the
+  // 7 parallel fetches the dashboard used to fire on mount. The response
+  // hydrates the same stores the page already reads from.
+  const fetchCommandCenterSummary = useCallback(async () => {
     setLogsLoading(true);
     try {
-      const res = await api.get('/observability/logs?limit=10');
-      setLogs(unwrapArrayOrEmpty(res));
+      const summary = await commandCenterService.getSummary();
+
+      // Hydrate the existing stores so the rest of the page is unchanged.
+      setAgents(summary.agents.list as never[]);
+      setTasks(
+        summary.tasks.list.map((t) => ({
+          ...t,
+          tenantId: '',
+          createdAt: t.createdAt,
+        })) as never[],
+        summary.tasks.total,
+      );
+      setWorkflows(
+        summary.workflows.list.map((w) => ({
+          id: w.id,
+          name: w.name,
+          status: w.isActive ? 'ACTIVE' : 'INACTIVE',
+          isActive: w.isActive,
+          createdAt: w.createdAt,
+          tenantId: '',
+        })) as never[],
+        summary.workflows.total,
+      );
+      setDepartments(
+        summary.departments.list.map((d) => ({
+          id: d.id,
+          name: d.name,
+          status: d.status,
+          tenantId: '',
+        })) as never[],
+        summary.departments.total,
+      );
+
+      setPendingApprovals(summary.approvals.pending);
+      setMonthCost(summary.costs.monthCents / 100);
+      setLogs(
+        summary.activity.map((a) => ({
+          id: a.id,
+          agentId: '',
+          status: a.severity === 'error' ? 'FAILED' : 'COMPLETED',
+          startedAt: a.timestamp,
+          evaluationScore: undefined,
+          agent: { name: a.message },
+        })) as ExecutionLog[],
+      );
     } catch {
-      setLogs([]);
+      // Silent fail — keep the existing store contents.
     } finally {
       setLogsLoading(false);
     }
-  }, []);
-
-  const fetchApprovals = useCallback(async () => {
-    try {
-      const res = await api.get('/approvals?status=PENDING&limit=1');
-      const { total } = unwrapList(res);
-      setPendingApprovals(total ?? 0);
-    } catch {
-      setPendingApprovals(0);
-    }
-  }, []);
-
-  const fetchCosts = useCallback(async () => {
-    try {
-      const res = await api.get('/costs/summary');
-      const data = unwrapItem(res);
-      // CostSummary.totalCostCents is in cents; convert to dollars
-      const cents = (data?.totalCostCents ?? data?.totalCents) as number | undefined;
-      if (typeof cents === 'number') {
-        setMonthCost(Math.round(cents) / 100);
-      } else {
-        setMonthCost(0);
-      }
-    } catch {
-      setMonthCost(0);
-    }
-  }, []);
+  }, [setAgents, setTasks, setWorkflows, setDepartments]);
 
   useEffect(() => {
-    void fetchAgents(1, 100);
-    void fetchTasks(1, 100);
-    void fetchWorkflows(1, 100);
-    void fetchDepartments();
-    void fetchLogs();
-    void fetchApprovals();
-    void fetchCosts();
-  }, [fetchAgents, fetchTasks, fetchWorkflows, fetchDepartments, fetchLogs, fetchApprovals, fetchCosts]);
+    void fetchCommandCenterSummary();
+  }, [fetchCommandCenterSummary]);
 
   // ── Socket live updates ──────────────────────────────────────────────
   useEffect(() => {
@@ -194,19 +208,18 @@ export default function CommandCenterPage() {
         p.status as import('@/shared/types/domain.types').AgentStatus,
       );
     });
-    socket.on('task:completed', () => {
-      void fetchLogs();
-      void fetchCosts();
-    });
-    socket.on('task:failed', () => void fetchLogs());
-    socket.on('approval:pending', () => void fetchApprovals());
+    // Live updates: re-fetch the whole summary on any of these events.
+    // (Was 4 separate fetches; now 1 round-trip.)
+    socket.on('task:completed', () => void fetchCommandCenterSummary());
+    socket.on('task:failed', () => void fetchCommandCenterSummary());
+    socket.on('approval:pending', () => void fetchCommandCenterSummary());
     return () => {
       socket.off('agent:status_updated');
       socket.off('task:completed');
       socket.off('task:failed');
       socket.off('approval:pending');
     };
-  }, [updateAgentStatus, fetchLogs, fetchCosts, fetchApprovals]);
+  }, [updateAgentStatus, fetchCommandCenterSummary]);
 
   // ── Derived data ─────────────────────────────────────────────────────
   const runningAgents = agents.filter((a) => a.status === 'ACTIVE' || a.status === 'RUNNING').length;
@@ -371,9 +384,9 @@ export default function CommandCenterPage() {
                 Your Departments
               </h2>
               <button
-                onClick={() => void fetchDepartments()}
+                onClick={() => void fetchCommandCenterSummary()}
                 className="text-xs text-zinc-500 hover:text-zinc-300 transition flex items-center gap-1"
-                aria-label="Refresh departments"
+                aria-label="Refresh"
               >
                 <RefreshCw className="w-3 h-3" />
                 Refresh
@@ -457,7 +470,7 @@ export default function CommandCenterPage() {
                 Live Activity
               </h2>
               <button
-                onClick={() => void fetchLogs()}
+                onClick={() => void fetchCommandCenterSummary()}
                 className="text-xs text-zinc-500 hover:text-zinc-300 transition flex items-center gap-1"
                 aria-label="Refresh activity"
               >

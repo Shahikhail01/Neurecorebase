@@ -19,6 +19,7 @@ interface WorkflowState {
   fetchWorkflows: (page?: number, limit?: number) => Promise<void>;
   updateWorkflowStatus: (id: string, status: WorkflowStatus) => void;
   setPage: (page: number) => void;
+  setWorkflows: (workflows: Workflow[], total?: number) => void;
   reset: () => void;
 }
 
@@ -49,6 +50,9 @@ export const useWorkflowStore = create<WorkflowState>()(
         })),
 
       setPage: (page) => set({ page }),
+
+      setWorkflows: (workflows, total) =>
+        set({ workflows, total: total ?? workflows.length }),
 
       reset: () => set({ workflows: [], total: 0, page: 1, loading: false, error: null }),
     }),

@@ -19,6 +19,7 @@ interface TaskState {
   fetchTasks: (page?: number, limit?: number, agentId?: string) => Promise<void>;
   updateTaskStatus: (id: string, status: TaskStatus) => void;
   setPage: (page: number) => void;
+  setTasks: (tasks: Task[], total?: number) => void;
   reset: () => void;
 }
 
@@ -52,6 +53,8 @@ export const useTaskStore = create<TaskState>()(
         })),
 
       setPage: (page) => set({ page }),
+
+      setTasks: (tasks, total) => set({ tasks, total: total ?? tasks.length }),
 
       reset: () => set({ tasks: [], total: 0, page: 1, loading: false, error: null }),
     }),

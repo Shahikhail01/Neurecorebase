@@ -19,6 +19,7 @@ interface DepartmentState {
   fetchDepartments: () => Promise<void>;
   fetchDepartment: (id: string) => Promise<void>;
   setSelected: (dept: Department | null) => void;
+  setDepartments: (departments: Department[], total?: number) => void;
   reset: () => void;
 }
 
@@ -56,6 +57,9 @@ export const useDepartmentStore = create<DepartmentState>()(
       },
 
       setSelected: (selected) => set({ selected }),
+
+      setDepartments: (departments, total) =>
+        set({ departments, total: total ?? departments.length }),
 
       reset: () => set({ departments: [], selected: null, total: 0, loading: false, error: null }),
     }),
