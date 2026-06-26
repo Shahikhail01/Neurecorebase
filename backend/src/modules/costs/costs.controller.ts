@@ -244,6 +244,7 @@ export class CostsController {
 
   /**
    * Get cost breakdown by agent with names
+   * Phase 2 — optional `?departmentId=` filter
    * GET /api/v1/costs/breakdown/by-agent
    */
   @Get('breakdown/by-agent')
@@ -252,10 +253,16 @@ export class CostsController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('tenantId') tenantId?: string,
+    @Query('departmentId') departmentId?: string,
   ) {
     const tenant = this.resolveTenantId(req.user, tenantId);
     const { start, end } = this.parseDateRange(startDate, endDate);
-    return this.costsService.getCostByAgentBreakdown(tenant, start, end);
+    return this.costsService.getCostByAgentBreakdown(
+      tenant,
+      start,
+      end,
+      departmentId,
+    );
   }
 
   /**
@@ -272,5 +279,27 @@ export class CostsController {
     const tenant = this.resolveTenantId(req.user, tenantId);
     const { start, end } = this.parseDateRange(startDate, endDate);
     return this.costsService.getCostByModelBreakdown(tenant, start, end);
+  }
+
+  /**
+   * Phase 2 — get cost summary scoped to a single department.
+   * GET /api/v1/costs/department/:departmentId
+   */
+  @Get('department/:departmentId')
+  async getDepartmentCostSummary(
+    @Req() req: { user: JwtPayload },
+    @Param('departmentId') departmentId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('tenantId') tenantId?: string,
+  ) {
+    const tenant = this.resolveTenantId(req.user, tenantId);
+    const { start, end } = this.parseDateRange(startDate, endDate);
+    return this.costsService.getDepartmentCostSummary(
+      tenant,
+      departmentId,
+      start,
+      end,
+    );
   }
 }

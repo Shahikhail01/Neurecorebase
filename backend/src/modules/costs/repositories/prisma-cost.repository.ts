@@ -148,22 +148,32 @@ export class PrismaCostRecordRepository implements ICostRecordRepository {
 
   /**
    * Get cost records grouped by agent
+   * Phase 2 — optional `departmentId` filter
    */
   async getCostByAgent(
     tenantId: string,
     startDate: Date,
     endDate: Date,
+    departmentId?: string,
   ): Promise<
-    Array<{ agentId: string; totalCostCents: number; recordCount: number }>
+    Array<{
+      agentId: string;
+      totalCostCents: number;
+      recordCount: number;
+      departmentId?: string | null;
+    }>
   > {
+    const where: Record<string, unknown> = {
+      tenantId,
+      windowStart: { gte: startDate },
+      windowEnd: { lte: endDate },
+      agentId: { not: null },
+    };
+    if (departmentId) where.departmentId = departmentId;
+
     const result = await this.prisma.costRecord.groupBy({
       by: ['agentId'],
-      where: {
-        tenantId,
-        windowStart: { gte: startDate },
-        windowEnd: { lte: endDate },
-        agentId: { not: null },
-      },
+      where,
       _sum: { costCents: true },
       _count: { id: true },
     });
@@ -173,6 +183,57 @@ export class PrismaCostRecordRepository implements ICostRecordRepository {
       totalCostCents: Number(r._sum.costCents ?? 0),
       recordCount: r._count.id,
     }));
+  }
+
+  /**
+   * Phase 2 — get cost summary aggregated for a single department.
+   * Returns totals + agent breakdown scoped to that department.
+   */
+  async getCostSummaryByDepartment(
+    tenantId: string,
+    departmentId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<{
+    totalCostCents: number;
+    recordCount: number;
+    byAgent: Array<{
+      agentId: string;
+      totalCostCents: number;
+      recordCount: number;
+    }>;
+  }> {
+    const where = {
+      tenantId,
+      departmentId,
+      windowStart: { gte: startDate },
+      windowEnd: { lte: endDate },
+      agentId: { not: null },
+    };
+
+    const [aggregate, byAgent] = await Promise.all([
+      this.prisma.costRecord.aggregate({
+        where,
+        _sum: { costCents: true },
+        _count: { id: true },
+      }),
+      this.prisma.costRecord.groupBy({
+        by: ['agentId'],
+        where,
+        _sum: { costCents: true },
+        _count: { id: true },
+      }),
+    ]);
+
+    return {
+      totalCostCents: Number(aggregate._sum.costCents ?? 0),
+      recordCount: aggregate._count.id,
+      byAgent: byAgent.map((r) => ({
+        agentId: r.agentId!,
+        totalCostCents: Number(r._sum.costCents ?? 0),
+        recordCount: r._count.id,
+      })),
+    };
   }
 
   /**

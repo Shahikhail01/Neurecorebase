@@ -1,27 +1,16 @@
 'use client';
 
 /**
- * /departments/[id]/workspace — Department Workspace (Phase 5)
+ * /departments/[id]/workspace — Department Workspace (Phase 5 + Phase 2 R2)
  *
  * The single page where all of a department's work lives.
  *
- * Layout:
- *   ┌─ Workspace Header ─────────────────────────────────────────┐
- *   │  [Icon] Dept Name    [status]                              │
- *   │  Description · Head agent · Budget bar                     │
- *   │  [Add agent] [Edit dept]                                   │
- *   └────────────────────────────────────────────────────────────┘
- *   ┌─ Tabs ──────────────────────────────────────────────────────┐
- *   │ Overview │ Agents │ Tasks │ Workflows │ Routines │         │
- *   │ Projects │ Goals │ Costs │ Members                        │
- *   └────────────────────────────────────────────────────────────┘
- *   ┌─ Tab Content ───────────────────────────────────────────────┐
- *   │  (active tab content)                                       │
- *   └────────────────────────────────────────────────────────────┘
- *
- * Per-dept data scoping uses backend gap fixes from Phase 1:
- *   - ?departmentId= on agents/tasks/workflows/goals/projects
- *   - ?ownerAgentIds= (comma-separated) on routines (added in Phase 1)
+ * Phase 2 R2 additions:
+ *   - Per-tab "+ New" buttons open modal forms (Task/Workflow/Routine/Project/Goal)
+ *   - Row clicks open the right-side Inspector (workflow/routine/project/goal/member)
+ *   - Members tab now uses /users/department/:id (Phase 2 backend)
+ *   - Costs tab now uses /costs/department/:id (Phase 2 backend)
+ *   - Dead QuickAction CTAs in Overview tab replaced with in-tab modal openers
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -40,10 +29,10 @@ import {
   UserCog,
   Plus,
   ArrowLeft,
-  RefreshCw,
   Activity,
   Edit3,
   ChevronRight,
+  UserPlus,
 } from 'lucide-react';
 
 import { useTenantAuth } from '@/hooks/useTenantAuth';
@@ -52,16 +41,22 @@ import { KpiCard } from '@/components/creatio/KpiCard';
 import { StatusBadge } from '@/components/creatio/StatusBadge';
 import { ActionButton, ActionToolbar } from '@/components/creatio/ActionToolbar';
 import { QuickAction } from '@/components/creatio/QuickAction';
+import { Modal } from '@/components/creatio/Modal';
 import { AgentCard } from '@/components/agent-card/AgentCard';
 import { AreaChart } from '@/components/charts/AreaChart';
 import { DonutChart } from '@/components/charts/DonutChart';
+import { CreateTaskForm } from '@/components/forms/CreateTaskForm';
+import { CreateWorkflowForm } from '@/components/forms/CreateWorkflowForm';
+import { CreateRoutineForm } from '@/components/forms/CreateRoutineForm';
+import { CreateProjectForm } from '@/components/forms/CreateProjectForm';
+import { CreateGoalForm } from '@/components/forms/CreateGoalForm';
 import { useAgentStore } from '@/stores/agentStore';
 import { useTaskStore } from '@/stores/taskStore';
 import { useWorkflowStore } from '@/stores/workflowStore';
 import { useDepartmentStore } from '@/stores/departmentStore';
 import { useInspectorStore } from '@/stores/inspectorStore';
 import api from '@/services/api';
-import { unwrapArrayOrEmpty, unwrapList, unwrapItem } from '@/services/unwrap';
+import { unwrapArrayOrEmpty, unwrapList } from '@/services/unwrap';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 type WorkspaceTabId =
@@ -102,6 +97,13 @@ interface Member {
   isActive?: boolean;
 }
 
+interface DeptCostRow {
+  agentId: string;
+  agentName?: string;
+  totalCostCents: number;
+  recordCount: number;
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────
 export default function DepartmentWorkspacePage() {
   const params = useParams<{ id: string }>();
@@ -121,6 +123,10 @@ export default function DepartmentWorkspacePage() {
   const [membersLoading, setMembersLoading] = useState(false);
   const [monthCostCents, setMonthCostCents] = useState(0);
   const [costLoading, setCostLoading] = useState(true);
+  const [costRows, setCostRows] = useState<DeptCostRow[]>([]);
+
+  // Modal state
+  const [modal, setModal] = useState<null | 'task' | 'workflow' | 'routine' | 'project' | 'goal' | 'assign'>(null);
 
   const dept = departments.find((d) => d.id === deptId);
 
@@ -136,7 +142,6 @@ export default function DepartmentWorkspacePage() {
     void fetchWorkflows(1, 200);
   }, [fetchAgents, fetchTasks, fetchWorkflows]);
 
-  // Per-dept filtered data
   const deptAgents = useMemo(
     () => agents.filter((a) => (a as { departmentId?: string }).departmentId === deptId),
     [agents, deptId],
@@ -153,9 +158,8 @@ export default function DepartmentWorkspacePage() {
   const fetchMembers = useCallback(async () => {
     setMembersLoading(true);
     try {
-      const res = await api.get(`/users?departmentId=${deptId}&limit=50`);
-      const list = unwrapArrayOrEmpty(res);
-      setMembers(list);
+      const res = await api.get(`/users/department/${deptId}?limit=50`);
+      setMembers(unwrapArrayOrEmpty(res));
     } catch {
       setMembers([]);
     } finally {
@@ -166,11 +170,21 @@ export default function DepartmentWorkspacePage() {
   const fetchCosts = useCallback(async () => {
     setCostLoading(true);
     try {
-      const res = await api.get(`/costs/summary?departmentId=${deptId}`);
-      const data = unwrapItem(res);
-      setMonthCostCents((data?.totalCostCents ?? 0) as number);
+      const [summary, breakdown] = await Promise.all([
+        api
+          .get(`/costs/department/${deptId}`)
+          .then((r) => r?.data?.data ?? r?.data ?? r)
+          .catch(() => null),
+        api
+          .get(`/costs/breakdown/by-agent?departmentId=${deptId}`)
+          .then((r) => r?.data?.data ?? r?.data ?? r)
+          .catch(() => []),
+      ]);
+      setMonthCostCents(Number(summary?.totalCostCents ?? 0));
+      setCostRows(Array.isArray(breakdown) ? breakdown : []);
     } catch {
       setMonthCostCents(0);
+      setCostRows([]);
     } finally {
       setCostLoading(false);
     }
@@ -180,6 +194,14 @@ export default function DepartmentWorkspacePage() {
     if (activeTab === 'members') void fetchMembers();
     if (activeTab === 'overview' || activeTab === 'costs') void fetchCosts();
   }, [activeTab, fetchMembers, fetchCosts]);
+
+  const refreshAll = useCallback(() => {
+    void fetchTasks(1, 200);
+    void fetchWorkflows(1, 200);
+    void fetchAgents(1, 200);
+    if (activeTab === 'members') void fetchMembers();
+    if (activeTab === 'costs' || activeTab === 'overview') void fetchCosts();
+  }, [fetchTasks, fetchWorkflows, fetchAgents, fetchMembers, fetchCosts, activeTab]);
 
   if (!user) return null;
 
@@ -219,6 +241,17 @@ export default function DepartmentWorkspacePage() {
     { name: 'Failed',    value: failedTasks, color: '#ef4444' },
   ].filter((s) => s.value > 0);
 
+  const tabButton = (id: 'task' | 'workflow' | 'routine' | 'project' | 'goal', label: string) => (
+    <ActionButton
+      variant="primary"
+      size="sm"
+      icon={<Plus className="w-3.5 h-3.5" />}
+      onClick={() => setModal(id)}
+    >
+      {label}
+    </ActionButton>
+  );
+
   return (
     <TenantShell user={user}>
       <div className="max-w-7xl mx-auto space-y-6">
@@ -236,7 +269,7 @@ export default function DepartmentWorkspacePage() {
         {/* ── Workspace Header ───────────────────────────────────── */}
         <motion.section
           initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={{ opacity: 0, y: 0 }}
           transition={{ duration: 0.3 }}
           className="card-surface p-6"
         >
@@ -355,6 +388,31 @@ export default function DepartmentWorkspacePage() {
           </nav>
         </div>
 
+        {/* ── Per-tab header with + button ────────────────────────── */}
+        {(activeTab === 'tasks' || activeTab === 'workflows' || activeTab === 'routines' ||
+          activeTab === 'projects' || activeTab === 'goals' || activeTab === 'members') && (
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-zinc-200 capitalize">{activeTab}</h2>
+            <div className="flex items-center gap-2">
+              {activeTab === 'tasks' && tabButton('task', 'New Task')}
+              {activeTab === 'workflows' && tabButton('workflow', 'New Workflow')}
+              {activeTab === 'routines' && tabButton('routine', 'New Routine')}
+              {activeTab === 'projects' && tabButton('project', 'New Project')}
+              {activeTab === 'goals' && tabButton('goal', 'New Goal')}
+              {activeTab === 'members' && (
+                <ActionButton
+                  variant="primary"
+                  size="sm"
+                  icon={<UserPlus className="w-3.5 h-3.5" />}
+                  onClick={() => setModal('assign')}
+                >
+                  Assign User
+                </ActionButton>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── Tab Content ────────────────────────────────────────── */}
         <AnimatePresence mode="wait">
           <motion.div
@@ -376,6 +434,7 @@ export default function DepartmentWorkspacePage() {
                 monthCostCents={monthCostCents}
                 costLoading={costLoading}
                 taskStatusDonut={taskStatusDonut}
+                onOpenModal={(m) => setModal(m)}
               />
             )}
             {activeTab === 'agents' && (
@@ -385,31 +444,181 @@ export default function DepartmentWorkspacePage() {
               <TasksTab deptTasks={deptTasks} onInspect={(id) => openInspector('task', id)} />
             )}
             {activeTab === 'workflows' && (
-              <WorkflowsTab deptWorkflows={deptWorkflows} />
+              <WorkflowsTab deptWorkflows={deptWorkflows} onInspect={(id) => openInspector('workflow', id)} />
             )}
             {activeTab === 'routines' && (
-              <RoutinesTab agentIds={deptAgents.map((a) => a.id)} />
+              <RoutinesTab
+                agentIds={deptAgents.map((a) => a.id)}
+                onInspect={(id) => openInspector('routine', id)}
+              />
             )}
             {activeTab === 'projects' && (
-              <ProjectsTab deptId={deptId} />
+              <ProjectsTab deptId={deptId} onInspect={(id) => openInspector('project', id)} />
             )}
             {activeTab === 'goals' && (
-              <GoalsTab deptId={deptId} />
+              <GoalsTab deptId={deptId} onInspect={(id) => openInspector('goal', id)} />
             )}
             {activeTab === 'costs' && (
               <CostsTab
                 deptId={deptId}
                 monthCostCents={monthCostCents}
+                costRows={costRows}
                 loading={costLoading}
               />
             )}
             {activeTab === 'members' && (
-              <MembersTab members={members} loading={membersLoading} />
+              <MembersTab
+                members={members}
+                loading={membersLoading}
+                onInspect={(id) => openInspector('member', id)}
+                onUnassign={async (id) => {
+                  await api.post(`/users/${id}/unassign-department`);
+                  void fetchMembers();
+                }}
+              />
             )}
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* ── Modals ──────────────────────────────────────────────── */}
+      <Modal open={modal === 'task'} onClose={() => setModal(null)} title="New Task" description="Assign work to a department agent">
+        <CreateTaskForm
+          agents={deptAgents.map((a) => ({ id: a.id, name: a.name }))}
+          onClose={() => setModal(null)}
+          onCreated={() => refreshAll()}
+        />
+      </Modal>
+      <Modal open={modal === 'workflow'} onClose={() => setModal(null)} title="New Workflow" description="Create an automation pipeline">
+        <CreateWorkflowForm onClose={() => setModal(null)} onCreated={() => refreshAll()} />
+      </Modal>
+      <Modal open={modal === 'routine'} onClose={() => setModal(null)} title="New Routine" description="Schedule a recurring agent task">
+        <CreateRoutineForm
+          agents={deptAgents.map((a) => ({ id: a.id, name: a.name }))}
+          onClose={() => setModal(null)}
+          onCreated={() => refreshAll()}
+        />
+      </Modal>
+      <Modal open={modal === 'project'} onClose={() => setModal(null)} title="New Project" description={`Project in ${dept.name}`}>
+        <CreateProjectForm
+          departmentId={deptId}
+          onClose={() => setModal(null)}
+          onCreated={() => refreshAll()}
+        />
+      </Modal>
+      <Modal open={modal === 'goal'} onClose={() => setModal(null)} title="New Goal" description={`Goal for ${dept.name}`}>
+        <CreateGoalForm
+          departmentId={deptId}
+          agents={deptAgents.map((a) => ({ id: a.id, name: a.name }))}
+          onClose={() => setModal(null)}
+          onCreated={() => refreshAll()}
+        />
+      </Modal>
+      <Modal open={modal === 'assign'} onClose={() => setModal(null)} title="Assign User to Department" description="Add an existing tenant user to this department">
+        <AssignUserForm
+          departmentId={deptId}
+          onClose={() => setModal(null)}
+          onAssigned={() => {
+            void fetchMembers();
+          }}
+        />
+      </Modal>
     </TenantShell>
+  );
+}
+
+// ─── AssignUserForm (inline; lives here to keep file count low) ───────────
+function AssignUserForm({
+  departmentId,
+  onClose,
+  onAssigned,
+}: {
+  departmentId: string;
+  onClose: () => void;
+  onAssigned: () => void;
+}) {
+  const [userId, setUserId] = useState('');
+  const [users, setUsers] = useState<Array<{ id: string; email: string; firstName?: string; lastName?: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    api
+      .get(`/users?limit=50${search ? `&search=${encodeURIComponent(search)}` : ''}`)
+      .then((r) => {
+        const list = unwrapArrayOrEmpty(r);
+        setUsers(list);
+      })
+      .catch(() => setUsers([]))
+      .finally(() => setLoading(false));
+  }, [search]);
+
+  const submit = async () => {
+    if (!userId) {
+      setError('Select a user');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await api.post(`/users/${userId}/assign-department`, { departmentId });
+      onAssigned();
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to assign user');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <input
+        type="text"
+        placeholder="Search by name or email…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full bg-surface-overlay border border-surface-border rounded-md px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-accent-500"
+      />
+      <div className="max-h-64 overflow-y-auto divide-y divide-surface-border border border-surface-border rounded-md">
+        {users.length === 0 && !loading && (
+          <p className="p-4 text-xs text-zinc-500 text-center">No users found.</p>
+        )}
+        {users.map((u) => {
+          const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email;
+          return (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => setUserId(u.id)}
+              className={`w-full text-left px-3 py-2 transition flex items-center gap-3 ${
+                userId === u.id ? 'bg-accent-500/15' : 'hover:bg-surface-overlay'
+              }`}
+            >
+              <div className="w-7 h-7 rounded-full bg-surface-overlay text-zinc-400 flex items-center justify-center text-xs font-semibold shrink-0">
+                {(u.firstName?.[0] ?? u.email[0]).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-zinc-200 truncate">{fullName}</p>
+                <p className="text-xs text-zinc-500 truncate">{u.email}</p>
+              </div>
+              {userId === u.id && <StatusBadge status="ACTIVE" />}
+            </button>
+          );
+        })}
+      </div>
+      {error && <p className="text-xs text-state-danger">{error}</p>}
+      <div className="flex justify-end gap-2 pt-3 border-t border-surface-border">
+        <ActionButton variant="ghost" size="md" onClick={onClose} disabled={loading}>
+          Cancel
+        </ActionButton>
+        <ActionButton variant="primary" size="md" onClick={submit} disabled={loading || !userId}>
+          {loading ? 'Assigning…' : 'Assign'}
+        </ActionButton>
+      </div>
+    </div>
   );
 }
 
@@ -427,6 +636,7 @@ function OverviewTab(props: {
   monthCostCents: number;
   costLoading: boolean;
   taskStatusDonut: { name: string; value: number; color: string }[];
+  onOpenModal: (m: 'task' | 'workflow' | 'routine' | 'project' | 'goal' | 'assign') => void;
 }) {
   return (
     <div className="space-y-4">
@@ -473,7 +683,7 @@ function OverviewTab(props: {
             height={180}
           />
           <p className="text-xs text-zinc-500 text-center mt-2">
-            Per-department task chart coming in Phase 5.1
+            Per-department task chart coming soon.
           </p>
         </div>
         <div className="card-surface p-4">
@@ -492,37 +702,37 @@ function OverviewTab(props: {
         </div>
       </div>
 
-      {/* Quick actions */}
+      {/* Quick actions — now open in-tab modals */}
       <div>
         <h3 className="text-sm font-semibold text-zinc-300 mb-3">Quick actions</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <QuickAction
-            label="Spawn Agent"
-            description="Add a new AI agent"
-            icon={<Plus className="w-5 h-5" />}
-            accent="accent"
-            href="/marketplace?tab=spawn"
-          />
           <QuickAction
             label="New Task"
             description="Assign work"
             icon={<ListTodo className="w-5 h-5" />}
             accent="info"
-            href={`/tasks?create=1&departmentId=${props.deptId}`}
+            onClick={() => props.onOpenModal('task')}
           />
           <QuickAction
-            label="Set Goal"
-            description="Define objective"
-            icon={<Target className="w-5 h-5" />}
-            accent="success"
-            href={`/goals?create=1&departmentId=${props.deptId}`}
+            label="New Workflow"
+            description="Automate steps"
+            icon={<GitBranch className="w-5 h-5" />}
+            accent="accent"
+            onClick={() => props.onOpenModal('workflow')}
           />
           <QuickAction
             label="New Routine"
-            description="Automate work"
+            description="Schedule recurring"
             icon={<Repeat className="w-5 h-5" />}
             accent="warning"
-            href={`/routines?create=1&departmentId=${props.deptId}`}
+            onClick={() => props.onOpenModal('routine')}
+          />
+          <QuickAction
+            label="New Goal"
+            description="Define objective"
+            icon={<Target className="w-5 h-5" />}
+            accent="success"
+            onClick={() => props.onOpenModal('goal')}
           />
         </div>
       </div>
@@ -538,8 +748,6 @@ function AgentsTab({ deptAgents, onInspect }: { deptAgents: unknown[]; onInspect
         icon={<Users className="w-10 h-10" />}
         title="No agents in this department yet"
         description="Spawn your first agent from the marketplace."
-        ctaLabel="Spawn Agent"
-        ctaHref="/marketplace?tab=spawn"
       />
     );
   }
@@ -654,15 +862,19 @@ function TasksTab({ deptTasks, onInspect }: { deptTasks: unknown[]; onInspect: (
 }
 
 // Workflows tab
-function WorkflowsTab({ deptWorkflows }: { deptWorkflows: unknown[] }) {
+function WorkflowsTab({
+  deptWorkflows,
+  onInspect,
+}: {
+  deptWorkflows: unknown[];
+  onInspect: (id: string) => void;
+}) {
   if (deptWorkflows.length === 0) {
     return (
       <EmptyTab
         icon={<GitBranch className="w-10 h-10" />}
         title="No workflows in this department"
         description="Create workflows to automate recurring agent tasks."
-        ctaLabel="New Workflow"
-        ctaHref="/workflows"
       />
     );
   }
@@ -671,10 +883,10 @@ function WorkflowsTab({ deptWorkflows }: { deptWorkflows: unknown[] }) {
       {deptWorkflows.map((wf) => {
         const w = wf as { id: string; name: string; isActive: boolean; agent?: { name: string } };
         return (
-          <Link
+          <button
             key={w.id}
-            href={`/workflows/${w.id}`}
-            className="flex items-center gap-3 px-4 py-3 hover:bg-surface-overlay transition"
+            onClick={() => onInspect(w.id)}
+            className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-surface-overlay transition"
           >
             <GitBranch className="w-4 h-4 text-zinc-500 shrink-0" />
             <div className="flex-1 min-w-0">
@@ -684,19 +896,25 @@ function WorkflowsTab({ deptWorkflows }: { deptWorkflows: unknown[] }) {
               )}
             </div>
             <StatusBadge status={w.isActive ? 'ACTIVE' : 'PAUSED'} />
-          </Link>
+          </button>
         );
       })}
     </div>
   );
 }
 
-// Routines tab — uses Phase 1 backend fix ?ownerAgentIds=
-function RoutinesTab({ agentIds }: { agentIds: string[] }) {
+// Routines tab
+function RoutinesTab({
+  agentIds,
+  onInspect,
+}: {
+  agentIds: string[];
+  onInspect: (id: string) => void;
+}) {
   const [routines, setRoutines] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchRoutines = useCallback(() => {
     if (agentIds.length === 0) {
       setRoutines([]);
       setLoading(false);
@@ -714,6 +932,10 @@ function RoutinesTab({ agentIds }: { agentIds: string[] }) {
       .finally(() => setLoading(false));
   }, [agentIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    fetchRoutines();
+  }, [fetchRoutines]);
+
   if (loading) return <div className="card-surface p-8 text-center text-zinc-500 text-sm">Loading…</div>;
   if (routines.length === 0) {
     return (
@@ -721,8 +943,6 @@ function RoutinesTab({ agentIds }: { agentIds: string[] }) {
         icon={<Repeat className="w-10 h-10" />}
         title="No routines in this department"
         description="Routines owned by agents in this department will appear here."
-        ctaLabel="New Routine"
-        ctaHref="/routines"
       />
     );
   }
@@ -731,10 +951,10 @@ function RoutinesTab({ agentIds }: { agentIds: string[] }) {
       {routines.map((routine) => {
         const r = routine as { id: string; name: string; status: string; description?: string };
         return (
-          <Link
+          <button
             key={r.id}
-            href={`/routines/${r.id}`}
-            className="flex items-center gap-3 px-4 py-3 hover:bg-surface-overlay transition"
+            onClick={() => onInspect(r.id)}
+            className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-surface-overlay transition"
           >
             <Repeat className="w-4 h-4 text-zinc-500 shrink-0" />
             <div className="flex-1 min-w-0">
@@ -744,7 +964,7 @@ function RoutinesTab({ agentIds }: { agentIds: string[] }) {
               )}
             </div>
             <StatusBadge status={r.status} />
-          </Link>
+          </button>
         );
       })}
     </div>
@@ -752,7 +972,13 @@ function RoutinesTab({ agentIds }: { agentIds: string[] }) {
 }
 
 // Projects tab
-function ProjectsTab({ deptId }: { deptId: string }) {
+function ProjectsTab({
+  deptId,
+  onInspect,
+}: {
+  deptId: string;
+  onInspect: (id: string) => void;
+}) {
   const [projects, setProjects] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -775,8 +1001,6 @@ function ProjectsTab({ deptId }: { deptId: string }) {
         icon={<Briefcase className="w-10 h-10" />}
         title="No projects in this department"
         description="Create projects to track deliverables and timelines."
-        ctaLabel="New Project"
-        ctaHref="/projects"
       />
     );
   }
@@ -785,10 +1009,10 @@ function ProjectsTab({ deptId }: { deptId: string }) {
       {projects.map((proj) => {
         const p = proj as { id: string; name: string; status: string; description?: string; targetDate?: string };
         return (
-          <Link
+          <button
             key={p.id}
-            href={`/projects/${p.id}`}
-            className="flex items-center gap-3 px-4 py-3 hover:bg-surface-overlay transition"
+            onClick={() => onInspect(p.id)}
+            className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-surface-overlay transition"
           >
             <Briefcase className="w-4 h-4 text-zinc-500 shrink-0" />
             <div className="flex-1 min-w-0">
@@ -803,7 +1027,7 @@ function ProjectsTab({ deptId }: { deptId: string }) {
               </span>
             )}
             <StatusBadge status={p.status} />
-          </Link>
+          </button>
         );
       })}
     </div>
@@ -811,7 +1035,13 @@ function ProjectsTab({ deptId }: { deptId: string }) {
 }
 
 // Goals tab
-function GoalsTab({ deptId }: { deptId: string }) {
+function GoalsTab({
+  deptId,
+  onInspect,
+}: {
+  deptId: string;
+  onInspect: (id: string) => void;
+}) {
   const [goals, setGoals] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -834,8 +1064,6 @@ function GoalsTab({ deptId }: { deptId: string }) {
         icon={<Target className="w-10 h-10" />}
         title="No goals in this department"
         description="Define objectives and track progress at the department level."
-        ctaLabel="Set Goal"
-        ctaHref="/goals"
       />
     );
   }
@@ -847,7 +1075,11 @@ function GoalsTab({ deptId }: { deptId: string }) {
           level?: string; ownerAgent?: { name?: string };
         };
         return (
-          <div key={g.id} className="card-surface p-4">
+          <button
+            key={g.id}
+            onClick={() => onInspect(g.id)}
+            className="w-full text-left card-surface p-4 hover:bg-surface-overlay transition"
+          >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-zinc-200">{g.title}</p>
@@ -868,7 +1100,7 @@ function GoalsTab({ deptId }: { deptId: string }) {
                 {g.progress ?? 0}%
               </span>
             </div>
-          </div>
+          </button>
         );
       })}
     </div>
@@ -876,7 +1108,17 @@ function GoalsTab({ deptId }: { deptId: string }) {
 }
 
 // Costs tab
-function CostsTab({ deptId, monthCostCents, loading }: { deptId: string; monthCostCents: number; loading: boolean }) {
+function CostsTab({
+  deptId,
+  monthCostCents,
+  costRows,
+  loading,
+}: {
+  deptId: string;
+  monthCostCents: number;
+  costRows: DeptCostRow[];
+  loading: boolean;
+}) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -886,29 +1128,65 @@ function CostsTab({ deptId, monthCostCents, loading }: { deptId: string; monthCo
           color="warn"
           icon={<Wallet className="w-4 h-4" />}
         />
-        <KpiCard label="Daily average" value="—" color="neutral" />
-        <KpiCard label="Projected EOM" value="—" color="neutral" />
+        <KpiCard
+          label="Top Agent"
+          value={loading ? '—' : costRows[0]?.agentName ?? '—'}
+          color="ops"
+        />
+        <KpiCard
+          label="Active Agents"
+          value={loading ? '—' : costRows.length}
+          color="strategy"
+        />
       </div>
-      <div className="card-surface p-6 text-center">
-        <Wallet className="w-10 h-10 text-zinc-600 mx-auto mb-2" />
-        <p className="text-sm text-zinc-300 font-medium">Cost detail coming soon</p>
-        <p className="text-xs text-zinc-500 mt-1 max-w-md mx-auto">
-          Detailed cost breakdown (by model, by agent, by provider) for department <code className="text-zinc-400">{deptId}</code> requires per-agent cost endpoints.
-        </p>
+
+      <div className="card-surface divide-y divide-surface-border">
+        {loading ? (
+          <p className="p-8 text-center text-sm text-zinc-500">Loading…</p>
+        ) : costRows.length === 0 ? (
+          <p className="p-8 text-center text-sm text-zinc-500">
+            No cost records yet for department <code className="text-zinc-400">{deptId.slice(0, 8)}…</code>
+          </p>
+        ) : (
+          costRows.map((row) => (
+            <div key={row.agentId} className="px-4 py-3 flex items-center gap-3">
+              <Wallet className="w-4 h-4 text-zinc-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-zinc-200 truncate">
+                  {row.agentName ?? row.agentId.slice(0, 8) + '…'}
+                </p>
+                <p className="text-xs text-zinc-500">{row.recordCount} records</p>
+              </div>
+              <span className="text-sm font-mono text-zinc-300">
+                ${(row.totalCostCents / 100).toFixed(4)}
+              </span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
 }
 
 // Members tab
-function MembersTab({ members, loading }: { members: Member[]; loading: boolean }) {
+function MembersTab({
+  members,
+  loading,
+  onInspect,
+  onUnassign,
+}: {
+  members: Member[];
+  loading: boolean;
+  onInspect: (id: string) => void;
+  onUnassign: (id: string) => void;
+}) {
   if (loading) return <div className="card-surface p-8 text-center text-zinc-500 text-sm">Loading…</div>;
   if (members.length === 0) {
     return (
       <EmptyTab
         icon={<UserCog className="w-10 h-10" />}
         title="No members assigned"
-        description="Members of this department will appear here. Assign users from the admin panel."
+        description="Use the 'Assign User' button above to add a tenant member to this department."
       />
     );
   }
@@ -916,19 +1194,33 @@ function MembersTab({ members, loading }: { members: Member[]; loading: boolean 
     <div className="card-surface divide-y divide-surface-border">
       {members.map((m) => (
         <div key={m.id} className="flex items-center gap-3 px-4 py-3">
-          <div className="w-9 h-9 rounded-full bg-accent-500/15 text-accent-500 flex items-center justify-center text-sm font-semibold">
+          <button
+            onClick={() => onInspect(m.id)}
+            className="w-9 h-9 rounded-full bg-accent-500/15 text-accent-500 flex items-center justify-center text-sm font-semibold shrink-0 hover:bg-accent-500/25 transition"
+            title="View member"
+          >
             {(m.firstName?.[0] ?? m.email[0]).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
+          </button>
+          <button
+            onClick={() => onInspect(m.id)}
+            className="flex-1 min-w-0 text-left"
+          >
             <p className="text-sm font-medium text-zinc-200 truncate">
               {m.firstName} {m.lastName}
             </p>
             <p className="text-xs text-zinc-500 truncate">{m.email}</p>
-          </div>
+          </button>
           <StatusBadge status={m.role} />
           {m.isActive !== undefined && (
             <StatusBadge status={m.isActive ? 'ACTIVE' : 'INACTIVE'} />
           )}
+          <button
+            onClick={() => onUnassign(m.id)}
+            className="text-xs text-zinc-500 hover:text-state-danger transition px-2 py-1"
+            title="Remove from department"
+          >
+            Remove
+          </button>
         </div>
       ))}
     </div>
@@ -940,8 +1232,6 @@ function EmptyTab({
   icon,
   title,
   description,
-  ctaLabel,
-  ctaHref,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -956,15 +1246,6 @@ function EmptyTab({
       </div>
       <p className="text-sm font-medium text-zinc-300">{title}</p>
       <p className="text-xs text-zinc-500 mt-1 max-w-md mx-auto">{description}</p>
-      {ctaLabel && ctaHref && (
-        <Link
-          href={ctaHref}
-          className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-lg bg-accent-500 hover:bg-accent-600 text-white text-xs font-medium transition"
-        >
-          <Plus className="w-3 h-3" />
-          {ctaLabel}
-        </Link>
-      )}
     </div>
   );
 }

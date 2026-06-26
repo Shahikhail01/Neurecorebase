@@ -77,7 +77,16 @@ export interface BarDataPoint {
 }
 
 // ─── Inspector Panel ──────────────────────────────────────────────────────────
-export type InspectorType = 'agent' | 'task' | 'workflow' | 'department' | 'tenant';
+export type InspectorType =
+  | 'agent'
+  | 'task'
+  | 'workflow'
+  | 'routine'
+  | 'project'
+  | 'goal'
+  | 'department'
+  | 'tenant'
+  | 'member';
 
 export interface InspectorState {
   open: boolean;

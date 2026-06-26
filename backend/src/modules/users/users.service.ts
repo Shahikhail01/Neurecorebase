@@ -23,7 +23,13 @@ export class UsersService {
     private readonly passwordService: PasswordService,
   ) {}
 
-  async findAll(tenantId?: string, page = 1, limit = 20, search?: string) {
+  async findAll(
+    tenantId?: string,
+    page = 1,
+    limit = 20,
+    search?: string,
+    departmentId?: string,
+  ) {
     const skip = (page - 1) * limit;
 
     const searchFilter: Prisma.UserWhereInput | undefined = search
@@ -38,6 +44,7 @@ export class UsersService {
 
     const where: Prisma.UserWhereInput = {};
     if (tenantId) where.tenantId = tenantId;
+    if (departmentId) where.departmentId = departmentId;
     if (searchFilter) where.AND = [searchFilter];
 
     const [items, total] = await Promise.all([
@@ -52,6 +59,7 @@ export class UsersService {
           lastName: true,
           role: true,
           tenantId: true,
+          departmentId: true,
           isActive: true,
           createdAt: true,
         },
@@ -78,6 +86,7 @@ export class UsersService {
         lastName: true,
         role: true,
         tenantId: true,
+        departmentId: true,
         isActive: true,
         createdAt: true,
       },
@@ -172,17 +181,70 @@ export class UsersService {
     return { message: 'Password updated successfully' };
   }
 
-  async deactivate(id: string, tenantId?: string) {
+async deactivate(id: string, tenantId?: string) {
     // First verify the user exists with proper tenant isolation
     await this.findOne(id, tenantId);
 
     // Build unique where clause
-    const where: Prisma.UserWhereUniqueInput = { id };
+    const where: Prisma.UserUniqueWhereInput = { id };
 
     return this.prisma.user.update({
       where,
       data: { isActive: false },
-      select: { id: true, email: true, isActive: true },
+      select: {
+        id: true,
+        email: true,
+        isActive: true,
+      },
     });
   }
+
+  /**
+   * Phase 2 — assign a user to a department (tenant-scoped).
+   * Verifies user belongs to tenant AND department belongs to same tenant.
+   */
+  async assignToDepartment(userId: string, departmentId: string, tenantId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException(`User ${userId} not found in tenant`);
+
+    const dept = await this.prisma.department.findFirst({
+      where: { id: departmentId, tenantId },
+      select: { id: true },
+    });
+    if (!dept) throw new NotFoundException(`Department ${departmentId} not found in tenant`);
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { departmentId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        departmentId: true,
+      },
+    });
+  }
+
+  /**
+   * Phase 2 — unassign user from their current department.
+   */
+  async unassignFromDepartment(userId: string, tenantId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException(`User ${userId} not found in tenant`);
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { departmentId: null },
+      select: { id: true, departmentId: true },
+    });
+  }
+}
 }

@@ -6,12 +6,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useInspectorStore } from '@/stores/inspectorStore';
 import { AgentInspector } from '@/components/inspector/AgentInspector';
 import { TaskInspector } from '@/components/inspector/TaskInspector';
+import { WorkflowInspector } from '@/components/inspector/WorkflowInspector';
+import { RoutineInspector } from '@/components/inspector/RoutineInspector';
+import { ProjectInspector } from '@/components/inspector/ProjectInspector';
+import { GoalInspector } from '@/components/inspector/GoalInspector';
+import { MemberInspector } from '@/components/inspector/MemberInspector';
 
 // O — Open/Closed: add new inspector types here without modifying panel
 const INSPECTOR_MAP = {
   agent:      AgentInspector,
   task:       TaskInspector,
-  workflow:   () => <GenericInspector title="Workflow" />,
+  workflow:   WorkflowInspector,
+  routine:    RoutineInspector,
+  project:    ProjectInspector,
+  goal:       GoalInspector,
+  member:     MemberInspector,
   department: () => <GenericInspector title="Department" />,
   tenant:     () => <GenericInspector title="Tenant" />,
 } as const;

@@ -333,6 +333,10 @@ model User {
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  // Phase 2 — primary department assignment (nullable; user can belong to multiple via projects)
+  departmentId String?
+  department   Department? @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: SetNull)
+
   // Relations
   sessions           Session[]
   auditLogs          AuditLog[]
@@ -356,6 +360,7 @@ model User {
 
   @@index([tenantId])
   @@index([email])
+  @@index([departmentId])
   @@map("users")
 }
 
@@ -703,6 +708,7 @@ model Department {
   parent      Department?      @relation("DepartmentHierarchy", fields: [parentId], references: [id])
   children    Department[]    @relation("DepartmentHierarchy")
   agents      Agent[]         @relation("DepartmentAgents")
+  members     User[]          @relation("DepartmentMembers")
 
   // Phase 5 back-relations - Costs
   costRecords    CostRecord[]

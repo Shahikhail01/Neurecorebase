@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsEnum,
   IsBoolean,
+  IsUUID,
   MinLength,
   MaxLength,
 } from 'class-validator';
@@ -53,6 +54,10 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string | null;
 }
 
 export class ChangePasswordDto {
@@ -63,4 +68,9 @@ export class ChangePasswordDto {
   @MinLength(8)
   @MaxLength(72)
   newPassword!: string;
+}
+
+export class AssignUserToDepartmentDto {
+  @IsUUID()
+  departmentId!: string;
 }

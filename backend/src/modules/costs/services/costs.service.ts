@@ -12,6 +12,7 @@ import {
   PrismaBudgetPolicyRepository,
   PrismaBudgetIncidentRepository,
 } from '../repositories/prisma-budget.repository';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import type { CostSummary } from '../interfaces/cost.interface';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class CostsService {
     private readonly costRepository: PrismaCostRecordRepository,
     private readonly budgetRepository: PrismaBudgetPolicyRepository,
     private readonly incidentRepository: PrismaBudgetIncidentRepository,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -249,13 +251,36 @@ export class CostsService {
 
   /**
    * Get cost by agent breakdown with names
+   * Phase 2 — optional `departmentId` filter
    */
   async getCostByAgentBreakdown(
     tenantId: string,
     startDate: Date,
     endDate: Date,
+    departmentId?: string,
   ) {
-    return this.costRepository.getCostByAgent(tenantId, startDate, endDate);
+    const rows = await this.costRepository.getCostByAgent(
+      tenantId,
+      startDate,
+      endDate,
+      departmentId,
+    );
+
+    // Hydrate agent names (limited cardinality — small N)
+    const agentIds = rows.map((r) => r.agentId);
+    const agents = agentIds.length
+      ? await this.prisma.agent.findMany({
+          where: { id: { in: agentIds } },
+          select: { id: true, name: true, departmentId: true },
+        })
+      : [];
+    const agentMap = new Map(agents.map((a) => [a.id, a]));
+
+    return rows.map((r) => ({
+      ...r,
+      agentName: agentMap.get(r.agentId)?.name ?? r.agentId,
+      departmentId: agentMap.get(r.agentId)?.departmentId ?? null,
+    }));
   }
 
   /**
@@ -267,5 +292,22 @@ export class CostsService {
     endDate: Date,
   ) {
     return this.costRepository.getCostByModel(tenantId, startDate, endDate);
+  }
+
+  /**
+   * Phase 2 — get per-department cost summary (tenant-scoped).
+   */
+  async getDepartmentCostSummary(
+    tenantId: string,
+    departmentId: string,
+    startDate: Date,
+    endDate: Date,
+  ) {
+    return this.costRepository.getCostSummaryByDepartment(
+      tenantId,
+      departmentId,
+      startDate,
+      endDate,
+    );
   }
 }

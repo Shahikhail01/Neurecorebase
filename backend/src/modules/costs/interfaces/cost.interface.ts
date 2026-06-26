@@ -123,14 +123,39 @@ export interface ICostRecordRepository {
 
   /**
    * Get cost records grouped by agent
+   * Phase 2 — optional `departmentId` filter
    */
   getCostByAgent(
     tenantId: string,
     startDate: Date,
     endDate: Date,
+    departmentId?: string,
   ): Promise<
-    Array<{ agentId: string; totalCostCents: number; recordCount: number }>
+    Array<{
+      agentId: string;
+      totalCostCents: number;
+      recordCount: number;
+      departmentId?: string | null;
+    }>
   >;
+
+  /**
+   * Phase 2 — get cost summary aggregated for a single department.
+   */
+  getCostSummaryByDepartment(
+    tenantId: string,
+    departmentId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<{
+    totalCostCents: number;
+    recordCount: number;
+    byAgent: Array<{
+      agentId: string;
+      totalCostCents: number;
+      recordCount: number;
+    }>;
+  }>;
 
   /**
    * Get cost records grouped by model

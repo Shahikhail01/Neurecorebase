@@ -18,6 +18,7 @@ import {
   CreateUserDto,
   UpdateUserDto,
   ChangePasswordDto,
+  AssignUserToDepartmentDto,
 } from './dto/user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -44,6 +45,7 @@ export class UsersController {
   findAll(
     @CurrentUser() user: AuthenticatedUser,
     @Query('tenantId') tenantId?: string,
+    @Query('departmentId') departmentId?: string,
     @Query('search') search?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
@@ -56,7 +58,13 @@ export class UsersController {
       user.role === UserRole.SUPPORT
         ? tenantId
         : (user.tenantId ?? undefined);
-    return this.usersService.findAll(effectiveTenantId, page, limit, search);
+    return this.usersService.findAll(
+      effectiveTenantId,
+      page,
+      limit,
+      search,
+      departmentId,
+    );
   }
 
   @Get(':id')
@@ -135,5 +143,77 @@ export class UsersController {
         ? undefined
         : (user.tenantId ?? undefined);
     return this.usersService.deactivate(id, tenantId);
+  }
+
+  // ─── Phase 2 — Department membership ───────────────────────────────────
+
+  /**
+   * Tenant-scoped user lookup. Allows tenant OWNER/ADMIN/USER to view
+   * members of their own tenant. Reuses findOne with tenant scope.
+   * GET /api/v1/users/tenant/:id
+   */
+  @Get('tenant/:id')
+  findOneTenantScoped(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
+    return this.usersService.findOne(id, user.tenantId);
+  }
+
+  /**
+   * List users for a specific department (tenant-scoped).
+   * GET /api/v1/users/department/:departmentId
+   */
+  @Get('department/:departmentId')
+  findByDepartment(
+    @Param('departmentId') departmentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number,
+    @Query('search') search?: string,
+  ) {
+    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
+    return this.usersService.findAll(
+      user.tenantId,
+      page,
+      limit,
+      search,
+      departmentId,
+    );
+  }
+
+  /**
+   * Assign a user to a department (tenant-scoped).
+   * POST /api/v1/users/:id/assign-department
+   * Body: { departmentId: string }
+   */
+  @Post(':id/assign-department')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN, UserRole.OWNER, UserRole.ADMIN)
+  assignToDepartment(
+    @Param('id') userId: string,
+    @Body() dto: AssignUserToDepartmentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
+    return this.usersService.assignToDepartment(
+      userId,
+      dto.departmentId,
+      user.tenantId,
+    );
+  }
+
+  /**
+   * Unassign a user from their department (tenant-scoped).
+   * POST /api/v1/users/:id/unassign-department
+   */
+  @Post(':id/unassign-department')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN, UserRole.OWNER, UserRole.ADMIN)
+  unassignFromDepartment(
+    @Param('id') userId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
+    return this.usersService.unassignFromDepartment(userId, user.tenantId);
   }
 }
