@@ -558,3 +558,50 @@ A: "0 tasks in total, byStatus field is empty, indicating no tasks are
 **Commit:** `d7437743` `fix(ai): ground Ask AI in live tenant data via Prisma`
 
 **Lesson learned:** Always inject real data into LLM prompts when the user expects factual answers. Hallucinations are easy to mask when the prompt is generic — explicit "use ONLY this data" instructions + structured JSON input prevents the model from making up plausible-sounding numbers.
+
+---
+
+## Consolidated AI & Chat Fixes Summary (Fixes 15-20)
+
+| # | Title | Files | Commit |
+|---|---|---|---|
+| 15 | New `ChatModule` with 2 endpoints | `chat.module.ts`, `chat.service.ts`, `chat.controller.ts`, `dto/chat.dto.ts`, `index.ts` (all new) | `d70c19bf` |
+| 16 | `@Controller({ version: '1' })` for URI versioning | `chat.controller.ts` (modified) | `d70c19bf` |
+| 17 | TypeScript strict null check on `response.usage` | `chat.service.ts` (modified) | `d70c19bf` |
+| 18 | Frontend chat unwrap for `{ status, data, meta }` envelope | `chat.service.ts`, `ConversationalAIService.ts` (modified) | `d70c19bf` |
+| 19 | Production `.env` MiniMax config | `.env` (modified on Contabo) | `d70c19bf` |
+| 20 | Live tenant data injection — kill hallucinations | `chat.service.ts` (major), `chat.controller.ts`, `chat.module.ts` (modified) | `d7437743` |
+
+### Quick reference for next on-call
+
+```bash
+# Backend test
+ssh contabo
+python3 -c "
+import requests
+r = requests.post('http://127.0.0.1:3003/api/v1/auth/login',
+                  json={'email':'demo@neurecore.ai','password':'Tenant@123!'})
+t = r.json()['data']['tokens']['accessToken']
+r = requests.post('http://127.0.0.1:3003/api/v1/chat/messages',
+                  json={'message':'How many agents do I have?','maxTokens':300},
+                  headers={'Authorization':f'Bearer {t}'})
+print(r.json()['data']['reply'])
+"
+
+# Frontend test
+node -e "const{chromium}=require('playwright-core');(async()=>{
+const b=await chromium.launch();const p=await(await b.newContext()).newPage();
+await p.goto('https://hq.neurecore.com/login');await p.waitForTimeout(2000);
+await p.fill('input[type=email]','demo@neurecore.ai');
+await p.fill('input[type=password]','Tenant@123!');
+await p.click('button[type=submit]');await p.waitForTimeout(15000);
+await p.click('button:has-text(\"Ask AI\")');await p.waitForTimeout(2000);
+await p.fill('input[placeholder*=\"Ask about your team\"]','How many agents?');
+await p.keyboard.press('Enter');await p.waitForTimeout(15000);
+await p.screenshot({path:'/tmp/ai-test.png'});await b.close()})()"
+```
+
+### Related docs
+
+- [`ai-chat-architecture.md`](./ai-chat-architecture.md) — full system diagram, endpoint schemas, error handling matrix, future enhancements
+- [`new_neurecore.md`](./new_neurecore.md) — top-level summary with quick reference table

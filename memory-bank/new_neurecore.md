@@ -1288,3 +1288,92 @@ pm2 restart neurecore-backend
 - `demo@neurecore.ai` / `Tenant@123!` → Command Center shows "7 departments · 7 agents"
 - All 7 Scale-Up Business departments visible with hierarchy
 - GitHub: `https://github.com/Shahikhail01/Neurecorebase` (7 commits, fully pushed)
+
+---
+
+## AI & Chat Features — Session 3 (2026-06-26)
+
+**Detailed log:** [`production-deployment-log.md#session-3--minimax-ai-wiring-2026-06-2526`](./production-deployment-log.md) (Fixes 15–20)
+
+### What's now wired
+
+| Component | Status | Notes |
+|---|---|---|
+| MiniMax LLM provider | ✅ Live | `https://api.minimax.io/v1`, model `MiniMax-Text-01` |
+| `POST /api/v1/chat/messages` | ✅ Live | Command Center "Ask AI" entry point |
+| `POST /api/v1/ai/chat` | ✅ Live | `ConversationalAIService` entry point |
+| Live tenant data injection | ✅ Live | Every chat prompt includes Prisma snapshot |
+| JWT-derived tenantId scoping | ✅ Live | `req.user.tenantId` from `JwtAuthGuard` |
+
+### MiniMax configuration (Contabo `.env`)
+
+```bash
+MINIMAX_API_KEY=sk-cp-uIHDBUPhYE4x5rr1R3kR1OoEVe5i_cuigLDc-XBhk0FLd4O2sYsru4aor1RmsdVR2Rg_xjdI28ykWr9AtQqTxJqGPul1ELJrIcT5HwUw2JUSXtdIQrjpzs0
+MINIMAX_BASE_URL=https://api.minimax.io/v1
+MINIMAX_MODEL=MiniMax-Text-01
+LLM_PROVIDER=minimax
+DEFAULT_MODEL=MiniMax-Text-01
+```
+
+### New backend files
+
+```
+backend/src/modules/chat/chat.module.ts          — imports ModelsModule + DatabaseModule
+backend/src/modules/chat/chat.service.ts         — Prisma data snapshot + MiniMax call
+backend/src/modules/chat/chat.controller.ts       — POST /chat/messages + /ai/chat (JWT-scoped)
+backend/src/modules/chat/dto/chat.dto.ts          — SendChatMessageDto with class-validator
+backend/src/modules/chat/index.ts                — barrel exports
+```
+
+### Live-data snapshot schema (injected into every prompt)
+
+```json
+{
+  "tenantId": "e223c25a-...",
+  "generatedAt": "2026-06-26T...",
+  "agents":       { "total": 7,  "byStatus": { "IDLE": 7 } },
+  "departments":  { "active": 7 },
+  "tasks":        { "total": 0,  "byStatus": {} },
+  "workflows":    { "total": 0,  "byStatus": {} },
+  "approvals":    { "pending": 0 },
+  "cost":         { "monthToDateCents": 0, "currency": "USD" }
+}
+```
+
+### Verified conversation (Playwright, real browser)
+
+```
+👤 "How many agents do I have?"
+🤖 "You have 7 agents." + chart {IDLE: 7}
+
+👤 "What is the status of my tasks?"
+🤖 "0 tasks in total, byStatus field is empty, indicating no tasks are
+   in progress or have any status." + empty chart
+```
+
+### 6 critical fixes applied (full details in production-deployment-log.md)
+
+15. New `ChatModule` with `/chat/messages` + `/ai/chat` endpoints
+16. `@Controller({ version: '1' })` for URI versioning (empty `@Controller()` skipped `/v1/`)
+17. TypeScript strict null check (`response.usage` possibly undefined)
+18. Frontend unwrap of `{ status, data: { reply, ... }, meta }` envelope
+19. Production `.env` MiniMax config with API key
+20. **Live tenant data injection** — grounded MiniMax in real Prisma counts, killed hallucinations
+
+### Lessons learned (AI-specific)
+
+1. **Never trust client-supplied `tenantId`** — always derive from JWT (`req.user.tenantId`).
+2. **LLMs hallucinate generic numbers** without real data — inject JSON snapshot + explicit "use ONLY this data" instruction.
+3. **Graceful degradation**: each Prisma query has `.catch(() => null/[])` so one bad query doesn't kill the reply.
+4. **Prisma client names ≠ model names**: `approvalRequest` for `ApprovalRequest` model, `costRecord` for `CostRecord`, field `costCents` (not `amount`).
+5. **`@Controller()` empty parens** skips NestJS URI versioning — always pass `{ version: '1' }`.
+6. **Frontend response unwrappers** must match the backend's `{ status, data, meta }` envelope — adding new endpoints requires auditing all callers.
+
+### Related commits
+
+```
+3bd98a7b docs(memory-bank): document Ask AI live-data grounding (fix 20)
+d7437743 fix(ai): ground Ask AI in live tenant data via Prisma
+b5631c78 docs(memory-bank): document MiniMax AI wiring session (fixes 15-19)
+d70c19bf feat(ai): wire MiniMax API for Ask AI + agent chat
+```
