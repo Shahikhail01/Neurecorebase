@@ -1,8 +1,8 @@
 # NeureCore — Daily Tools & Integration Plan
 
-**Document Version:** 1.4  
+**Document Version:** 1.5  
 **Date:** 2026-06-26  
-**Status:** Phase A Weeks 0-4 COMPLETE — Google Sign-In + Integration Module + Google OAuth + Credential Storage + Brevo Email Relay. All ready for deployment.  
+**Status:** Phase A + Phase B (Weeks 5-10) COMPLETE — Google Sign-In + Integrations Module + Gmail + Calendar + Drive folder per agent. Brevo SMTP done.  
 **Audience:** Engineering, product, planning
 
 ---
@@ -506,6 +506,9 @@ System deploys:
 | **2** | **✅ Google OAuth flow (backend) — DONE** | **✅ OAuth callback handler (frontend) — DONE** |
 | **3** | **✅ Encrypted credential storage — DONE** | **✅ Integration cards UI — DONE** |
 | **4** | **✅ Brevo SMTP integration — DONE** | **✅ Email alias configuration — DONE** |
+| **5-6** | **✅ Gmail: read inbox + send — DONE** | **✅ Agent email composer — DONE** |
+| **7-8** | **✅ Calendar: view/create events — DONE** | **✅ Calendar widget — DONE** |
+| **9-10** | **✅ Drive: folder per agent — DONE** | **✅ Drive file browser — DONE** |
 
 **Backend Module Structure:**
 ```
