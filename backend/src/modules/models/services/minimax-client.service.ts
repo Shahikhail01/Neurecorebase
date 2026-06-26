@@ -58,8 +58,8 @@ export class MiniMaxClient {
 
     this.apiKey = (cfgGet('MINIMAX_API_KEY') as string) ?? '';
     this.baseUrl =
-      (cfgGet('MINIMAX_BASE_URL') as string) ?? 'https://api.minimax.chat/v1';
-    this.model = (cfgGet('MINIMAX_MODEL') as string) ?? 'MiniMax-Text-01';
+      (cfgGet('MINIMAX_BASE_URL') as string) ?? 'https://api.minimaxi.com/v1';
+    this.model = (cfgGet('MINIMAX_MODEL') as string) ?? 'MiniMax-M2.5';
 
     if (!this.apiKey) {
       Logger.warn(
