@@ -1256,3 +1256,86 @@ Pushed to `origin` (Shahikhail01/Neurecorebase) → Vercel auto-build triggered.
 
 6. **OAuth state with base64 is sufficient for tenant routing**: Encrypting the state was overkill for basic tenant routing. Base64-encoded JSON with `{tenantId, provider, redirectUri}` is simple, sufficient, and avoids a separate encryption step.
 
+
+---
+
+# Session 8 — Vercel Deploy Fix (post Phase B) — 2026-06-26
+
+**Date:** 2026-06-26
+**Operator:** Kilo
+**Duration:** ~10 minutes
+**Outcome:** ✅ SUCCESS — Vercel tenant frontend redeployed
+
+---
+
+## Problem
+
+After Phase B commits were pushed to `origin`, Vercel deployments failed with:
+```
+Error: No Next.js version detected. Make sure your package.json has "next"
+in either "dependencies" or "devDependencies". Also check your Root Directory
+setting matches the directory of your package.json file.
+```
+
+Three consecutive deployments failed (all from `bf5b44a1` and `bd33f1b5`).
+
+## Root Cause
+
+The Vercel project `neurecorebase-tenant` had `rootDirectory: null` (repo root).
+
+The repo root `package.json` (`neurecore/package.json`) does **not** have `next` in dependencies — it lists frontend-only deps like `@radix-ui/*`, `framer-motion`, `recharts`. Vercel uses the root `package.json` to detect the framework, so without `next` it assumed this wasn't a Next.js project.
+
+The actual Next.js app is at `neurecore/frontend-tenant/package.json` which DOES have `"next": "^15.5.12"`.
+
+The deployment log (Fix 5) had solved this earlier by setting `rootDirectory: null, sourceFilesOutsideRootDirectory: true` — but the project must have been re-imported and lost that config, or the `rootDirectory: null` combination with cross-dir files stopped working.
+
+## Fix
+
+PATCH `/v9/projects/neurecorebase-tenant` via API:
+
+```bash
+curl -X PATCH "https://api.vercel.com/v9/projects/neurecorebase-tenant?teamId=team_wOWHtzagqXIj1iVZOpaeP4vz" \
+  -H "Authorization: Bearer $VERCEL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rootDirectory": "frontend-tenant",
+    "sourceFilesOutsideRootDirectory": false,
+    "installCommand": "npm install --legacy-peer-deps",
+    "buildCommand": "npm run build"
+  }'
+```
+
+Result:
+```json
+{
+  "id": "prj_EV6YAjwGAnneM6OlVmkDuXWt3M9e",
+  "rootDirectory": "frontend-tenant",
+  "sourceFilesOutsideRootDirectory": false,
+  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "npm run build",
+  "framework": "nextjs"
+}
+```
+
+Then triggered redeploy with empty commit `69c2fc52 chore: trigger Vercel redeploy after rootDirectory fix`.
+
+## Verification
+
+| URL | Status |
+|---|---|
+| `https://hq.neurecore.com` | HTTP 200 ✅ |
+| `https://hq.neurecore.com/settings/integrations` | HTTP 200 ✅ |
+| `https://hq.neurecore.com/settings/integrations/google` | HTTP 200 ✅ |
+
+Latest deployment: `dpl_FtSe75PsVg7X2ZeDngFwtq1vDo4o` — **READY**
+
+## Lessons Learned
+
+1. **Always set `rootDirectory` explicitly when a Next.js app is not at repo root.** Use `"frontend-tenant"` directly instead of relying on `rootDirectory: null + sourceFilesOutsideRootDirectory: true`. The cross-dir approach is fragile and gets reset on re-imports.
+
+2. **The repo root `package.json` (at `neurecore/package.json`) is an orphan** — it duplicates some frontend deps without Next.js. It might be worth deleting or merging with `frontend-tenant/package.json` in a future cleanup.
+
+3. **Vercel `errorMessage: "No Next.js version detected"` is ALWAYS a package.json / rootDirectory issue**, not a framework issue. Vercel detects framework from `package.json` + `rootDirectory`, not from runtime files.
+
+4. **Use the Vercel API to fix project settings** — the CLI doesn't have a stable command for setting `rootDirectory` post-creation. PATCH `/v9/projects/{name}` is the reliable way.
+
