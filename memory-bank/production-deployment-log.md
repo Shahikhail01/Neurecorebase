@@ -510,3 +510,51 @@ d70c19bf feat(ai): wire MiniMax API for Ask AI + agent chat
 - NestJS `enableVersioning` is global — controllers WITHOUT explicit `version` get NO version prefix at all, not the default version.
 - Frontend response unwrappers must match the backend's `{ status, data: <payload>, meta }` envelope exactly. When adding new endpoints, audit all places that call them.
 - LLM clients that return "stub responses" when API key missing are a footgun — they look like success but produce useless output. Either fail-fast or return a clearly distinguishable error marker.
+
+### Fix 20: Ground Ask AI in live tenant data (2026-06-26)
+
+**Issue:** MiniMax answered hallucinated numbers ("45 agents running", "15/8/5 tasks by priority", generic overdue-tasks advice) instead of real tenant data.
+
+**Root cause:** ChatService built the prompt with only `SYSTEM + HISTORY + USER` — no actual tenant data. The model had to guess.
+
+**Fix:** ChatService now fetches a compact live-data snapshot via Prisma `Promise.all` groupBy/count/aggregate and prepends it to the prompt as a structured JSON block:
+
+```ts
+{
+  tenantId, generatedAt,
+  agents: { total, byStatus: { IDLE: 7 } },
+  departments: { active: 7 },
+  tasks: { total, byStatus },
+  workflows: { total, byStatus },
+  approvals: { pending },
+  cost: { monthToDateCents, currency }
+}
+```
+
+ChatController now reads `tenantId` from JWT (`req.user.tenantId` set by JwtAuthGuard) — never trusts client-supplied context.
+
+System prompt now explicitly says "Answer the user using ONLY the LIVE TENANT DATA provided. If the data does not contain the answer, say so directly rather than guessing."
+
+**Prisma model corrections during implementation:**
+- `prisma.approval` → `prisma.approvalRequest` (model `ApprovalRequest`, table `approval_requests`)
+- `prisma.cost` → `prisma.costRecord` (model `CostRecord`, table `cost_records`)
+- `cost.amount` → `cost.costCents` (Decimal cents, not dollars)
+- `cost.date` → `cost.windowStart` (DateTime range field, not single date)
+
+**Each query has `.catch(() => null/[])`** so one bad query degrades gracefully instead of killing the reply.
+
+**ChatModule now imports DatabaseModule** for PrismaService.
+
+**Verified end-to-end** (Python, real JWT):
+```
+Q: "How many agents do I have?"
+A: "You have 7 agents." + chart {IDLE: 7}
+
+Q: "What is the status of my tasks?"
+A: "0 tasks in total, byStatus field is empty, indicating no tasks are
+    in progress." + empty chart
+```
+
+**Commit:** `d7437743` `fix(ai): ground Ask AI in live tenant data via Prisma`
+
+**Lesson learned:** Always inject real data into LLM prompts when the user expects factual answers. Hallucinations are easy to mask when the prompt is generic — explicit "use ONLY this data" instructions + structured JSON input prevents the model from making up plausible-sounding numbers.
