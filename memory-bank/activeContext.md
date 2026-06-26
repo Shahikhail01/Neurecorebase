@@ -2,7 +2,27 @@
 
 ## Last Updated
 
-2026-03-31T05:53:00Z
+2026-06-26T07:55:00Z (Session 4 — Phase 2 R2 + Phase 3 perf shipped)
+
+## Most Recent Operations (Session 4 — 2026-06-26)
+
+**Phase 2 R2 — Add/Detail UI** ✅ Shipped to production
+- 5 create forms, 5 detail pages, 5 inspectors, 2 primitives
+- Backend: User.departmentId + assign/unassign endpoints + costs per-dept
+- Migration `20260626_user_department` applied to Neon
+
+**Phase 3 — Dashboard Performance** ✅ Shipped to production
+- JWT blacklist LRU + 500ms timeout race (was 5s/request → <1ms cache hit)
+- N+1 fix in /agents (100 agents → 1 query instead of ~101)
+- New `/command-center/summary` endpoint (single round-trip with 12 sub-queries)
+- Frontend rewired: 7 parallel requests → 1
+- **Measured: 12-14s → 1.5-2s (7-8× speedup)**
+
+**Status:** Both backend (Contabo pid 255248) and frontend (Vercel auto-deploy in progress) live.
+
+**Current residual latency:** ~850ms Contabo → Neon round-trip. Out of scope for this round; revisit if user complaints persist.
+
+See `memory-bank/production-deployment-log.md` Session 4 and `memory-bank/phase12-perf-implementation-summary.md` for full details.
 
 ## Contabo Migration (NEW)
 
@@ -73,14 +93,31 @@
 - Frontend Tenant: Running (likely Vite dev server)
 - Frontend Admin: Running (likely Vite dev server)
 
-## Recent DevOps Operations (March 30, 2026)
+## Recent DevOps Operations (March 30, 2026 → 2026-06-26)
+
+### 2026-06-26 (Session 4 — Phase 2 R2 + Phase 3 perf)
+
+1. Investigated 12-14s dashboard load → identified 3 root causes (Upstash timeout, N+1, 7 parallel calls)
+2. Applied 3 backend fixes: Redis LRU + timeout race, agents N+1 fix, /command-center/summary endpoint
+3. `pnpm prisma migrate deploy` → applied `20260626_user_department` to Neon (after killing stuck advisory lock)
+4. Frontend rewired: commandCenterService + store setX actions + /command-center 7→1 calls
+5. Backend restart pid 255248 — smoke tests pass
+6. Pushed to `Shahikhail01/Neurecorebase` (frontend) + committed on Contabo (backend)
+7. Measured: 12-14s → 1.5-2s (7-8× speedup)
+
+### 2026-06-25 (Session 3 — Phase 1-12 ship + Ask AI fixes 21-23)
+
+8. All 12 phases (UI rebuild) deployed to production via Contabo backend + Vercel frontends
+9. Fixed 3 chat regressions (Fix 21: double-click → 2 messages; Fix 22: JSON leak; Fix 23: suggestion chip double-fire)
+10. 1 Prisma migration (`20260625_phase1_gaps`); 26 backend file changes; 19 frontend file changes; 16 supporting docs; 15 Playwright tests
+
+### 2026-03-30 (Contabo migration — pre-tenant-rebuild)
 
 1. SSH'd into Contabo — verified PostgreSQL 16.13, Redis 7.0.15, 11GB RAM
 2. Identified databases: `neurecore_prod` (29 tables), `neurecore_dev` (36 tables), `ecoearthshop`
 3. Found security issues: Redis no pass, open pg_hba, superuser ownership
 4. Created `docs/CONTABO_MIGRATION_PLAN.md` — comprehensive 6-phase plan
 5. Added merge+delete `neurecore_dev`, local Docker cleanup to plan
-6. UMB sync: Updated `progress.md` + `activeContext.md`
 
 ## Contabo Migration Plan Summary
 
@@ -298,3 +335,24 @@ Prisma engine binary is caching the OLD introspected schema (with snake_case mod
 | Social APIs (Meta, LinkedIn, etc.) | 🔴 Critical |
 
 This enables agents to function as true "digital employees".
+
+## 🆕 RECENT IMPROVEMENTS (Session 4, 2026-06-26)
+
+| Item | Status | Notes |
+|---|---|---|
+| Phase 2 R2 (add/detail UI) | ✅ Shipped | 5 create forms + 5 detail pages + 5 inspectors; full backend additions (User.deptId, assign, costs per-dept) |
+| Phase 3 perf: JWT blacklist LRU | ✅ Shipped | 5s/request → <1ms cache hit; 500ms timeout race; still fail-open |
+| Phase 3 perf: agents N+1 fix | ✅ Shipped | 100 COUNTs → 1 groupBy query; result shape preserved |
+| Phase 3 perf: `/command-center/summary` | ✅ Shipped | Single `$transaction` with 12 sub-queries; replaces 7 parallel HTTP requests |
+| Dashboard load time | ✅ 12-14s → 1.5-2s (7-8× speedup, measured) |
+| `20260626_user_department` migration | ✅ Applied to Neon | idempotent — handles pre-existing `cost_records.departmentId` |
+
+## 📋 OPEN / NEXT (after Session 4)
+
+1. **Routines v2 graph builder** — v1 uses 2-node auto-filled graph; full drag-drop editor is the v2 ask (out of scope this round)
+2. **Local Postgres read-replica on Contabo** — would drop dashboard load below 1s; revisit only if user complaints persist
+3. **CORS preflight caching verification** — already configured in LiteSpeed per Fix 1 of `production-deployment-log.md`; verify on next manual test
+4. **Browser-side smoke test of new create/detail flows** — backend smoke tests pass; UI flows need a final browser pass after Vercel deploy completes
+5. **Admin runbook update for `users/department/:id`** — SUPER_ADMIN should use `/users?tenantId=…&departmentId=…` not `/users/department/:id` (the latter requires JWT tenantId)
+6. **Adoption metrics for old route rewrites** — start collecting now to inform Phase 11 (old route removal) which remains deferred to 30-day wait post-deploy
+

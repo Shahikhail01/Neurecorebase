@@ -213,12 +213,123 @@ Run `pnpm exec playwright test` in `frontend-tenant/`.
 
 ---
 
+## C.1 Phase 2 R2 + Phase 3 Verification (Addendum — 2026-06-26)
+
+### Backend smoke tests
+
+```bash
+ssh contabo
+TOKEN=$(curl -s -X POST http://localhost:3003/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"demo@neurecore.ai","password":"Tenant@123!"}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"]["tokens"]["accessToken"])')
+
+# Phase 2 R2 endpoints
+curl -s -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3003/api/v1/users/department/test | head -3
+curl -s -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3003/api/v1/users/tenant/test | head -3
+curl -s -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3003/api/v1/costs/department/test | head -3
+curl -s -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:3003/api/v1/costs/breakdown/by-agent?departmentId=test" | head -3
+```
+
+- [ ] All 4 endpoints return `HTTP 200`
+- [ ] `users/department/test` returns `{items: [], total: 0, page: 1, limit: 50}` (empty but well-formed)
+- [ ] `costs/department/test` returns `{totalCostCents: 0, recordCount: 0, byAgent: []}`
+
+### Performance verification (Phase 3)
+
+```bash
+# 1. Direct DB latency baseline
+time PGPASSWORD=$NEON_PASS psql -h $NEON_HOST -U neondb_owner -d neondb -c 'SELECT 1;'
+# Expected: <1s
+
+# 2. /command-center/summary endpoint timing (5 calls)
+for i in 1 2 3 4 5; do
+  curl -s -o /dev/null -w "  Load $i: HTTP %{http_code} | %{time_total}s\n" \
+    -H "Authorization: Bearer $TOKEN" \
+    http://localhost:3003/api/v1/command-center/summary
+done
+# Expected: each 1.5-2.5s
+
+# 3. Verify the page issues 1 request (not 7) on load
+# Open browser DevTools → Network tab → load /command-center
+# Expected: 1 request to /api/v1/command-center/summary (not 7 individual requests)
+
+# 4. JWT cache effectiveness
+pm2 logs neurecore-backend --lines 500 --nostream | grep -c 'Redis unavailable when checking token'
+# Expected: <10 per 500 lines
+
+# 5. /agents?limit=100 timing
+curl -s -o /dev/null -w 'HTTP %{http_code} | %{time_total}s\n' \
+  -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:3003/api/v1/agents?limit=100"
+# Expected: <500ms (was ~5s before Phase 3 N+1 fix)
+```
+
+**Pass criteria:**
+- [ ] /command-center/summary 1.5-2.5s per call
+- [ ] /agents?limit=100 <500ms
+- [ ] Browser Network tab shows 1 request on /command-center load
+- [ ] JWT cache hit rate >90% (look for absence of `Redis unavailable` warnings)
+
+### Frontend smoke (browser-side)
+
+- [ ] Open https://hq.neurecore.com/command-center — full dashboard renders in <3s
+- [ ] Open a department workspace — `+ New Task` button opens modal
+- [ ] Submit a new task — appears in the board without page reload
+- [ ] Click on a task row — right-side inspector opens
+- [ ] Click inspector's external-link button — full-page detail loads
+- [ ] Open Members tab — "Assign User" button works (search + select + assign)
+- [ ] Open Costs tab — per-department breakdown renders
+- [ ] All 5 detail pages (`/workflows/[id]`, `/routines/[id]`, `/projects/[id]`, `/goals/[id]`, `/users/[id]`) render without 404
+
+### Type check + lint
+
+```bash
+cd /home/najeeb/Linux-Dev/neurecore-base/neurecore/frontend-tenant
+npx tsc --noEmit
+npx next lint --dir src/app/command-center --dir src/stores --dir src/services
+# Expected: 0 errors (pre-existing errors in ConversationalAIService.ts / chat.service.ts are not in scope)
+```
+
+- [ ] `tsc --noEmit` clean for changed files
+- [ ] `next lint` clean for changed dirs
+
+### DB schema verification
+
+```bash
+PGPASSWORD=$NEON_PASS psql -h $NEON_HOST -U neondb_owner -d neondb -c '\d users' | grep departmentId
+# Expected: departmentId | text | | | column present
+
+PGPASSWORD=$NEON_PASS psql -h $NEON_HOST -U neondb_owner -d neondb -c '\d cost_records' | grep departmentId
+# Expected: departmentId | text | | | column present
+
+PGPASSWORD=$NEON_PASS psql -h $NEON_HOST -U neondb_owner -d neondb \
+  -c "SELECT migration_name, finished_at FROM _prisma_migrations WHERE migration_name='20260626_user_department';"
+# Expected: 1 row with the migration name and a timestamp
+```
+
+- [ ] `users.departmentId` column present
+- [ ] `cost_records.departmentId` column present (from Phase 5)
+- [ ] `_prisma_migrations` records `20260626_user_department` as applied
+
+---
+
 ## D. Documentation Review
 
-- [ ] `memory-bank/new_neurecore.md` is up to date (Phase 12 complete)
-- [ ] `memory-bank/deployment-guide.md` covers all deploy steps
+- [ ] `memory-bank/new_neurecore.md` is up to date (Phases 1-12 + Phase 2 R2 + Phase 3 complete)
+- [ ] `memory-bank/deployment-guide.md` covers all deploy steps + §3.5 Phase 2 R2 + Phase 3 addendum
+- [ ] `memory-bank/phase12-r2-add-detail-implementation-summary.md` exists
+- [ ] `memory-bank/phase12-perf-implementation-summary.md` exists
+- [ ] `memory-bank/production-deployment-log.md` Session 4 documents the 2026-06-26 deploy
+- [ ] `memory-bank/activeContext.md` "Most Recent Operations" reflects Session 4
+- [ ] `memory-bank/progress.md` "Most Recent — Session 4" reflects Phase 2 R2 + Phase 3
+- [ ] `memory-bank/runbook.md` §5.4 Performance Troubleshooting section exists
 - [ ] All phase summaries (phase1–12) cross-reference each other
-- [ ] Prisma migration is documented in `prisma/migrations/20260625_phase1_gaps/migration.sql`
+- [ ] Prisma migration is documented in `prisma/migrations/20260626_user_department/migration.sql`
 - [ ] README in `frontend-tenant/` updated with new dev/build/test commands
 
 ---

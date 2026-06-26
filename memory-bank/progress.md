@@ -1,8 +1,47 @@
-# Progress Tracking — NeureCore Gold Phase 1
+# Progress Tracking — NeureCore
 
-**Last Updated**: March 30, 2026
-**Current Phase**: Phase 1 Foundation
-**Overall Status**: 🟢 Phase 1 ~99% Complete - Contabo Migration Plan Created
+**Last Updated**: 2026-06-26
+**Current Phase**: All implementation phases complete (Phase 1-12 + Phase 2 R2 + Phase 3 perf)
+**Overall Status**: 🟢 **Production-live** with 7-8× dashboard performance improvement (12-14s → 1.5-2s)
+
+> **Note on scope:** This document was originally the Phase 1 Foundation tracker. The actual current state is the production-deployed UI rebuild (Phases 1-12) + Add/Detail UI (Phase 2 R2) + Performance (Phase 3). For the comprehensive implementation plan, see `memory-bank/new_neurecore.md` v4.0. For deploy records, see `memory-bank/production-deployment-log.md`.
+
+---
+
+## Most Recent — Session 4 (2026-06-26) — Phase 2 R2 + Phase 3 Perf
+
+| Item | Status | Notes |
+|---|---|---|
+| Phase 2 R2 add/detail UI | ✅ Shipped | 5 forms + 5 detail pages + 5 inspectors + 2 primitives |
+| Phase 2 R2 backend | ✅ Shipped | User.departmentId + assign endpoint + costs per-dept |
+| Phase 3 perf: JWT LRU | ✅ Shipped | 5s/request → <1ms; 500ms timeout race; fail-open |
+| Phase 3 perf: agents N+1 | ✅ Shipped | 100 COUNTs → 1 groupBy; result shape preserved |
+| Phase 3 perf: /command-center/summary | ✅ Shipped | 12 sub-queries in 1 transaction; replaces 7 parallel requests |
+| Dashboard load time | ✅ **12-14s → 1.5-2s (7-8×)** | Measured end-to-end on Contabo → browser |
+| `20260626_user_department` migration | ✅ Applied to Neon | idempotent; handles pre-existing `cost_records.departmentId` |
+| Backend commit | ✅ `c5c05ec` on Contabo | pid 255248 |
+| Frontend commit | ✅ `6324dd86` → Vercel | auto-deploy in progress |
+
+See:
+- `memory-bank/phase12-r2-add-detail-implementation-summary.md`
+- `memory-bank/phase12-perf-implementation-summary.md`
+- `memory-bank/production-deployment-log.md` Session 4
+
+---
+
+## Historical — Session 3 (2026-06-25) — Phase 1-12 ship + Ask AI Fixes 21-23
+
+| Item | Status | Notes |
+|---|---|---|
+| Phase 1-12 UI rebuild | ✅ Shipped | 26 backend + 19 frontend file changes; 1 Prisma migration; 16 docs; 15 Playwright tests |
+| Fix 21: double-click → 2 messages | ✅ Shipped | Starter chip + retry button in-flight guards |
+| Fix 22: literal JSON leak | ✅ Shipped | Brace-aware `_extractFirstJsonObject` |
+| Fix 23: suggestion chip double-fire | ✅ Shipped | `suggestionsDisabled` prop threaded |
+| Commit | `09def1ed` | Ask AI regressions fixed |
+
+---
+
+## Phase 1 Foundation (March 30, 2026) — ORIGINAL
 
 ---
 

@@ -390,6 +390,61 @@ Create a Grafana dashboard with:
 - Database: connection count, query duration, slow query log
 - Business: new tenants, departments created, agents spawned, $ spent
 
+### 5.4 Performance Troubleshooting (Phase 3 — added 2026-06-26)
+
+**Baseline (post-Phase 3):** `/command-center` end-to-end page load = 1.5-2.0s
+
+**Symptoms & likely causes:**
+
+| Symptom | Likely cause | Where to look | Fix |
+|---|---|---|---|
+| `/command-center` > 3s | Upstash Redis hanging again | `pm2 logs` for "Redis unavailable" warnings | Check `REDIS_URL`; consider Upstash plan upgrade or local Redis |
+| `/agents?limit=100` > 1s | `_count.tasks` N+1 regression | `pm2 logs` for slow query warnings | Verify the groupBy-based fix is still in place; re-apply if reverted |
+| Many requests > 3s | Dashboard fetching 7+ calls instead of 1 | Browser DevTools Network tab | Verify `/command-center` page uses `commandCenterService.getSummary()` (1 call) not the 7 individual fetches |
+| Single endpoint > 5s | DB slow query or connection pool exhaustion | Neon dashboard → "Active connections" | Check for missing index; consider `EXPLAIN ANALYZE` |
+| All requests > 10s | Contabo → Neon network degradation | `ssh contabo time psql -h … -c "SELECT 1;"` (should be <1s) | Contact Neon support; check Contabo bandwidth |
+
+**Quick perf triage script (run on Contabo):**
+
+```bash
+ssh contabo
+
+# 1. Direct DB latency
+time PGPASSWORD=$NEON_PASS psql -h $NEON_HOST -U neondb_owner -d neondb -c 'SELECT 1;'
+# Expected: <1s. If >2s → Neon issue, not code
+
+# 2. Backend per-request timing
+pm2 logs neurecore-backend --lines 200 --nostream | grep -E 'GET /api/v1/command-center/summary.*ms' | tail -10
+# Expected: each 1.5-2.5s. Controller time 1-2s, pre-audit <1s
+
+# 3. JWT cache effectiveness (should not see "Redis unavailable" warnings)
+pm2 logs neurecore-backend --lines 500 --nostream | grep -c 'Redis unavailable when checking token'
+# Expected: <10 per 500 lines (i.e., very rare)
+
+# 4. N+1 regression check (look for slow /agents calls)
+pm2 logs neurecore-backend --lines 200 --nostream | grep -E 'GET /api/v1/agents.*ms' | tail -5
+# Expected: <500ms
+
+# 5. Dashboard endpoint health
+TOKEN=$(curl -s -X POST http://localhost:3003/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"demo@neurecore.ai","password":"Tenant@123!"}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"]["tokens"]["accessToken"])')
+
+for i in 1 2 3; do
+  curl -s -o /dev/null -w "  Load $i: %{time_total}s\n" \
+    -H "Authorization: Bearer $TOKEN" \
+    http://localhost:3003/api/v1/command-center/summary
+done
+# Expected: 1.5-2.5s each
+```
+
+**When to consider a local Postgres read-replica on Contabo:**
+
+If `SELECT 1` from Contabo to Neon consistently > 1s AND users complain about dashboard latency, the residual ~1.5s is purely network. A local read-replica would drop page load to ~200-400ms.
+
+**Estimated effort:** 4-6 hours (set up streaming replication from Neon to Contabo Postgres; add a `REPLICA_DATABASE_URL` env var; route read-only queries through it).
+
 ---
 
 ## 6. Phase 11 — Old Route Removal (Future)
@@ -508,9 +563,9 @@ sudo systemctl restart redis
 | Date | Change | Author |
 |---|---|---|
 | 2026-06-25 | Initial runbook (Phase 12 hardening) | Kilo |
-| | | |
+| 2026-06-26 | §5.4 Performance Troubleshooting added (Phase 3) | Kilo |
 
 ---
 
-**Last updated:** 2026-06-25 16:05
+**Last updated:** 2026-06-26 13:00
 **Maintainer:** TBD — assign before production rollout

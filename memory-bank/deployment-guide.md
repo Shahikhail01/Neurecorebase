@@ -1,10 +1,10 @@
-# Deployment Guide — Tenant Frontend Creatio Rebuild
+# Deployment Guide — NeureCore (Tenant Frontend Creatio Rebuild + Phase 2 R2 + Phase 3 Perf)
 
-**Date:** 2026-06-25
+**Date:** 2026-06-26
 **Audience:** DevOps + Backend + Frontend engineers
-**Status:** Ready for staging deploy
+**Status:** Production-deployed (Phases 1-12 + Phase 2 R2 + Phase 3 perf all live as of 2026-06-26)
 
-This guide covers the full end-to-end deployment of the rebuilt tenant frontend (Phases 1–12) to Contabo production.
+This guide covers the full end-to-end deployment of the rebuilt tenant frontend (Phases 1–12) + Add/Detail UI (Phase 2 R2) + Performance fixes (Phase 3) to Contabo production. Phase 2 R2 and Phase 3 deploy steps are at the end of each section.
 
 ---
 
@@ -178,6 +178,117 @@ pm2 restart neurecore-backend
 ```
 
 **Important:** only roll back within 30 minutes. After that, the enum values + columns are referenced by clients.
+
+---
+
+## 3.5 Phase 2 R2 + Phase 3 Deploy (Addendum — 2026-06-26)
+
+### Backend deploy (Contabo)
+
+```bash
+ssh contabo
+
+cd /opt/neurecore/backend/backend
+
+# 1. Stage the changes (already in working tree after `git fetch` + cherry-pick or local commit)
+git status -s
+# Expected: ~5 backend files modified + 1 new module (command-center)
+
+# 2. Apply Prisma migration
+npx prisma migrate status         # confirm 20260626_user_department is pending
+npx prisma migrate deploy         # applies User.departmentId + cost_records already present
+# If "advisory lock" error → kill the stuck session:
+#   PGPASSWORD=... psql -h ... -U neondb_owner -d neondb -c "SELECT pg_terminate_backend(<pid>);"
+
+# 3. Regenerate Prisma client (in case schema changed)
+npx prisma generate
+
+# 4. Typecheck + build
+npx tsc --noEmit -p tsconfig.json
+npx nest build
+
+# 5. Restart backend
+pm2 restart neurecore-backend
+sleep 8
+
+# 6. Verify the new module is mapped
+pm2 logs neurecore-backend --lines 30 --nostream | grep -E 'CommandCenter|users/department'
+# Expected: "CommandCenterController {/api/command-center} (version: 1)" + 4 new users routes
+```
+
+**Files changed:**
+- `prisma/schema.prisma` (User.departmentId + Department.members)
+- `prisma/migrations/20260626_user_department/migration.sql` (NEW)
+- `src/infrastructure/cache/redis.service.ts` (LRU + 500ms timeout race)
+- `src/modules/agents/services/agents.service.ts` (N+1 fix)
+- `src/modules/command-center/*` (NEW module — module, controller, service)
+- `src/modules/users/{dto/user.dto.ts, users.controller.ts, users.service.ts}` (assign + lookup)
+- `src/modules/costs/{costs.controller.ts, services/costs.service.ts, interfaces/cost.interface.ts, repositories/prisma-cost.repository.ts}` (per-dept)
+- `src/app.module.ts` (register CommandCenterModule)
+
+### Frontend deploy (Vercel)
+
+```bash
+# In local repo (this machine):
+cd /home/najeeb/Linux-Dev/neurecore-base/neurecore
+git status --short   # confirm only docs + frontend files
+git add memory-bank/ frontend-tenant/
+git commit -F /tmp/msg.txt    # use prepared message
+git push origin main         # Vercel auto-builds
+```
+
+**Files changed:**
+- 5 create forms (Task, Workflow, Routine, Project, Goal) — NEW
+- 5 inspectors (Workflow, Routine, Project, Goal, Member) — NEW
+- 5 detail pages (`app/{workflows,routines,projects,goals,users}/[id]/page.tsx`) — NEW
+- 2 primitives (`Modal`, `FormField`) — NEW
+- 3 store actions added (`setTasks`, `setWorkflows`, `setDepartments`)
+- `services/command-center.service.ts` — NEW
+- `app/command-center/page.tsx` — rewired to single summary call
+- `components/layout/InspectorPanel.tsx` — wired 5 new inspectors
+- `types/ui.types.ts` — extended InspectorType union
+
+### Rollback
+
+If something goes wrong:
+
+```bash
+# Backend rollback (5 min safe window after deploy)
+ssh contabo "cd /opt/neurecore/backend/backend && git revert HEAD --no-edit && \
+  npx prisma migrate resolve --rolled-back 20260626_user_department 2>/dev/null || true; \
+  npx nest build && pm2 restart neurecore-backend"
+
+# Frontend rollback (instant via Vercel)
+# 1. Go to https://vercel.com → project → Deployments → previous successful → Promote to Production
+# OR: vercel rollback
+```
+
+**Caveat:** The `User.departmentId` migration is additive (nullable column), so DB rollback is safe — existing data is not affected.
+
+### Verification post-deploy
+
+```bash
+# 1. New endpoints respond
+TOKEN=$(curl -s -X POST http://localhost:3003/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"demo@neurecore.ai","password":"Tenant@123!"}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"]["tokens"]["accessToken"])')
+
+curl -s -w '\nHTTP %{http_code} TIME %{time_total}s\n' \
+  -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3003/api/v1/command-center/summary
+
+# Expected: 200 OK in 1.5-2.5s
+
+# 2. Per-dept endpoints
+curl -s -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:3003/api/v1/users/department/test" | head -2
+curl -s -w '\nHTTP %{http_code}\n' -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:3003/api/v1/costs/department/test" | head -2
+
+# 3. Browser check: open https://hq.neurecore.com/command-center
+# Expected: full dashboard loads in <3s (was 12-14s)
+```
 
 ---
 

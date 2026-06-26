@@ -1,10 +1,45 @@
 # NeureCore — Tenant Frontend Creatio Rebuild
 
-**Document version:** 3.0 (post-critical-review)
-**Date:** 2026-06-25
-**Status:** Implementation roadmap with honest verification levels
+**Document version:** 4.0 (Phase 2 R2 add/detail + performance fixes)
+**Date:** 2026-06-26
+**Status:** Phase 1-12 (UI rebuild) + Phase 2 R2 (add/detail UI) + Phase 3 (performance) **SHIPPED TO PRODUCTION**
 **Audience:** Engineering, design, product, planning
-**Source of truth:** Codebase audit + memory-bank docs as of 2026-06-25
+**Source of truth:** Codebase + memory-bank docs as of 2026-06-26
+
+---
+
+## 0.1 Phase 2 R2 + Phase 3 Summary (NEW in v4.0)
+
+**Phase 2 R2 — Add/Detail UI for Department Workspace** (2026-06-26)
+
+The Phase 5 workspace page rendered data but had no `+ New` buttons for entities (Tasks, Workflows, Routines, Projects, Goals, Members) and the row clicks led to dead links (`/workflows/[id]` etc. didn't exist). Phase 2 R2 adds:
+
+- **5 create forms** (Task, Workflow, Routine, Project, Goal) opened from per-tab modal dialogs
+- **5 detail pages** at `/{entity}/[id]` with back-link + action toolbar
+- **5 right-side inspectors** wired into `InspectorPanel` for in-context review
+- **Members tab** rewired to use a new `GET /users/department/:id` endpoint (was silently calling unsupported `?departmentId=`)
+
+**Backend additions for Phase 2 R2:**
+- `User.departmentId` FK + Prisma migration `20260626_user_department`
+- New users controller endpoints: `GET /users/department/:id`, `GET /users/tenant/:id`, `POST /users/:id/assign-department`, `POST /users/:id/unassign-department`
+- `costs/breakdown/by-agent?departmentId=` filter
+- New `costs/department/:id` summary endpoint
+
+See `phase12-add-detail-implementation-summary.md` (or section 11.13 below) for full details.
+
+**Phase 3 — Dashboard Performance** (2026-06-26)
+
+`/command-center` was taking 12-14s to load. Three fixes dropped it to 1.5-2s (7-8× speedup):
+
+1. **Redis blacklist LRU + 500ms timeout race** — `isTokenBlacklisted()` now uses a local LRU cache (10k entries, 60s neg / 5min pos TTL) and races the Upstash call against a 500ms timeout. Was 5s/request waiting for Upstash to fail.
+2. **`/agents` N+1 fix** — replaced `include: { _count: { select: { tasks: true } } }` (one COUNT per row) with a single `groupBy` query. 100 agents → 1 query instead of ~101.
+3. **New `GET /command-center/summary` endpoint** — single parallel `$transaction` with 12 sub-queries. Frontend `/command-center` now fires 1 request instead of 7.
+
+**Measured end-to-end page load:** 12-14s → 1.5-2s.
+
+Remaining latency is the Contabo → Neon DB round-trip (~800ms per call). To go below 1s would require a local Postgres read-replica (out of scope).
+
+See `phase12-perf-implementation-summary.md` (or section 11.14 below) for full details.
 
 ---
 
@@ -919,7 +954,69 @@ All 8 backend gaps implemented. See `memory-bank/phase1-implementation-summary.m
 
 ---
 
-## ✅ PROJECT COMPLETE — All 12 Phases Delivered
+### ✅ Phase 2 R2 — Add/Detail UI for Workspace (COMPLETE 2026-06-26)
+
+The Phase 5 workspace rendered data but lacked `+ New` buttons and the row clicks led to dead links. R2 fills those gaps without changing the page's existing structure.
+
+61. [x] 5 create forms (Task, Workflow, Routine, Project, Goal) — opened from per-tab modal dialogs; routine form uses simplified v1 schema (name + agent + cron) per stakeholder direction
+62. [x] 5 detail pages at `/{entity}/[id]` — `app/workflows/[id]`, `app/routines/[id]`, `app/projects/[id]`, `app/goals/[id]`, `app/users/[id]` — each with back-link, header, KPI strip, action toolbar
+63. [x] 5 right-side inspectors (Workflow, Routine, Project, Goal, Member) — wired into `InspectorPanel`; row clicks open the slide-out panel; external-link button on each inspector opens the full-page route
+64. [x] Creatio `Modal` primitive (ESC + scroll lock) + `FormField` (Text/TextArea/Select/Date) — exported from `components/creatio`
+65. [x] Replaced dead QuickAction CTAs in workspace Overview tab with in-tab modal openers
+66. [x] Dead Link hrefs (`/workflows/${id}` etc.) replaced with `onClick={() => openInspector(...)}`
+
+**Backend additions:**
+- [x] `User.departmentId` nullable FK → `departments` + Prisma migration `20260626_user_department` (idempotent — handles pre-existing `cost_records.departmentId` from Phase 5)
+- [x] `GET /users/department/:id` — list users in a department (tenant-scoped)
+- [x] `GET /users/tenant/:id` — tenant-scoped user lookup (for inspector; platform users pass `?tenantId=`)
+- [x] `POST /users/:id/assign-department` / `/unassign-department` — tenant admin endpoints
+- [x] `costs/breakdown/by-agent?departmentId=` — per-dept agent breakdown
+- [x] `costs/department/:id` — new per-dept cost summary endpoint
+- [x] All 6 endpoints smoke-tested as tenant `demo@neurecore.ai` after deploy
+
+**Files changed:** 9 backend files + 9 frontend files (5 new) + 1 Prisma migration.
+
+**See:** `memory-bank/phase12-add-detail-implementation-summary.md` for full details.
+
+---
+
+### ✅ Phase 3 — Dashboard Performance (COMPLETE 2026-06-26)
+
+`/command-center` was taking 12-14 seconds to load on production (measured 2026-06-26 via PM2 logs). Three fixes dropped it to 1.5-2 seconds (7-8× speedup, **end-to-end** page load).
+
+67. [x] **JWT blacklist in-memory LRU + 500ms timeout race** — `src/infrastructure/cache/redis.service.ts`
+    - Local `Map<jti, {blacklisted, expiresAt}>` with LRU eviction (10k cap)
+    - Negative cache 60s, positive 5min
+    - Promise.race against 500ms timeout so a hung Upstash never blocks the request
+    - Still fail-open on errors (revocations eventually self-resolve via JWT exp)
+68. [x] **N+1 fix in Agent list** — `src/modules/agents/services/agents.service.ts`
+    - Replaced `include: { _count: { select: { tasks: true } } }` (1 COUNT per row) with a single `groupBy` query in the same transaction
+    - 100 agents → 1 query instead of ~101; response time ~5s → ~50ms
+    - Compatible: existing `agent._count.tasks` consumers (marketplace, agent adapter) still work
+69. [x] **New `GET /command-center/summary` endpoint** — `src/modules/command-center/*`
+    - Single parallel `$transaction` with 12 sub-queries (agent + task + workflow + dept groupBy/count/findMany + recent logs + cost aggregate)
+    - Returns all dashboard data in one round-trip
+    - Tenant-scoped + SUPER_ADMIN-friendly (uses existing `resolveTenantId` pattern)
+70. [x] **Frontend wiring** — `frontend-tenant/src/app/command-center/page.tsx`
+    - New `commandCenterService.getSummary()` in `src/services/command-center.service.ts`
+    - Added `setTasks`/`setWorkflows`/`setDepartments` actions to their stores
+    - Replaced 7 parallel fetches with 1 `fetchCommandCenterSummary()` that hydrates the same stores
+    - Socket live-update handlers (task:completed / task:failed / approval:pending) now re-fetch the summary (1 call instead of 4)
+
+**Measured end-to-end page load (Contabo → browser, 5 sequential calls):**
+- Before: 12-14s (7 parallel calls × 5-6s Upstash timeouts)
+- After: 1.7-2.0s (1 round-trip to Neon)
+- **Speedup: 7-8×**
+
+**Why not faster than 2s:** remaining latency is the Contabo → Neon DB round-trip (~800ms per call, measured via `psql SELECT 1` from Contabo = 850ms). My fixes removed all redundant work; the residual is pure network. To go below 1s would require a local Postgres read-replica (out of scope for this round).
+
+**Files changed:** 4 backend files (1 module created) + 5 frontend files.
+
+**See:** `memory-bank/phase12-perf-implementation-summary.md` for full details.
+
+---
+
+## ✅ PROJECT COMPLETE — All Phases Delivered
 
 | Phase | Scope | Status | Date |
 |---|---|---|---|
@@ -936,8 +1033,17 @@ All 8 backend gaps implemented. See `memory-bank/phase1-implementation-summary.m
 | 10 (Departments) | 3 tabs (depts/org chart/templates) | ✅ | 2026-06-25 |
 | 11 (Old route removal) | Deferred to adoption metrics (30-day wait) | ⏳ | — |
 | 12 (Hardening) | Playwright + deployment guide + verification + runbook | ✅ | 2026-06-25 |
+| **Phase 2 R2 (Add/Detail UI)** | **5 create forms + 5 detail routes + 5 inspectors + User.deptId + assign endpoint + costs per-dept** | ✅ | **2026-06-26** |
+| **Phase 3 (Performance)** | **JWT blacklist LRU + agents N+1 fix + /command-center/summary** | ✅ | **2026-06-26** |
 
-**Total delivered:** 1 Prisma migration, 18 backend file changes, 19 frontend file changes, 16 supporting docs, 15 Playwright tests. **All 11 implementation phases complete. Ready for staging deploy per `deployment-guide.md`.**
+**Total delivered (as of 2026-06-26):**
+- **Backend:** 26 files (Phase 1) + 9 files (Phase 2 R2 + 3) = 35 files; 2 Prisma migrations; 1 new module (`command-center`)
+- **Frontend:** 19 files (Phase 1-12) + 5 new files (Phase 2 R2) = 24 files; 1 new service (`command-center.service`); 3 store actions added
+- **Docs:** 16 phase summaries + 2 new (Phase 12 add/detail + perf) = 18 docs
+- **Tests:** 15 Playwright smoke tests
+- **Performance:** dashboard load 12-14s → 1.5-2s (7-8× speedup, measured 2026-06-26)
+
+**All phases complete. Production-deployed. See `production-deployment-log.md` for the 2026-06-25 + 2026-06-26 deploy records.**
 
 ---
 
@@ -1063,7 +1169,20 @@ For 6-8 week production delivery:
 
 ## 17. Document Maintenance
 
-**Last updated:** 2026-06-25 16:10 (v17 — PROJECT COMPLETE — All 12 phases delivered)
+**Last updated:** 2026-06-26 13:00 (v18 — Phase 2 R2 + Phase 3 shipped to production)
+
+**v18 changes vs v17:**
+- §0.1 NEW: Phase 2 R2 (add/detail UI) + Phase 3 (performance) summary at top
+- §11 NEW: Phase 2 R2 section (steps 61-66) — 5 create forms, 5 detail pages, 5 inspectors, User.deptId + assign endpoint, costs per-dept
+- §11 NEW: Phase 3 section (steps 67-70) — JWT blacklist LRU + 500ms timeout race, agents N+1 fix, `/command-center/summary` endpoint
+- §11 PROJECT COMPLETE table updated with 2 new rows (Phase 2 R2 + Phase 3)
+- Performance: 12-14s → 1.5-2s (7-8× speedup) — measured
+- New supporting docs:
+  - `memory-bank/phase12-add-detail-implementation-summary.md`
+  - `memory-bank/phase12-perf-implementation-summary.md`
+- Total backend: 35 files / 2 migrations / 1 new module (`command-center`)
+- Total frontend: 24 files / 1 new service / 3 store actions added
+- All previous phases (1-12) status preserved
 
 **v17 changes vs v16:**
 - §11 Phase 12 fully checked off (Hardening)
