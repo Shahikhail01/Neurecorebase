@@ -291,6 +291,7 @@ model Tenant {
   crmConnectors     CrmConnector[]
   tenantLimit       TenantLimit?
   oauthTokens       OAuthToken[]
+  integrationCredentials IntegrationCredential[]
   invoices          Invoice[]
   expenses          Expense[]
   billingEvents     BillingEvent[]
@@ -319,7 +320,7 @@ model Tenant {
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
-  passwordHash String
+  passwordHash String?   // Optional: null for Google Sign-In users who have no password
   firstName    String
   lastName     String
   role         UserRole  @default(USER)
@@ -328,6 +329,10 @@ model User {
   isVerified   Boolean   @default(false)
   lastLoginAt  DateTime?
   metadata     Json      @default("{}")
+
+  // Google Sign-In identity (unique — one account per Google ID)
+  googleId       String?  @unique
+  googlePicture  String?
 
   // Tenant relation — null for SUPER_ADMIN / PLATFORM_ADMIN
   tenantId String?
@@ -1425,4 +1430,55 @@ model BudgetIncident {
   @@index([budgetPolicyId])
   @@index([status])
   @@map("budget_incidents")
+}
+
+// ─── Integration Credentials (Phase A: Week 1) ─────────────────────────────────
+
+enum IntegrationProvider {
+  GOOGLE
+  BREVO
+  SLACK
+  MICROSOFT
+}
+
+enum IntegrationStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  PENDING
+}
+
+model IntegrationCredential {
+  id          String             @id @default(uuid())
+  tenantId    String
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider    IntegrationProvider
+  label       String?            // Human-readable label e.g. "Google Workspace"
+  status      IntegrationStatus  @default(PENDING)
+
+  // Encrypted credentials (AES-256-GCM)
+  // Structure varies by provider:
+  // GOOGLE: { accessToken, refreshToken, expiryDate, scopes }
+  // BREVO: { apiKey }
+  // SLACK: { botToken, signingSecret }
+  // MICROSOFT: { accessToken, refreshToken, expiryDate }
+  encryptedCredentials String     @db.Text
+
+  // OAuth-specific fields
+  scopes      String[]          @default([])
+  expiresAt   DateTime?
+  lastSyncAt  DateTime?
+
+  // Token from Google (used for redirect URI validation)
+  state       String?
+
+  metadata    Json              @default("{}")
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([tenantId, provider])
+  @@index([tenantId])
+  @@index([status])
+  @@map("integration_credentials")
 }

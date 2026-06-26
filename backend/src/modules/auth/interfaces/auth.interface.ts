@@ -9,6 +9,7 @@ export interface IAuthService {
     password: string,
     meta: RequestMeta,
   ): Promise<AuthResult>;
+  googleSignIn(data: GoogleSignInInput): Promise<AuthResult>;
   refresh(refreshToken: string): Promise<TokenPair>;
   logout(userId: string, jti: string): Promise<void>;
   validateUser(email: string, password: string): Promise<ValidatedUser | null>;
@@ -21,6 +22,14 @@ export interface RegisterInput {
   lastName: string;
   role?: UserRole;
   tenantId?: string;
+}
+
+export interface GoogleSignInInput {
+  googleId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  googlePicture?: string;
 }
 
 export interface AuthResult {

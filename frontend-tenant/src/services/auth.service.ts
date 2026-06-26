@@ -13,6 +13,15 @@ export const authService = {
     return result;
   },
 
+  async googleSignIn(idToken: string): Promise<AuthResult> {
+    const res = await api.post('/auth/google', { idToken });
+    const result = unwrapItem(res) as AuthResult;
+    if (result?.tokens) {
+      tokenManager.setTokens(result.tokens.accessToken, result.tokens.refreshToken);
+    }
+    return result;
+  },
+
   async register(payload: RegisterPayload): Promise<AuthResult> {
     const res = await api.post('/auth/register', payload);
     const result = unwrapItem(res) as AuthResult;

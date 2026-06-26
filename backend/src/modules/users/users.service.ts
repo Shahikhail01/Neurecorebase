@@ -247,4 +247,3 @@ async deactivate(id: string, tenantId?: string) {
     });
   }
 }
-}

@@ -14,6 +14,7 @@ import {
   AuthResult,
   ValidatedUser,
   RequestMeta,
+  GoogleSignInInput,
 } from '../interfaces/auth.interface';
 import { TokenPair } from '../interfaces/token.interface';
 import { UserRole } from '@prisma/client';
@@ -36,6 +37,9 @@ export class AuthService implements IAuthService {
   ): Promise<ValidatedUser | null> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !user.isActive) return null;
+
+    // Google Sign-In users have no password
+    if (!user.passwordHash) return null;
 
     const valid = await this.passwordService.compare(
       password,
@@ -135,6 +139,67 @@ export class AuthService implements IAuthService {
     await this.tokenService.revokeAccessToken(jti, 15 * 60); // 15 min safety window
     await this.tokenService.revokeAllRefreshTokens(userId);
     this.logger.log(`User logged out: ${userId}`);
+  }
+
+  async googleSignIn(data: GoogleSignInInput): Promise<AuthResult> {
+    // Check if user exists by email
+    const existingByEmail = await this.prisma.user.findUnique({
+      where: { email: data.email },
+    });
+
+    if (existingByEmail) {
+      // User exists - link Google ID if not already linked
+      if (!existingByEmail.googleId) {
+        await this.prisma.user.update({
+          where: { id: existingByEmail.id },
+          data: {
+            googleId: data.googleId,
+            googlePicture: data.googlePicture,
+          },
+        });
+        this.logger.log(`Google ID linked: ${data.email}`);
+      }
+      const validated = this.toValidatedUser(existingByEmail);
+      const tokens = await this.tokenService.issueTokenPair(validated);
+      this.logger.log(`User logged in via Google: ${data.email}`);
+      return { user: validated, tokens };
+    }
+
+    // User doesn't exist - create new account with tenant
+    // Find default tier for new tenants
+    const defaultTier = await this.prisma.tier.findFirst({
+      where: { isDefault: true },
+    });
+    if (!defaultTier) {
+      throw new Error('No default tier found. Please contact support.');
+    }
+
+    const tenant = await this.prisma.tenant.create({
+      data: {
+        name: data.email.split('@')[1]?.replace('.', ' ').replace(/^\w/, c => c.toUpperCase()) ?? 'Personal',
+        slug: `tenant-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        tierId: defaultTier.id,
+      },
+    });
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        googleId: data.googleId,
+        googlePicture: data.googlePicture,
+        role: UserRole.OWNER,
+        tenantId: tenant.id,
+        isActive: true,
+        isVerified: true,
+      },
+    });
+
+    const validated = this.toValidatedUser(user);
+    const tokens = await this.tokenService.issueTokenPair(validated);
+    this.logger.log(`User registered via Google: ${user.email} tenant=${tenant.id}`);
+    return { user: validated, tokens };
   }
 
   private toValidatedUser(user: {

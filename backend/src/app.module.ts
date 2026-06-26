@@ -30,6 +30,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { ConnectorsModule } from './modules/connectors/connectors.module';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { ReliabilityModule } from './modules/reliability/reliability.module';
 import { AgentTemplatesModule } from './modules/agent-templates/agent-templates.module';
@@ -87,6 +88,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     // Phase 4 — Analytics Engine, CRM Connectors, Financial Module & Reliability
     AnalyticsModule,
     ConnectorsModule,
+    IntegrationsModule, // Phase A: Google Workspace + Brevo OAuth
     FinanceModule,
     ReliabilityModule,
 
