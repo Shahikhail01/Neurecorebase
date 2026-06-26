@@ -28,13 +28,22 @@ export function AIChatPanel({ isOpen, onClose, pageContext }: AIChatPanelProps) 
     useAIChat(pageContext);
 
   const [input, setInput] = useState('');
+  const [submittingPrompt, setSubmittingPrompt] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const text = input.trim();
-    if (!text) return;
+    if (!text || isTyping) return; // gate: prevent double-submit
     setInput('');
     await send(text);
+  };
+
+  // Gated wrapper for starter buttons so a rapid double-click does not
+  // send the same prompt twice (regression: produced duplicate user/AI pairs).
+  const handleStarterClick = (prompt: string) => {
+    if (isTyping || submittingPrompt) return;
+    setSubmittingPrompt(prompt);
+    applySuggestion(prompt).finally(() => setSubmittingPrompt(null));
   };
 
   return (
@@ -103,8 +112,9 @@ export function AIChatPanel({ isOpen, onClose, pageContext }: AIChatPanelProps) 
                     {STARTER_PROMPTS.map((p) => (
                       <button
                         key={p}
-                        onClick={() => applySuggestion(p)}
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2.5 text-left text-xs text-zinc-300 hover:border-zinc-700 hover:bg-zinc-800/50 transition-colors"
+                        onClick={() => handleStarterClick(p)}
+                        disabled={isTyping || submittingPrompt !== null}
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2.5 text-left text-xs text-zinc-300 hover:border-zinc-700 hover:bg-zinc-800/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-zinc-800 disabled:hover:bg-zinc-900/50"
                       >
                         {p}
                       </button>
@@ -117,7 +127,8 @@ export function AIChatPanel({ isOpen, onClose, pageContext }: AIChatPanelProps) 
                     <AIChatMessage
                       key={msg.id}
                       message={msg}
-                      onSuggestionSelect={applySuggestion}
+                      onSuggestionSelect={handleStarterClick}
+                      suggestionsDisabled={isTyping || submittingPrompt !== null}
                     />
                   ))}
                   <AnimatePresence>

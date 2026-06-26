@@ -30,9 +30,11 @@ function MiniChart({ data }: { data: { label: string; value: number }[] }) {
 function Suggestions({
   items,
   onSelect,
+  disabled = false,
 }: {
   items: string[];
   onSelect: (text: string) => void;
+  disabled?: boolean;
 }) {
   if (!items.length) return null;
   return (
@@ -41,7 +43,8 @@ function Suggestions({
         <button
           key={s}
           onClick={() => onSelect(s)}
-          className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-indigo-600 hover:text-indigo-300 transition-colors"
+          disabled={disabled}
+          className="rounded-full border border-zinc-700 bg-zinc-800/60 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-indigo-600 hover:text-indigo-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-zinc-700"
         >
           {s}
         </button>
@@ -54,9 +57,10 @@ function Suggestions({
 interface AIChatMessageProps {
   message:    ChatMessage;
   onSuggestionSelect: (text: string) => void;
+  suggestionsDisabled?: boolean;
 }
 
-export function AIChatMessage({ message, onSuggestionSelect }: AIChatMessageProps) {
+export function AIChatMessage({ message, onSuggestionSelect, suggestionsDisabled = false }: AIChatMessageProps) {
   const isUser = message.role === 'user';
 
   return (
@@ -92,6 +96,7 @@ export function AIChatMessage({ message, onSuggestionSelect }: AIChatMessageProp
           <Suggestions
             items={message.metadata.suggestions}
             onSelect={onSuggestionSelect}
+            disabled={suggestionsDisabled}
           />
         )}
 

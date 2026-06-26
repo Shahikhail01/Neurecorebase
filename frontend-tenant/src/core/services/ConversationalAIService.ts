@@ -128,19 +128,24 @@ export class ConversationalAIService implements IConversationalAIService {
   ): ChatMessageMetadata & { cleanedReply: string } {
     let cleanedReply = reply;
 
-    // Try to extract embedded JSON from reply
-    const jsonMatch = reply.match(/\{[\s\S]*?"chartType"[\s\S]*?\}/);
-    if (jsonMatch) {
+    // Extract embedded JSON by finding the first '{' that begins a chart block
+    // and matching braces to the closing '}'. Previous regex /\{[\s\S]*?"chartType"[\s\S]*?\}/
+    // was non-greedy and stopped at the first inner '}' (inside chartData items),
+    // which produced invalid JSON and left the raw text in the bubble.
+    const extracted = this._extractFirstJsonObject(reply);
+    if (extracted && /"chartType"\s*:/.test(extracted)) {
       try {
-        const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
-        cleanedReply = reply.replace(jsonMatch[0], "").trim();
-        return {
-          cleanedReply,
-          chartType: parsed.chartType as ChatMessageMetadata["chartType"],
-          chartData:
-            (parsed.chartData as ChatMessageMetadata["chartData"]) ?? [],
-          suggestions: (apiData?.suggestions as string[]) ?? [],
-        };
+        const parsed = JSON.parse(extracted) as Record<string, unknown>;
+        if (parsed.chartType) {
+          cleanedReply = reply.replace(extracted, "").trim();
+          return {
+            cleanedReply,
+            chartType: parsed.chartType as ChatMessageMetadata["chartType"],
+            chartData:
+              (parsed.chartData as ChatMessageMetadata["chartData"]) ?? [],
+            suggestions: (apiData?.suggestions as string[]) ?? [],
+          };
+        }
       } catch {
         /* fall through */
       }
@@ -153,6 +158,46 @@ export class ConversationalAIService implements IConversationalAIService {
       suggestions:
         (apiData?.suggestions as string[]) ?? this._inferSuggestions(reply),
     };
+  }
+
+  /**
+   * Find the first balanced {...} block in `text`. Returns the JSON string
+   * (including the outer braces) or null if no balanced block is found.
+   *
+   * The reply may look like:
+   *   "...summary text.\n\n{\n  \"chartType\": \"pie\",\n  \"chartData\": [\n    {...}, ...\n  ]\n}"
+   * and a naive /\{.*?\}/ regex would stop at the first inner '}'.
+   */
+  private _extractFirstJsonObject(text: string): string | null {
+    const start = text.indexOf("{");
+    if (start < 0) return null;
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
+      if (inString) {
+        if (escape) {
+          escape = false;
+        } else if (ch === "\\") {
+          escape = true;
+        } else if (ch === '"') {
+          inString = false;
+        }
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+      } else if (ch === "{") {
+        depth++;
+      } else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          return text.substring(start, i + 1);
+        }
+      }
+    }
+    return null;
   }
 
   /** Rule-based offline fallback — when API is unavailable */
