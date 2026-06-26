@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -13,6 +14,7 @@ import {
   Mail,
   Calendar,
   Drive,
+  ChevronRight,
   Sheet,
 } from 'lucide-react';
 
@@ -107,10 +109,17 @@ function GoogleIntegrationCard({
 
       <div className="mt-4 flex gap-2">
         {integration.connected ? (
-          <Button variant="destructive" size="sm" onClick={onDisconnect} disabled={loading}>
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
-            Disconnect
-          </Button>
+          <>
+            <Link href="/settings/integrations/google">
+              <Button size="sm">
+                <ChevronRight className="w-4 h-4" /> Manage
+              </Button>
+            </Link>
+            <Button variant="destructive" size="sm" onClick={onDisconnect} disabled={loading}>
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+              Disconnect
+            </Button>
+          </>
         ) : (
           <Button size="sm" onClick={onConnect} disabled={loading}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}

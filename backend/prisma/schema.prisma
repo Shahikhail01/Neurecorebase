@@ -260,6 +260,10 @@ model Tenant {
   settings   Json         @default("{}")
   metadata   Json         @default("{}")
 
+  // Phase B: Google Workspace identifiers (cached after first connect)
+  googleDriveRootFolderId String?
+  googleCalendarId        String?
+
   // Tier relation (Phase 6: replaces plan + agentLimit)
   tierId String
   tier   Tier   @relation(fields: [tierId], references: [id])
@@ -507,6 +511,9 @@ model Agent {
   // Template info stored for reference (template may change, agent keeps snapshot)
   templateId      String?
   templateVersion String?
+
+  // Phase B: Google Drive folder for this agent (auto-created on Google connect)
+  googleDriveFolderId String?
 
   // Whether this agent slot is active for this tenant
   // Tenant can toggle selected agents within their tier allocation

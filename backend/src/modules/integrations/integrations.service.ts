@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IntegrationProvider, IntegrationStatus } from '@prisma/client';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { PrismaIntegrationCredentialStore, GoogleCredentials } from './services/integration-credential.store';
 
 const GOOGLE_SCOPES = [
@@ -18,6 +19,7 @@ export class IntegrationsService {
   constructor(
     private readonly credentialStore: PrismaIntegrationCredentialStore,
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async initiateGoogleOAuth(tenantId: string, redirectUri?: string): Promise<{ url: string; state: string }> {
@@ -132,6 +134,13 @@ export class IntegrationsService {
 
   async disconnectGoogle(tenantId: string): Promise<void> {
     await this.credentialStore.delete(tenantId, IntegrationProvider.GOOGLE);
+    // Clear cached Google identifiers on tenant
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { googleDriveRootFolderId: null, googleCalendarId: null },
+    }).catch(() => {
+      // Tenant update is best-effort cleanup
+    });
     this.logger.log(`Google OAuth disconnected for tenant ${tenantId}`);
   }
 
