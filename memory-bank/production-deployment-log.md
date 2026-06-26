@@ -605,3 +605,85 @@ await p.screenshot({path:'/tmp/ai-test.png'});await b.close()})()"
 
 - [`ai-chat-architecture.md`](./ai-chat-architecture.md) — full system diagram, endpoint schemas, error handling matrix, future enhancements
 - [`new_neurecore.md`](./new_neurecore.md) — top-level summary with quick reference table
+
+---
+
+## Session 3.5 — Ask AI regressions (2026-06-26)
+
+User reported 3 issues from a chat session:
+1. "First click on a question (already listed) does nothing. Second click starts chat, but produces two ans."
+2. "AI mentions json in all answers" (literal `{ "chartType": "pie", ... }` rendered in the bubble)
+3. (Implicit) suggestion chips in AI replies could also double-fire
+
+### Fix 21: Double-click → 2 messages (regression)
+
+**Root cause:** Starter prompt buttons (`STARTER_PROMPTS`) in `AIChatPanel.tsx` had no in-flight guard. A rapid double-click registered two clicks before React unmounted the button, calling `applySuggestion(p)` twice → 2 user messages + 2 AI replies.
+
+**Fix:**
+- Added local `submittingPrompt` state in `AIChatPanel`
+- Wrapped starter handler in `handleStarterClick()` that short-circuits when `isTyping || submittingPrompt !== null`
+- Same gate threads down via new `suggestionsDisabled` prop on `AIChatMessage` → `Suggestions` (so the "Show me all agents" / "Show pending tasks" chips can't double-fire either)
+- `disabled` styling added: `disabled:opacity-50 disabled:cursor-not-allowed`
+
+**Verified:** Rapid double-click on starter → 1 AI call (was 2). User msg + AI reply: 1 each.
+
+### Fix 22: Literal JSON leak in chat bubble
+
+**Root cause:** `_parseMetadata()` in `ConversationalAIService.ts` used regex:
+```ts
+reply.match(/\{[\s\S]*?"chartType"[\s\S]*?\}/)
+```
+This is non-greedy and stops at the FIRST `}` — which is inside the chartData items (`{ label: "IDLE", value: 7 }`). The substring is invalid JSON, `JSON.parse` throws, the catch falls through, and the raw chart block stays as literal text in the chat bubble.
+
+**Fix:** Replaced with hand-rolled brace-balancing scanner that is string-aware (handles `\"` escapes inside `"` strings):
+```ts
+private _extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0, inString = false, escape = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) { /* handle escapes */ continue; }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return text.substring(start, i + 1);
+    }
+  }
+  return null;
+}
+```
+
+**Verified:** AI reply now renders as proper bar chart HTML (`<div class="flex items-end gap-1.5 h-16">...<span>IDLE</span>...`) instead of literal `{ "chartType": "pie", ... }` text.
+
+### Fix 23: Suggestion chip double-fire (bonus)
+
+Same root cause as Fix 21 — suggestion chips in the AI reply also called `onSuggestionSelect` which routed to the same unguarded `applySuggestion`. Threaded the `suggestionsDisabled` prop down so they're also disabled while a request is in flight.
+
+### Files changed
+
+```
+frontend-tenant/src/core/services/ConversationalAIService.ts   (Fix #22 — _extractFirstJsonObject)
+frontend-tenant/src/features/ai-chat/components/AIChatPanel.tsx (Fix #21 — handleStarterClick + submittingPrompt state)
+frontend-tenant/src/features/ai-chat/components/AIChatMessage.tsx (Fix #23 — suggestionsDisabled prop)
+```
+
+### Commit
+
+```
+09def1ed fix(chat): 3 regressions — duplicate send, JSON leak, suggestion gating
+```
+
+### Lesson learned
+
+- **Non-greedy regex on nested structures**: `{.*?}` is brittle when the payload contains nested objects. Use a parser, not a regex, when the structure can nest.
+- **All clickable elements that fire async requests need an in-flight guard**, not just form-submit buttons. Starter chips, suggestion chips, retry buttons — every one is a double-click hazard.
+- **String-aware brace matching**: a naive depth counter breaks on `}` inside JSON string values. Track `inString` + escape state.
+
+### Verified end-to-end behavior
+
+```
+Q: "Reply with chart data: status breakdown"
+A: (HTML bar chart rendered with IDLE bar, not literal JSON)
+```
