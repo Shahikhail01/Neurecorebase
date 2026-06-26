@@ -1,14 +1,29 @@
 # Progress Tracking — NeureCore
 
 **Last Updated**: 2026-06-26
-**Current Phase**: All implementation phases complete (Phase 1-12 + Phase 2 R2 + Phase 3 perf)
-**Overall Status**: 🟢 **Production-live** with 7-8× dashboard performance improvement (12-14s → 1.5-2s)
+**Current Phase**: All implementation phases complete (Phase 1-12 + Phase 2 R2 + Phase 3 perf) + AI Tool Calling P1 (66 tools)
+**Overall Status**: 🟢 **Production-live** with 7-8× dashboard performance improvement (12-14s → 1.5-2s) + 72 AI tools
 
-> **Note on scope:** This document was originally the Phase 1 Foundation tracker. The actual current state is the production-deployed UI rebuild (Phases 1-12) + Add/Detail UI (Phase 2 R2) + Performance (Phase 3). For the comprehensive implementation plan, see `memory-bank/new_neurecore.md` v4.0. For deploy records, see `memory-bank/production-deployment-log.md`.
+> **Note on scope:** This document was originally the Phase 1 Foundation tracker. The actual current state is the production-deployed UI rebuild (Phases 1-12) + Add/Detail UI (Phase 2 R2) + Performance (Phase 3) + AI Tool Calling P1. For the comprehensive implementation plan, see `memory-bank/new_neurecore.md` v4.0. For deploy records, see `memory-bank/production-deployment-log.md`.
 
 ---
 
-## Most Recent — Session 4 (2026-06-26) — Phase 2 R2 + Phase 3 Perf
+## Most Recent — Session 7 (2026-06-26) — AI Tool Calling P1: 66 Tools
+
+| Item | Status | Notes |
+|---|---|---|
+| P1 66 tools | ✅ Deployed | Department (5), Agent (8), Project (5), Task (16), Approval (10), Budget (6), Company (3), Notifications (3), Reporting (2), Inbox (4) |
+| Total tools registered | ✅ 72 unique | 74 injected, http_request + calculator overwritten by enhanced versions |
+| Bug fix | ✅ | `StructuredToolRegistry` `OnModuleInit` removed — was running before `ToolsModule.onModuleInit()` |
+| TypeScript errors | ✅ Fixed | 4 errors resolved (tenantId cast, Project._count, JsonValue, duplicate type property) |
+| Backend | ✅ Restarted (pid 349359) | Health check: `GET /api/v1/health` returns 200 |
+| Files modified | ✅ | `neurecore-tools.ts`, `tools.module.ts`, `structured-tool.registry.ts` |
+
+See: `memory-bank/ai-tool-calling-implementation-plan.md` — P1 section
+
+---
+
+## Previous — Session 4 (2026-06-26) — Phase 2 R2 + Phase 3 Perf
 
 | Item | Status | Notes |
 |---|---|---|

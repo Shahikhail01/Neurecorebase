@@ -1,7 +1,7 @@
 # Implementation Plan: AI Agent Tool Calling for NeureCore
 
 **Date:** 2026-06-26
-**Status:** PHASES 1-4 COMPLETED, DEPLOYED
+**Status:** ALL PHASES COMPLETED, DEPLOYED — P1 66 TOOLS SHIPPED
 **Goal:** Enable users to instruct AI agents to perform actions (create projects, tasks, etc.) via chat
 
 ---
@@ -324,6 +324,34 @@ if (intent === 'action') {
 ### ⏸ Phase 5: Consolidate State Machines (DEFERRED)
 
 **Decision:** Keep `langgraph-official.ts` as canonical. Deprecate `agent-state-machine.ts` but keep for reference.
+
+---
+
+### ✅ P1: 66 Additional Tools Implemented (2026-06-26)
+
+**Deployed to Contabo** — 72 unique tools registered (74 injected, 2 duplicates: http_request, calculator overwritten)
+
+| Domain | Tools Added |
+|--------|-----------|
+| Department | updateDepartment, archiveDepartment, deleteDepartment, assignManager, unassignManager |
+| Agent | getAgent, updateAgent, archiveAgent, assignAgentToDepartment, removeAgentFromProject, bulkCreateAgents, bulkAssignToDepartment, getAgentWorkload |
+| Project | getProject, updateProject, archiveProject, deleteProject, cloneProject |
+| Task | getTask, updateTask, deleteTask, assignTask, unassignTask, markTaskComplete, markTaskInProgress, reopenTask, changeTaskPriority, addSubtask, listSubtasks, getMyTasks, getOverdueTasks, bulkAssignTasks, bulkChangeStatus, cloneTask |
+| Approval | listPendingApprovals, getApproval, approveRequest, rejectRequest, bulkApprove, bulkReject, createApprovalRequest, getMyPendingApprovals, resubmitApproval, cancelApprovalRequest |
+| Budget/Cost | getCostReport, getCostByDepartment, getCostByAgent, getCostByProject, setBudgetAlert, getTodayCost |
+| Company | getCompanyProfile, updateCompanyProfile, getTenantSettings |
+| Notifications | getMyNotifications, markNotificationRead, markAllNotificationsRead |
+| Reporting | getDashboardSummary, getOverdueTaskReport |
+| Inbox | getInboxSummary, listInboxItems, getInboxItem, respondToInboxItem |
+
+**Bug Fixed During P1:**
+- `StructuredToolRegistry` had `OnModuleInit` interface — ran BEFORE `ToolsModule.onModuleInit()`, causing 0 tools registered. Fixed by removing `implements OnModuleInit` and moving registration into `setTools()`.
+
+**TypeScript Errors Fixed:**
+- `tenantId: context.tenantId` → `tenantId: context.tenantId as string` in `BulkCreateAgentsTool`
+- `Project._count` removed from `GetProjectTool` (Prisma doesn't support it); replaced with separate `goal.count()`
+- `input: original.input` → `input: original.input as any` for JsonValue casting
+- Duplicate `type` property in `GetInboxItemTool` response object
 
 ---
 
