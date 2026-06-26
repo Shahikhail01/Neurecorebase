@@ -832,6 +832,64 @@ GET /api/v1/command-center/summary → 200 OK in 1.7-2.0s (5 sequential calls)
 
 ---
 
+## Session 5 — MiniMax M2.5 Upgrade (2026-06-26)
+
+**Date:** 2026-06-26
+**Operator:** Kilo (ssh contabo + git push)
+**Duration:** ~20 minutes
+**Outcome:** ✅ SUCCESS — MiniMax M2.5 deployed to Contabo backend
+
+### Changes
+
+**`neurecore-base/neurecore` (git, pushed to GitHub `0213e053`):**
+
+| File | Change |
+|------|--------|
+| `backend/src/modules/models/services/minimax-client.service.ts` | Default model `MiniMax-Text-01` → `MiniMax-M2.5`; default base URL `api.minimax.chat` → `api.minimaxi.com/v1` |
+| `backend/src/modules/models/services/model-routing.service.ts` | Added `minimax-m2.5` to model registry (1M context window, all capabilities) |
+| `.env.example` | Fixed typo `mini-mini-Text-01` → `MiniMax-M2.5`; updated base URL |
+
+**Contabo `/opt/neurecore/backend/backend/` (live, no git):**
+
+| File | Change |
+|------|--------|
+| `src/modules/models/services/minimax-client.service.ts` | Default model → `MiniMax-M2.5`; base URL → `api.minimaxi.com/v1` |
+| `src/modules/models/services/model-routing.service.ts` | Added `minimax-m2.5` to registry |
+| `.env` | Already had `MINIMAX_MODEL=MiniMax-M2.5` + `MINIMAX_BASE_URL=https://api.minimax.io/v1` — no change needed |
+
+### Deploy steps on Contabo
+
+```bash
+# 1. Edit source files directly (no git on Contabo)
+python3 << 'PYEOF'
+# (model-routing + minimax-client updates)
+PYEOF
+
+# 2. Build
+cd /opt/neurecore/backend/backend && npm run build
+
+# 3. Restart
+pm2 restart neurecore-backend
+
+# 4. Verify
+pm2 logs neurecore-backend --lines 10 --nostream
+```
+
+### Verification
+
+- M2.5 API smoke test: `POST https://api.minimax.io/v1/chat/completions` with model `MiniMax-M2.5` → `200 OK`
+- Backend `/api/v1/agent-templates?limit=1` → `HTTP 200` in ~1.2s
+- `pm2 logs` shows no errors from the restart
+
+### Notes
+
+- Contabo `.env` was already set to `MINIMAX_MODEL=MiniMax-M2.5` and `MINIMAX_BASE_URL=https://api.minimax.io/v1` — the env vars were correct even before the code update
+- The `neurecore-base/neurecore` repo and the Contabo `/opt/neurecore/backend/` are separate deployments; Contabo has no git, so changes must be applied manually via `ssh contabo`
+- M2.5 model ID: `MiniMax-M2.5` (or `MiniMax-M2.5-highspeed` for faster variant); API endpoint: `https://api.minimaxi.com/v1` (or `https://api.minimax.io/v1` which also works)
+- The Contabo backend at `/home/lifeosa.online/backend` is a DIFFERENT project (lifeosa/ecoearthshop); the neurecore backend runs from `/opt/neurecore/backend/backend/`
+
+---
+
 ## Related Docs
 
 - `memory-bank/new_neurecore.md` v4.0 — main plan with §0.1 (Phase 2 R2 + Phase 3 summary) and §11 (steps 61-70)

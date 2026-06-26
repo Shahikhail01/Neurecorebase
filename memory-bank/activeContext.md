@@ -2,9 +2,20 @@
 
 ## Last Updated
 
-2026-06-26T07:55:00Z (Session 4 — Phase 2 R2 + Phase 3 perf shipped)
+2026-06-26T13:18:00Z (Session 5 — MiniMax M2.5 deployed)
 
-## Most Recent Operations (Session 4 — 2026-06-26)
+## Most Recent Operations (Session 5 — 2026-06-26)
+
+**MiniMax M2.5 Upgrade** ✅ Deployed to production
+- `neurecore-base/neurecore` (git): `minimax-client.service.ts` + `model-routing.service.ts` updated
+- Contabo `/opt/neurecore/backend/backend/`: same files edited directly (no git on Contabo)
+- Default model: `MiniMax-M2.5`; base URL: `api.minimaxi.com/v1`
+- `.env` on Contabo already had `MINIMAX_MODEL=MiniMax-M2.5` + correct API key
+- Backend restarted (pid 270856), healthy — `HTTP 200` in ~1.2s on smoke test
+
+See `memory-bank/production-deployment-log.md` Session 5 for full details.
+
+## Previous Operations (Session 4 — 2026-06-26)
 
 **Phase 2 R2 — Add/Detail UI** ✅ Shipped to production
 - 5 create forms, 5 detail pages, 5 inspectors, 2 primitives
