@@ -132,6 +132,84 @@ Awaiting user PR review and merge to `main`.
 
 ---
 
+## 2026-06-27 17:50 · Phase 1 — Tier A (backend) + Tier B (frontend-eaos)
+
+### Task 1.1 + 1.7 — Swagger + OpenAPI bootstrap (commit `506d511e`)
+
+- Added `@nestjs/swagger ^7.4.0` to backend dependencies (manual `pnpm install` due to v10→v11 store layout change)
+- `nest-cli.json` plugin configured: `classValidatorShim: true, introspectComments: true`
+- `main.ts` builds DocumentBuilder with:
+  - Bearer auth (JWT)
+  - X-Tenant-ID header (platform role override)
+  - Idempotency-Key header
+  - Dev + production servers
+- `SwaggerModule.createDocument` builds the OpenAPI 3.1 spec
+- Persists to `backend/openapi/openapi.json` on every boot (write failures non-blocking)
+- SwaggerModule.setup mounts Swagger UI at `/api/docs`
+- `/api` root response now lists `/api/docs` + `/api/docs-json`
+- tsc: clean; nest build: succeeds
+
+### Task 1.2 — Canonical DTOs + envelopes (commit `36e9ebc5`)
+
+- `common/dto/pagination.dto.ts`: PaginationDto with page + limit (1-indexed, default 20, max 100)
+- `common/dto/id-param.dto.ts`: IdParamDto with @IsUUID() id field
+- `common/responses/paginated.response.ts`: PaginatedResponse<T> generic with items[] + pagination{page,limit,total,totalPages}
+- `common/responses/action-result.response.ts`: ActionResult<T> with success, message, optional data, optional warnings
+- All decorated with @ApiProperty / @ApiPropertyOptional so OpenAPI schema is correct
+- tsc: clean
+
+### Task 1.4 — TenantContextService + AsyncLocalStorage middleware (commit `4a5fdfb6`)
+
+- `common/context/tenant-context.ts`: TenantContext value type (tenantId, isCrossTenant, actorRole, actorUserId)
+- `common/context/tenant-context.service.ts`: TenantContextService using Node's AsyncLocalStorage
+  - `run(ctx, fn)` to bind context for request scope
+  - `get()` (throws if outside scope), `tenantId` getter, `getOrNull()` for background jobs
+- `common/context/tenant-context.middleware.ts`: NestMiddleware that runs after JwtAuthGuard
+  - Reads `req.user`, calls `resolveTenantContext()`, binds to ALS via `tenantContextService.run()`
+  - No-op for `@Public()` routes (no req.user)
+- `app.module.ts`: registers TenantContextMiddleware globally; adds TenantContextService to providers
+- tsc: clean
+- This is the foundation for removing the 15+ duplicate per-controller `resolveTenantId` methods
+
+### Tasks 1.8 + 1.9 — agents controller returns canonical envelopes (commit `80a2ed31`)
+
+- `dto/agent-response.dto.ts`: AgentResponseDto wire shape (12 safe fields, excludes internal `permissions` JSON)
+- `agents.controller.findAll`: now consumes PaginationDto, returns `PaginatedResponse<AgentResponseDto>` with {items, pagination:{...}}
+- `agents.controller.pause`: now returns `ActionResult<AgentResponseDto>` with {success:true, message, data}
+- `agents.controller` class decorated with `@ApiTags('agents')` + `@ApiBearerAuth('JWT')`
+- Legacy shapes still exist in other endpoints; agents is the proof of pattern
+- tsc: clean
+
+### Tasks 1.18-1.27 — frontend-eaos bootstrap (commit `94d6242c`)
+
+NEW APP — `frontend-eaos/` (no more `frontend-tenant/` per D-023)
+- `pnpm-workspace.yaml`: includes `frontend-eaos` as a workspace package
+- `package.json`: Next.js 15.0.3, React 19, TS 5.7, Tailwind 3.4, TanStack Query 5.59, react-hook-form, zod, socket.io-client, lucide-react, next-themes, date-fns, openapi-typescript, tailwind-merge
+- `tsconfig.json`: strict mode, @/* path alias
+- `next.config.mjs`: reactStrictMode, standalone output (Vercel), env config
+- `tailwind.config.ts`: NUWS §7.5 design tokens (canvas/state/spacing/radius)
+- `src/app/layout.tsx`: RootLayout with metadata, html lang, body classes, `<Providers>`
+- `src/app/providers.tsx`: ThemeProvider + QueryClientProvider + Toaster + Devtools
+- `src/app/page.tsx`: placeholder landing page ("EAOS — coming soon")
+- `src/app/globals.css`: Tailwind layers + design tokens
+- `src/components/feedback/Toaster.tsx`: singleton toast API with 4 variants (success/error/info/warning), auto-dismiss, aria-live, CustomEvent bus. **This is the FIX for FIX-006 (silently-dropped toasts in the old frontend-tenant).**
+- `src/lib/utils.ts`: cn() helper (clsx + tailwind-merge)
+- pnpm install: ~1,400 packages
+- tsc: clean
+- `next build`: "Compiled successfully" + 4 static pages
+
+### Phase 1 status
+
+**Backend (6/10 done):** 1.1, 1.2, 1.4, 1.7, 1.8, 1.9. Deferred: 1.5, 1.6 (annotations), 1.10 (Prisma). Note: 1.3 was already done in Phase 0.
+
+**`packages/ui/` (0/7 done):** all deferred. Premature extraction — should follow the 10-panel workspace build, not precede it.
+
+**`frontend-eaos/` (4/10 done):** 1.18, 1.19, 1.20, 1.21, 1.25, 1.27. Deferred: 1.22 (codegen — runs after 1.5/1.6), 1.23 (full tokens — partial), 1.24 (feature flags), 1.26 (Vercel).
+
+Awaiting user PR review (9 commits total on `eaos-base`).
+
+---
+
 ## 2026-06-27 15:57 · Decision recorded: D-022
 
 ### Build EAOS as a new frontend (`frontend-eaos`)

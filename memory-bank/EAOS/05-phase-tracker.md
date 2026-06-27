@@ -19,7 +19,7 @@
 | # | Phase | Goal | Weeks | Status | Started | Completed |
 |---|---|---|---|---|---|---|
 | 0 | Safety Lockdown | Fix backend security gaps | 1 | ✅ **Done** (5/5 backend tasks) | 2026-06-27 | 2026-06-27 |
-| 1 | Foundations + `frontend-eaos` scaffold | OpenAPI, tokens, schemas, contract tests, **new app bootstrap**, `packages/ui` extraction | 2 | ⬜ Not started | — | — |
+| 1 | Foundations + `frontend-eaos` scaffold | OpenAPI, tokens, schemas, contract tests, **new app bootstrap**, `packages/ui` extraction | 2 | 🟡 In progress (Tier A+B done, Tier C+D deferred) | 2026-06-27 | — |
 | 2 | Frontend data layer | TanStack Query + design tokens + permission hooks (in `frontend-eaos`; smaller scope) | 1–2 | ⬜ Not started | — | — |
 | 3 | EAOS-1 entity model | Universal entity workspace (10 panels + modal) | 6 | ⬜ Not started | — | — |
 | 4 | EAOS-2 widgets | Widget registry + per-panel visualizations | 4 | ⬜ Not started | — | — |
@@ -78,11 +78,13 @@ All changes are small and additive (guards, helpers, audit logging). If somethin
 
 ---
 
-## Phase 1 — Foundations + `frontend-eaos` Scaffold (Weeks 2–3)
+## Phase 1 — Foundations + `frontend-eaos` Scaffold (Weeks 2–3) 🟡 IN PROGRESS
 
 **Goal:** Make the contract docs enforceable. Every subsequent phase depends on this. **Also bootstrap the new `frontend-eaos/` app and `packages/ui/` shared library.**
 
-**Status:** ⬜ Not started
+**Status:** 🟡 Tier A (backend) + Tier B (frontend scaffold) complete. Tier C (annotations) and Tier D (packages/ui internals) deferred.
+**Started:** 2026-06-27
+**Branch:** `eaos-base`
 **Started:** —
 **Target completion:** —
 **Per-tenant flag:** None

@@ -1,45 +1,76 @@
 # NeureCore — EAOS Active Context
 
-**Last updated:** 2026-06-27 16:55
-**Phase:** 0 (Safety Lockdown) — **ALL 5 BACKEND TASKS DONE**
+**Last updated:** 2026-06-27 17:50
+**Phase:** 1 (Foundations) — **Tier A + Tier B complete** (backend foundation + frontend-eaos bootstrap)
 **Branch:** `eaos-base` (pushed to `origin`)
-**Status:** Phase 0 backend complete. Ready for PR review. Next: Phase 1 (scaffold `frontend-eaos/` + `packages/ui/`).
+**Status:** Phase 1 in progress. Tier A (backend) + Tier B (frontend scaffold) done. Deferring Tier C (annotations + Prisma) and Tier D (packages/ui internals).
 
 ---
 
 ## Current focus
 
-**Phase 0 backend complete.** All 5 backend security tasks shipped. Phase 0 frontend tasks were eliminated (per D-023 — `frontend-tenant/` deleted, no old frontend to fix). The 4 commits on `eaos-base`:
+**Phase 1 — Tier A + Tier B complete.** 5 new commits on `eaos-base` since Phase 0 wrap:
 
 | Commit | Task | Files |
 |---|---|---|
-| `c00dff57` | 0.1, 0.2 (D-016, D-015) | tools.controller, tiers/* import fix, security.types.ts rewrite, removed dead guards |
-| `795702dd` | 0.3 (D-014) | agent-streaming.controller: JwtAuthGuard + session ownership check |
-| `8d6fe982` | 0.4 (D-013) | audit.interceptor: wires AuditService.log() for POST/PATCH/DELETE |
-| `4ef6ef97` | 0.5 (D-016) | resolve-tenant-context.ts + assert-same-tenant.ts; applied to agents + departments findOne |
+| `506d511e` | 1.1 + 1.7 (swagger + OpenAPI bootstrap) | `backend/package.json`, `nest-cli.json`, `main.ts` |
+| `36e9ebc5` | 1.2 (PaginationDto, IdParamDto, PaginatedResponse, ActionResult) | `backend/src/common/{dto,responses}/` |
+| `4a5fdfb6` | 1.4 (TenantContextService + AsyncLocalStorage middleware) | `backend/src/common/context/`, `app.module.ts` |
+| `80a2ed31` | 1.8 + 1.9 (agents.findAll → PaginatedResponse, agents.pause → ActionResult) | `backend/src/modules/agents/` |
+| `94d6242c` | 1.18-1.27 (frontend-eaos bootstrap: Next.js 15, providers, Toaster, placeholder) | `pnpm-workspace.yaml`, `frontend-eaos/**` |
 
-**Next:** Phase 1 — scaffold `frontend-eaos/` + `packages/ui/`. See [`EAOS-implementation-roadmap.md` §5](./EAOS-implementation-roadmap.md) for the 17-task plan.
+**Next:** Tier A is complete; Tier B is complete; Tier C (1.5/1.6 annotate everything) and Tier D (1.11-1.17 packages/ui internals) deferred to user-directed follow-up.
 
-### Phase 0 status
+### Phase 1 status
 
-**Backend (5/5 done):**
-- ✅ 0.1: Delete `backend/src/modules/security/guards/roles.guard.ts` and `security.types.ts:UserRole`/`Permission`/`ROLE_PERMISSIONS` (commit `c00dff57`)
-- ✅ 0.2: Add `JwtAuthGuard` + `@Roles()` to `tools.controller.ts:execute`, `:execute/:id`, `:id/status` (commit `c00dff57`)
-- ✅ 0.3: Add session-ownership check to `agent-streaming.controller.ts:71-132` SSE (commit `795702dd`)
-- ✅ 0.4: Wire `AuditInterceptor` to `AuditService.log()` for all `POST/PATCH/DELETE` (commit `8d6fe982`)
-- ✅ 0.5: Add tenant isolation helpers + apply to `agents.findOne` + `departments.findOne` (commit `4ef6ef97`)
+**Backend (6/10 done):**
+- ✅ 1.1: Install `@nestjs/swagger` + nest-cli plugin
+- ✅ 1.2: `PaginationDto` + `IdParamDto` + envelope types (`PaginatedResponse<T>`, `ActionResult<T>`)
+- ⏭ 1.3: `resolve-tenant-context.ts` (already done in Phase 0 task 0.5; no-op)
+- ✅ 1.4: `TenantContextService` + `TenantContextMiddleware` (AsyncLocalStorage)
+- ⬜ 1.5: Annotate EVERY controller with `@ApiTags`, `@ApiOperation`, etc. — **DEFERRED** (~3-5 days mechanical)
+- ⬜ 1.6: Annotate EVERY DTO with `@ApiProperty` — **DEFERRED** (~2-3 days)
+- ✅ 1.7: OpenAPI generation wired (writes to `backend/openapi/openapi.json` on every boot)
+- ✅ 1.8: `agents.findAll` → `PaginatedResponse<AgentResponseDto>` (proof of pattern)
+- ✅ 1.9: `agents.pause` → `ActionResult<AgentResponseDto>` (proof of pattern)
+- ⬜ 1.10: Add EAOS-1 Prisma models — **DEFERRED** (needs user review of schema)
 
-**Frontend (eliminated per D-023):**
-- ⛔ 0.6: ~~Fix wrong-token-key bug in 11+ files~~ — **ELIMINATED** (frontend-tenant deleted)
-- ⛔ 0.7: ~~Wire `<Toaster />` to existing `ToastStrategy`~~ — **ELIMINATED** (frontend-tenant deleted)
+**`packages/ui/` (0/7 done):**
+- ⬜ 1.11-1.17: All deferred — building the shared design system is a multi-day effort that should follow the 10-panel scaffolding in EAOS-1 (avoid premature extraction)
 
-### Phase 0 success criteria
+**`frontend-eaos/` (4/10 done):**
+- ✅ 1.18: Bootstrap Next.js 15.0.3 + React 19 + TypeScript 5.7 + Tailwind 3.4
+- ✅ 1.19: Install deps (TanStack Query, react-hook-form, zod, socket.io-client, lucide-react, next-themes, date-fns, openapi-typescript, tailwind-merge)
+- ✅ 1.20: `app/layout.tsx` with `<Providers>` (ThemeProvider + QueryClientProvider + Toaster)
+- ✅ 1.21: `app/providers.tsx` with `QueryClientProvider` (default staleTime 30s, retry 2, etc.)
+- ⬜ 1.22: Set up `openapi-typescript` codegen pipeline (script is in package.json; runs against backend openapi.json once backend has annotations)
+- ⬜ 1.23: Apply design tokens — **partially done** (tokens in `tailwind.config.ts`); full coverage when `packages/ui` ships
+- ⬜ 1.24: `config/feature-flags.ts` — **DEFERRED** (no features to flag yet)
+- ✅ 1.25: Added to `pnpm-workspace.yaml`
+- ⬜ 1.26: Set up Vercel project — **DEFERRED** (user action; requires Vercel account)
+- ✅ 1.27: Placeholder page (`/`) — "EAOS — coming soon"
 
-- [x] SSE rejects mismatched `userId` with 403 (canAccessSession helper)
-- [x] `AuditLog` DB table will receive rows on every mutating request (auditService.log wired)
-- [x] Tenant isolation helper deployed + applied to 2 critical `findOne` endpoints (agents + departments)
-- [x] tsc passes (no errors)
-- [ ] Phase 0 backend code reviewed and merged to `main` (user action)
+### Phase 1 exit criteria
+
+- [x] Backend `nest build` succeeds
+- [x] Backend `tsc --noEmit` passes
+- [x] `frontend-eaos` `tsc --noEmit` passes
+- [x] `frontend-eaos` `next build` succeeds ("Compiled successfully" + 4 static pages)
+- [x] `pnpm-workspace.yaml` includes `frontend-eaos`
+- [x] OpenAPI bootstrap code in main.ts (writes to `backend/openapi/openapi.json` at boot)
+- [ ] `backend/openapi/openapi.json` actually generated — needs DB-connected server start (verify in dev)
+- [ ] `<Can permission="agent.spawn">` placeholder on a real page — **DEFERRED** (no real page yet)
+- [ ] Vercel deployment of `frontend-eaos` succeeds — **DEFERRED** (user action)
+- [ ] `agents.controller.ts:findAll` returns `PaginatedResponse<AgentResponseDto>` — **CODE DONE**, runtime verify deferred
+- [ ] `agents.controller.ts:pause` returns `ActionResult<AgentResponseDto>` — **CODE DONE**, runtime verify deferred
+
+### Rollback plan
+
+All Phase 1 changes are additive:
+- New `frontend-eaos/` doesn't affect existing backend or frontend-admin
+- New `TenantContextMiddleware` is no-op for routes without `req.user` (no breakage)
+- `PaginatedResponse<T>` / `ActionResult<T>` only used by the new agents.findAll/pause (other endpoints still use legacy shapes; backward compat preserved per spec §12)
+- OpenAPI generation only writes to disk on successful boot; write failure is non-blocking
 
 ---
 
@@ -47,7 +78,8 @@
 
 | Date | Change | Doc reference |
 |---|---|---|
-| 2026-06-27 16:55 | Phase 0 complete: tasks 0.3, 0.4, 0.5 done (commits `795702dd`, `8d6fe982`, `4ef6ef97`) | 03-implementation-log |
+| 2026-06-27 17:50 | Phase 1 Tier A+B: 5 commits shipped (swagger, DTOs, TenantContext, agents migration, frontend-eaos bootstrap) | 03-implementation-log |
+| 2026-06-27 16:55 | Phase 0 complete: tasks 0.3, 0.4, 0.5 done | 03-implementation-log |
 | 2026-06-27 16:11 | **D-023:** Deleted `frontend-tenant/` (no prod users, no release). Tasks 0.6/0.7 eliminated. Phase 9 dual-support dropped. Phase 10 decommission tasks already done. | 02-decisions-log D-023 |
 | 2026-06-27 15:57 | **D-022:** Build EAOS as new `frontend-eaos/`; freeze `frontend-tenant/`; extract `packages/ui/`; cookie auth from day 1 | 02-decisions-log D-022 |
 | 2026-06-27 15:45 | Branch `eaos-base` created and pushed to `origin`; commit `c00dff57` (Phase 0 tasks 0.1 + 0.2 + docs) | 03-implementation-log |
@@ -76,7 +108,8 @@
 | 4 | **Cookie auth (sole auth path).** Per D-023, the backend ships httpOnly cookies as the only auth path for `frontend-eaos/`. Confirm cookie set names, CSRF approach. | **AWAITING** | Engineering lead | api-contract §4.1, frontend-data-layer §4.1 |
 | 5 | **Tier 2/3 docs timing** (component catalog, observability, i18n, a11y, perf budgets, testing strategy). Written when their phase starts, OR in advance? | **AWAITING** | Engineering lead decision | roadmap §2 |
 | 6 | **Vercel OIDC token rotation.** The token in `frontend-tenant/.env.local` (deleted) was visible in a tool output. Revoke in Vercel dashboard, generate a new one for `frontend-eaos/.env.local`. | **ACTION** | User | D-023 |
-| 7 | **Phase 0 PR review.** All 5 backend tasks shipped; awaiting user review and merge to `main`. | **AWAITING** | User | impl-plan §9, roadmap §4 |
+| 7 | **Phase 0 + Phase 1 PR review.** 9 commits on `eaos-base` awaiting user review and merge to `main`. | **AWAITING** | User | impl-plan §9, roadmap §4 §5 |
+| 8 | **Phase 1.5/1.6 — annotate every controller/DTO.** ~3-5 days of mechanical work. Can be done in parallel with EAOS-1 frontend work. | **DECIDED-DEFER** | User decision on whether to proceed or skip | roadmap §5 |
 
 See [`02-decisions-log.md`](./02-decisions-log.md) for the full decision history.
 See [`05-phase-tracker.md`](./05-phase-tracker.md) for per-phase status.
@@ -91,36 +124,44 @@ None at this time.
 
 ## Blockers
 
-None currently. Phase 0 backend done. Ready for user PR review, then Phase 1.
+None currently. Phase 1 Tier A+B complete. Awaiting user review of PR.
 
 ---
 
 ## Session notes
 
-### Session — 2026-06-27 (Phase 0 backend completion)
+### Session — 2026-06-27 (Phase 1 Tier A + B)
 
-**Outcome:** All 5 Phase 0 backend tasks shipped. Phase 0 complete on the backend side. Awaiting user PR review.
+**Outcome:** Backend foundation (Tier A) and frontend-eaos bootstrap (Tier B) complete. 5 commits shipped, ~1,400 lines of new code. Tier C (annotations) and Tier D (packages/ui internals) deferred to user-directed follow-up.
 
 **Commits on `eaos-base` this session:**
-- `795702dd` — Task 0.3 (D-014): SSE session ownership check
-- `8d6fe982` — Task 0.4 (D-013): AuditInterceptor writes to DB
-- `4ef6ef97` — Task 0.5 (D-016): Tenant isolation helpers + apply to 2 endpoints
+- `506d511e` — Tasks 1.1 + 1.7: swagger install, OpenAPI bootstrap
+- `36e9ebc5` — Task 1.2: PaginationDto, IdParamDto, envelope types
+- `4a5fdfb6` — Task 1.4: TenantContextService + AsyncLocalStorage middleware
+- `80a2ed31` — Tasks 1.8 + 1.9: agents controller returns canonical envelopes
+- `94d6242c` — Tasks 1.18-1.27: frontend-eaos bootstrap (Next.js 15, providers, Toaster, placeholder)
 
 **Approach taken:**
-- Task 0.3: `JwtAuthGuard` at class level + `@CurrentUser()` + private `canAccessSession` helper as the single chokepoint. Platform roles bypass. Session creation no longer accepts `?userId=` query param.
-- Task 0.4: Inject `AuditService` into `AuditInterceptor`. Skip GET. Fire-and-forget via `void promise.catch()`. Action format `api.POST /path/:id` (UUIDs normalized to `:id` to avoid cardinality explosion).
-- Task 0.5: Two helpers created in `common/utils/`. Applied to `agents.findOne` and `departments.findOne` as proof of pattern. Existing `where: { tenantId }` Prisma filters in service methods are already correct (return 404 for cross-tenant lookups); `assertSameTenant` is belt-and-suspenders.
+- **Tier A (backend foundation):** focused on the high-leverage pieces — OpenAPI generation, canonical envelopes, AsyncLocalStorage tenant context. These unlock the rest of Phase 1 + EAOS-1.
+- **Tier B (frontend scaffold):** the minimum to get `pnpm install` and `next build` working. Toaster + providers are the foundation; everything else is page content.
+- **Tier C/D (deferred):** 1.5/1.6 (annotate every controller/DTO) is a mechanical 3-5 day task; 1.10 (Prisma EAOS-1 models) needs user review of the schema; 1.11-1.17 (packages/ui internals) should follow the 10-panel workspace build, not precede it.
+
+**Key decisions in this session:**
+- Used `clsx` + `tailwind-merge` for the `cn()` helper (industry standard).
+- pnpm v11 store layout change forced a `--no-frozen-lockfile` reinstall; resolved by re-running install.
+- TenantContextService is a per-instance singleton; the ALS store is request-scoped.
+- Toaster is intentionally simple (no external lib) — when `packages/ui` ships (Task 1.12), it becomes a thin wrapper.
 
 **Lessons:**
-- `assertSameTenant` adds defense-in-depth even when services already filter. Future service methods that forget the `tenantId` filter will be caught at the controller level.
-- The `canAccessSession` helper pattern (boolean predicate, not throwing) is cleaner than having the controller call `assertSameTenant` + handle NotFoundException in two branches.
+- Don't extract `packages/ui/` before you have real components to put in it. Premature extraction = the package is empty/abstract and has no real consumers.
+- AsyncLocalStorage is the cleanest way to make `tenantId` available to deep service calls without threading the parameter through every method signature. NestJS does this elegantly via the middleware.
+- Per-instance `QueryClient` in `useState` initializer is the canonical TanStack Query pattern (one client per app instance, not per render).
 
-**Next session:**
-1. User reviews Phase 0 PR (4 commits, ~440 lines of changes)
-2. User merges to `main` (or addresses review feedback first)
-3. Begin Phase 1: scaffold `frontend-eaos/` + `packages/ui/` per roadmap §5 (17 tasks)
-4. Decide on cookie auth implementation details (Phase 9 work, pulled forward per D-023)
-5. Vercel OIDC token rotation (user action)
+**Next session (user decides):**
+1. **Option A — Annotate (1.5/1.6):** mechanical 3-5 day task. Worth doing if the team values OpenAPI accuracy now.
+2. **Option B — Skip annotations, jump to EAOS-1 frontend work:** the agents migration (1.8/1.9) is enough proof; the rest can be annotated as we touch the code.
+3. **Option C — Add the EAOS-1 Prisma models (1.10):** unlocks the entity workspace in EAOS-1.
+4. **Option D — User reviews the 9 commits and merges to `main` first**, then we continue.
 
 ---
 
