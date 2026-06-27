@@ -22,9 +22,14 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { resolveTenantContext } from '../../common/utils/resolve-tenant-context';
 import { assertSameTenant } from '../../common/utils/assert-same-tenant';
+import { PaginationDto } from '../../common/dto/pagination.dto';
+import { PaginatedResponse } from '../../common/responses/paginated.response';
+import { ActionResult } from '../../common/responses/action-result.response';
+import type { AgentResponseDto } from './dto/agent-response.dto';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
 import { AgentStatus, AgentType } from '@prisma/client';
 import { UserRole } from '@prisma/client';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiOkResponse, ApiProduces } from '@nestjs/swagger';
 import { IsArray, IsOptional, IsString } from 'class-validator';
 
 class UpdatePermissionsDto {
@@ -38,6 +43,8 @@ class UpdatePermissionsDto {
 }
 
 @Controller({ path: 'agents', version: '1' })
+@ApiTags('agents')
+@ApiBearerAuth('JWT')
 export class AgentsController {
   constructor(
     private readonly agentsService: AgentsService,
@@ -56,33 +63,42 @@ export class AgentsController {
 
   // ─── List ────────────────────────────────────────────────
 
+  /**
+   * Phase 1, Task 1.8: returns the canonical `PaginatedResponse<AgentResponseDto>`
+   * envelope (per `EAOS-api-contract.md` §3.2). Replaces the legacy shape
+   * `{ data, total, page, limit, totalPages }` returned by `findAll`.
+   */
   @Get()
-  findAll(
+  @ApiOperation({ summary: 'List agents (paginated)' })
+  @ApiOkResponse({ description: 'Paginated list of agents' })
+  async findAll(
     @CurrentUser() user: JwtPayload,
+    @Query() pagination: PaginationDto,
     @Query('tenantId') tenantId?: string,
     @Query('departmentId') departmentId?: string,
     @Query('status') status?: AgentStatus,
     @Query('type') type?: AgentType,
-    @Query('page') page = '1',
-    @Query('limit') limit = '20',
-  ) {
-    // SUPER_ADMIN may list globally (no tenantId) or for a specific tenant.
-    const isPlatformRole =
-      user.role === UserRole.SUPER_ADMIN ||
-      user.role === UserRole.PLATFORM_ADMIN ||
-      user.role === UserRole.SUPPORT;
+  ): Promise<PaginatedResponse<AgentResponseDto>> {
+    const ctx = resolveTenantContext(user, { query: { tenantId } });
 
-    if (!isPlatformRole && !user.tenantId)
-      throw new ForbiddenException('Tenant context required');
-
-    return this.agentsService.findAll({
-      tenantId: user.role === UserRole.SUPER_ADMIN ? tenantId : user.tenantId,
+    const { data, total, page, limit } = await this.agentsService.findAll({
+      tenantId: ctx.tenantId,
       departmentId,
       status,
       type,
-      page: Number(page),
-      limit: Number(limit),
+      page: pagination.page,
+      limit: pagination.limit,
     });
+
+    return {
+      items: data as unknown as AgentResponseDto[],
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 
   // ─── Read one ────────────────────────────────────────────
@@ -206,19 +222,29 @@ export class AgentsController {
 
   // ─── Pause ───────────────────────────────────────────────
 
+  /**
+   * Phase 1, Task 1.9: returns the canonical `ActionResult<AgentResponseDto>`
+   * envelope (per `EAOS-api-contract.md` §3.3). Replaces the legacy
+   * `{ message, agent }` ad-hoc shape.
+   */
   @Post(':id/pause')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Pause an agent' })
   async pause(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtPayload,
     @Query('tenantId') tenantId?: string,
-  ) {
+  ): Promise<ActionResult<AgentResponseDto>> {
     const agent = await this.agentsService.updateStatus(
       id,
       AgentStatus.PAUSED,
       this.resolveTenantId(user, tenantId),
     );
-    return { message: 'Agent paused', agent };
+    return {
+      success: true,
+      message: 'Agent paused',
+      data: agent as unknown as AgentResponseDto,
+    };
   }
 
   // ─── Resume ──────────────────────────────────────────────
