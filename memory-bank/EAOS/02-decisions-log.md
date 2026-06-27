@@ -1,6 +1,6 @@
 # NeureCore — EAOS Decisions Log
 
-**Last updated:** 2026-06-27 15:57
+**Last updated:** 2026-06-27 16:11
 **Purpose:** Chronological log of all architectural, product, and process decisions made during EAOS planning and implementation. Each entry: decision, rationale, trade-offs, doc reference.
 
 **Format:** Newest first. Use ISO date prefix.
@@ -8,6 +8,38 @@
 ---
 
 ## 2026-06-27 (continued)
+
+### D-023 · Delete `frontend-tenant/` immediately (no production users, no release)
+
+**Decision:** Delete the entire `frontend-tenant/` folder. No "frozen" intermediate state, no 90-day redirect window, no Phase 10 decommission task.
+
+**Rationale:**
+- NeureCore has not been released; there are no customers using `frontend-tenant/` in production.
+- The "frozen + 90-day redirect + decommission in Phase 10" plan from D-022 was written assuming production users exist. They don't.
+- Deleting immediately removes the temptation for engineers to "just patch it here real quick" and eliminates the dual-implementation risk.
+- The frontend tech debt (1,251-line workspace page, half-finished SOLID migration, wrong-token-key bug, silently-dropped toasts, 12 Zustand stores with hand-rolled `loading`/`error`) disappears with the folder.
+- The `VERCEL_OIDC_TOKEN` and other secrets in `.env.local` need to be rotated (the folder contained a live Vercel token in a non-gitignored env file; that token was visible in tool output and should be revoked).
+
+**Trade-offs accepted:**
+- No "safety net" if `frontend-eaos/` has issues at launch. (Mitigation: `frontend-eaos/` is a clean build, not a rewrite — the patterns are proven; the work is in design + polish, not in untangling.)
+- Cannot run both apps side-by-side. (Acceptable: no users to migrate.)
+- Phase 0 tasks 0.6 and 0.7 (wrong-token-key bug, Toaster wiring) are eliminated entirely — there is no "old frontend" to fix.
+- Phase 9 dual-support window (90 days) becomes unnecessary — the backend ships httpOnly cookies as the only auth path for `frontend-eaos/`. No legacy `Authorization: Bearer` header fallback to maintain.
+- Phase 10 tasks 10.13–10.15 (parity verification, 301 redirect, delete) are already done.
+
+**Cleanup actions (immediate):**
+- Delete `frontend-tenant/` folder.
+- Rotate the Vercel OIDC token in Vercel dashboard (was leaked in `.env.local` content exposed during pre-deletion verification).
+- Revoke the Vercel project for `frontend-tenant` (the `hq.neurecore.com` deployment).
+- Update all 10 EAOS docs to reflect the new architecture: single frontend, no frozen, no dual-support, no 90-day redirect.
+
+**Doc references:**
+- This decision supersedes the "frozen" and "Phase 10 decommission" language in every doc.
+- Specifically removes Phase 0 tasks 0.6 and 0.7; removes Phase 9 dual-support language; removes Phase 10 tasks 10.13–10.15.
+
+**Status:** Approved 2026-06-27 16:11.
+
+---
 
 ### D-022 · Build EAOS as a new frontend (`frontend-eaos`); freeze `frontend-tenant`
 

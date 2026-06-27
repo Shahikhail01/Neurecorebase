@@ -10,7 +10,7 @@
 - 🔴 Blocked (waiting on decision/external)
 - ⛔ Skipped (with reason)
 
-**Architecture note (D-022):** EAOS is built in a **new `frontend-eaos/`** app; old `frontend-tenant/` is **FROZEN**. Phase 0 frontend tasks 0.6 and 0.7 are **N/A**. The "frontend data layer" Phase 2 shrinks because the new app uses TanStack Query from day 1 (no migration). Phase 9 (cookie auth) is pulled forward.
+**Architecture note (D-022 + D-023):** EAOS is built in a **new `frontend-eaos/`** app. The old `frontend-tenant/` was **deleted in full** per D-023 (no production users, no release). Phase 0 tasks 0.6 and 0.7 are **ELIMINATED**. The "frontend data layer" Phase 2 shrinks because the new app uses TanStack Query from day 1 (no migration). Phase 9 (cookie auth) is pulled forward and ships as the **sole** auth path (no dual-support window). Phase 10 decommission tasks are already done.
 
 ---
 
@@ -27,8 +27,8 @@
 | 6 | EAOS-4 Knowledge Hub | RAG pipeline + KnowledgeEntry model | 4 | ⬜ Not started | — | — |
 | 7 | EAOS-5 Solution Packs | Marketplace + install lifecycle | 6 | ⬜ Not started | — | — |
 | 8 | EAOS-6 Vertical Pack #1 | First industry pack (Retail recommended) | 8–10 | ⬜ Not started | — | — |
-| 9 | Auth hardening (pulled forward) | httpOnly cookies + CSRF — **lands BEFORE `frontend-eaos` ships** | 2 | ⬜ Not started | — | — |
-| 10 | Cleanup | Delete `frontend-tenant`, consolidate | 2 | ⬜ Not started | — | — |
+| 9 | Auth hardening (sole auth path) | httpOnly cookies + CSRF — **ships as the only auth, no dual support** | 2 | ⬜ Not started | — | — |
+| 10 | Cleanup (reduced scope) | Delete legacy data stores, dead code, feature flags at 100% | 1 | ⬜ Not started | — | — |
 
 ---
 
@@ -52,10 +52,10 @@
 - ⬜ 0.4: Wire `AuditInterceptor` to `AuditService.log()` for all `POST/PATCH/DELETE`
 - ⬜ 0.5: Add explicit `entity.tenantId === user.tenantId` check to all `findOne` methods
 
-#### Frontend (N/A in new `frontend-eaos/` per D-022)
+#### Frontend (ELIMINATED per D-023)
 
-- ⛔ 0.6: Fix wrong-token-key bug in 11+ files (N/A in new — httpOnly cookies from day 1)
-- ⛔ 0.7: Wire `<Toaster />` to existing `ToastStrategy` (N/A in new — included in scaffold)
+- ⛔ 0.6: ~~Fix wrong-token-key bug in 11+ files~~ — **ELIMINATED** (frontend-tenant deleted)
+- ⛔ 0.7: ~~Wire `<Toaster />` to existing `ToastStrategy`~~ — **ELIMINATED** (frontend-tenant deleted)
 
 ### Exit criteria
 

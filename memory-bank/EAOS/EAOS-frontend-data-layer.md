@@ -1,11 +1,11 @@
 # NeureCore — EAOS Frontend Data Layer Specification
 
-**Document Version:** 1.1
+**Document Version:** 1.2
 **Date:** 2026-06-27
 **Status:** EAOS Frontend Data Layer Spec — binding for `frontend-eaos/`
 **Audience:** Frontend, Backend (for contract alignment), QA
-**Supersedes:** v1.0 (D-022: target app is now `frontend-eaos/`; old `frontend-tenant/` is frozen; shared `packages/ui/` package is the new canonical source for permission hooks, query keys, design tokens, and components; Phase 9 httpOnly cookie auth is pulled forward so the new app ships with cookies from day 1)
-**Related:** `EAOS-api-contract.md` v1.0, `EAOS-rbac-model.md` v1.0, `EAOS-NUWS-principles.md` v1.3, `EAOS-implementation-plan.md` v2.7
+**Supersedes:** v1.1 (D-023: `frontend-tenant/` deleted in full per no production users / no release. The "frozen" intermediate state and 90-day redirect are obsolete. Single tenant frontend. The backend ships httpOnly cookies as the **sole** auth path for `frontend-eaos/` — no dual-support window, no `Authorization: Bearer` fallback needed.)
+**Related:** `EAOS-api-contract.md` v1.0, `EAOS-rbac-model.md` v1.0, `EAOS-NUWS-principles.md` v1.4, `EAOS-implementation-plan.md` v2.8
 
 ---
 
@@ -1144,9 +1144,9 @@ export function isFeatureEnabled(
 
 ---
 
-## 14. File Structure (per `EAOS-implementation-plan.md` §11.2 + this spec; v1.1 redirect to `frontend-eaos/`)
+## 14. File Structure (per `EAOS-implementation-plan.md` §11.2 + this spec; v1.2 final layout)
 
-**Per D-022:** the target app is `frontend-eaos/`. The old `frontend-tenant/` is frozen and will not receive new data-layer work. The shared `packages/ui/` package is the new canonical source for permission hooks, query keys factory, design tokens, and primitives. The file tree below shows the **new** `frontend-eaos/` layout. (The legacy `frontend-tenant/` layout is preserved in `EAOS-implementation-plan.md` §11.2 (LEGACY) for reference only.)
+**Per D-022 + D-023:** the **only** tenant frontend is `frontend-eaos/`. `frontend-tenant/` was deleted in full (no production users, no release). The shared `packages/ui/` package is the canonical source for permission hooks, query keys factory, design tokens, and primitives. No dual-frontend, no 90-day redirect, no legacy support window.
 
 ```
 neurecore-base/neurecore/
@@ -1215,26 +1215,17 @@ packages/ui/src/                         # SHARED
 
 ---
 
-## 15. Migration Plan (v1.1 — D-022: now a build, not a migration)
+## 15. Migration Plan (v1.2 — D-023: no migration, no legacy; just build)
 
-**Per D-022:** the `frontend-tenant/` migration described in v1.0 §15 is **no longer the path**. EAOS is being built in a **new** app (`frontend-eaos/`) from day 1, with TanStack Query as the default, httpOnly cookies for auth, and `packages/ui/` for shared design system. The "migration" cost on the old `frontend-tenant/` is now **zero** — the old app is frozen and will be decommissioned after `frontend-eaos` reaches feature parity + 90-day 301 redirect.
+**Per D-022 + D-023:** there is **no migration**. `frontend-tenant/` was deleted in full on 2026-06-27 (no production users, no release). EAOS is built in a **new** app (`frontend-eaos/`) from day 1, with TanStack Query as the default, httpOnly cookies as the **sole** auth path, and `packages/ui/` for shared design system. No "frozen" intermediate state, no 90-day redirect, no dual-support window.
 
-The remaining work for `frontend-eaos/` is essentially **the build phases of Phase 1 and Phase 2 of v1.0 §15**, condensed because the new app doesn't have legacy code to coexist with. See [`EAOS-implementation-roadmap.md` Phase 1 + Phase 2](./EAOS-implementation-roadmap.md) for the authoritative plan.
+The remaining work for `frontend-eaos/` is essentially **the build phases of Phase 1 and Phase 2 of v1.0 §15**, condensed because there is no legacy code to coexist with. See [`EAOS-implementation-roadmap.md` Phase 1 + Phase 2](./EAOS-implementation-roadmap.md) for the authoritative plan.
 
-### What was the "migration" in v1.0 (now obsolete)
+### What was the "migration" in v1.0 / v1.1 (now obsolete)
 
-The v1.0 §15 detailed 6 phases of incremental migration on `frontend-tenant/`:
-1. Foundations
-2. Retire dual layers (api.ts, socket.ts, CacheManager, etc.)
-3. Entity workspace
-4. httpOnly cookie auth
-5. Forms + validation
-6. Polish
-
-In v1.1, the entire migration is **replaced by the new-app build**. The only legacy-related work remaining is:
-
-- **Phase 9 (httpOnly cookies) is pulled forward** — the backend switches to httpOnly cookies BEFORE `frontend-eaos` ships, so the new app is cookie-auth from day 1. Dual-support window = 90 days for any existing tenant still on `frontend-tenant/`.
-- **Phase 10 (cleanup) adds** a new step: delete `frontend-tenant/` after `frontend-eaos` reaches feature parity + 90-day 301 redirect.
+- v1.0: 6 phases of incremental migration on `frontend-tenant/`.
+- v1.1 (D-022): replaced by the new-app build, with `frontend-tenant/` "frozen" for the transition.
+- **v1.2 (D-023):** even the frozen intermediate state is gone. `frontend-tenant/` is deleted. The only work is to build `frontend-eaos/` correctly from day 1.
 
 ### Build phases for `frontend-eaos/` (per roadmap Phase 1 + 2)
 

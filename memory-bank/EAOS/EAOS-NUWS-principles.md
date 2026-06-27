@@ -1,10 +1,10 @@
 # NeureCore Universal Workspace Specification (NUWS)
 
-**Document Version:** 1.3
+**Document Version:** 1.4
 **Date:** 2026-06-27
 **Status:** NUWS Core Specification — THE CONSTITUTION
 **Audience:** Engineering, Design, Product
-**Supersedes:** v1.2 (D-022: build EAOS in new `frontend-eaos/`; freeze `frontend-tenant/`; extract `packages/ui/`; cookie auth from day 1; Phase 9 work pulled forward; references in Appendix D redirect to `frontend-eaos/`)
+**Supersedes:** v1.3 (D-023: `frontend-tenant/` deleted in full per no production users / no release. The "frozen" status and 90-day redirect from v1.3 are no longer needed. Single tenant frontend: `frontend-eaos/`. All references that previously said "frozen" or "90-day" are obsolete; this v1.4 makes that explicit.)
 
 ---
 
@@ -50,6 +50,14 @@
 | Header | Bumped to v1.3; added supersession note about D-022. | The behavioral contract is unchanged; only the target app is now `frontend-eaos/` instead of `frontend-tenant/`. |
 | Appendix D | File structure references redirect to `frontend-eaos/`; the `packages/ui/` shared package is the new canonical source for design tokens, components, and permission hooks. | Per D-022. |
 | Glossary (Appendix B) | Add **frontend-eaos**, **frontend-tenant** (frozen), **packages/ui**. | Document the new architecture. |
+
+### 0d. Changelog (v1.3 → v1.4 — D-023)
+
+| Section | Change | Rationale |
+|---|---|---|
+| Header | Bumped to v1.4; the "frozen" status and 90-day redirect are obsolete. | `frontend-tenant/` was deleted in full per D-023. |
+| Appendix D | "Target app" note simplified — single tenant frontend, no legacy. | No dual support. |
+| Glossary (Appendix B) | **Remove `frontend-tenant` (frozen) entry.** It no longer exists. Keep `frontend-eaos` and `packages/ui`. | The "frozen" concept is gone. |
 
 ---
 
@@ -1617,8 +1625,7 @@ Every visual element in NeureCore conforms to this contract:
 | **Design Token** | A binding visual primitive (color, type scale, spacing, density) defined in §7.5 |
 | **Density** | One of Compact / Default / Comfortable row-height modes (§7.5.4) |
 | **`frontend-eaos`** (v1.3) | The new EAOS application. Served at `eaos.neurecore.com/{tenantCompanyName}`. The target of all new EAOS work per D-022. | UI layer |
-| **`frontend-tenant`** (v1.3) | The existing tenant application. **Frozen** per D-022 — no new features; critical security fixes only. Decommissioned after `frontend-eaos` reaches feature parity + 90-day 301 redirect. | UI layer |
-| **`packages/ui`** (v1.3) | Shared design system + permission hooks + query keys factory. Consumed by both `frontend-eaos` and `frontend-tenant` during the transition. | UI layer |
+| **`packages/ui`** (v1.4) | Shared design system + permission hooks + query keys factory. | UI layer |
 | **Universal Entity Property** | A property (State, Ownership, Labels, Health) that applies to all entities |
 | **Entity Health** | A computed status with signals, trend, and alerts |
 | **Progressive Disclosure** | Simple first, advanced on request, never overwhelming |
@@ -1661,7 +1668,7 @@ daily-tools-integration-plan.md
 
 The following reference values must be applied consistently across all NeureCore UIs. These are not page mockups — they are binding values for components.
 
-**Target app (per D-022, v1.3):** all new components land in `frontend-eaos/`. The shared `packages/ui/` package is the canonical source for these values. The old `frontend-tenant/` is frozen; do not introduce new components there.
+**Target app (per D-022 + D-023):** all new components land in `frontend-eaos/`. The shared `packages/ui/` package is the canonical source for these values. There is no other tenant frontend; `frontend-tenant/` was deleted in full per D-023.
 
 ### Shell dimensions (desktop, 1280px+)
 

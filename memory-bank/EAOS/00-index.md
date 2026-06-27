@@ -28,21 +28,20 @@ EAOS/
 └── EAOS-rbac-model.md
 ```
 
-**Frontend architecture (per D-022, 2026-06-27):**
+**Frontend architecture (per D-022 + D-023, 2026-06-27):**
 
-The EAOS workspace is built as a **new frontend** (`frontend-eaos/`), separate from the existing `frontend-tenant/`. Both share a `packages/ui/` package for design tokens, components, and permission hooks.
+The EAOS workspace is built as a **new frontend** (`frontend-eaos/`). The previous `frontend-tenant/` was **deleted** in full per D-023 (NeureCore has not been released, no production users). The monorepo now has one tenant frontend.
 
 ```
 neurecore/
 ├── backend/                    # shared, refactored in place
 ├── frontend-admin/             # platform console; RBAC updates only
-├── frontend-tenant/            # OLD — frozen; no new features
-├── frontend-eaos/              # NEW — full EAOS implementation
+├── frontend-eaos/              # EAOS — the only tenant frontend
 └── packages/
     └── ui/                     # shared design system + permission hooks
 ```
 
-URL: `https://eaos.neurecore.com/{tenantCompanyName}`. Old frontend continues to work at its current URL until decommission. See [`02-decisions-log.md` D-022](./02-decisions-log.md).
+URL: `https://eaos.neurecore.com/{tenantCompanyName}`. No legacy frontend to maintain. No 90-day redirect. No dual-support window for cookies. See [`02-decisions-log.md` D-022 + D-023](./02-decisions-log.md).
 
 ---
 

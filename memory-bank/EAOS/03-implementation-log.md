@@ -58,6 +58,30 @@ None — all Phase 0/0.1-0.2 work + EAOS docs are committed to `eaos-base`.
 
 ---
 
+## 2026-06-27 16:11 · D-023 — Deleted `frontend-tenant/`
+
+### Deleted the entire `frontend-tenant/` folder
+
+- Verified contents: 1.2GB (mostly `node_modules`, which is gitignored)
+- Confirmed `.env.local` and `.env.production` are gitignored (not in any commit)
+- ⚠️ Found a live `VERCEL_OIDC_TOKEN` in `.env.local` — flagged for rotation
+- `rm -rf frontend-tenant/`
+- Monorepo now contains only: `backend/`, `frontend-admin/`, `frontend-eaos/` (new, not yet built), `packages/ui/` (new, not yet built)
+
+### Doc updates (v2.7 → v2.8 in progress)
+
+- `02-decisions-log.md` — D-023 added
+- `00-index.md` — remove "frozen" status, single-frontend architecture
+- `01-active-context.md` — tasks 0.6/0.7 eliminated; Vercel OIDC rotation added as open thread
+- `04-fixes-tracker.md` — FIX-005, FIX-006 marked ✅ (fixed by deletion)
+- `05-phase-tracker.md` — Phase 0: 0.6/0.7 removed; Phase 9: dual-support language removed; Phase 10: tasks 10.13-10.15 marked ✅ (done)
+- `EAOS-implementation-plan.md` v2.7 → v2.8 — remove "frontend-tenant (frozen)" everywhere
+- `EAOS-NUWS-principles.md` v1.3 → v1.4 — remove `frontend-tenant` glossary entry
+- `EAOS-frontend-data-layer.md` v1.1 → v1.2 — update §14 to single-frontend
+- `EAOS-implementation-roadmap.md` v1.1 → v1.2 — remove Phase 10 decommission; remove Phase 9 dual-support
+
+---
+
 ## 2026-06-27 15:57 · Decision recorded: D-022
 
 ### Build EAOS as a new frontend (`frontend-eaos`)
@@ -69,7 +93,7 @@ None — all Phase 0/0.1-0.2 work + EAOS docs are committed to `eaos-base`.
 - URL: `eaos.neurecore.com/{tenantCompanyName}`
 - Decommissioning `frontend-tenant/` only after feature parity + 90-day 301 redirect
 
-### Doc updates (v2.6 → v2.7 in progress)
+### Doc updates (v2.6 → v2.7)
 
 - `EAOS-implementation-plan.md` — redirect file structure to `frontend-eaos/`
 - `EAOS-NUWS-principles.md` Appendix D — same

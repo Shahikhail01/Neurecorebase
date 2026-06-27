@@ -1,11 +1,11 @@
 # NeureCore — Enterprise AI Operating System Specification
 
-**Document Version:** 2.7
+**Document Version:** 2.8
 **Date:** 2026-06-27
 **Status:** EAOS Core Specification
 **Audience:** Engineering, product, architecture
-**Supersedes:** v2.6 (D-022: build EAOS in new `frontend-eaos/`; freeze `frontend-tenant/`; extract `packages/ui/`; cookie auth from day 1; Phase 9 work pulled forward; all file structure references in §11 redirect to `frontend-eaos/`)
-**Related:** `daily-tools-integration-plan.md`, `agent-implementation.md`, `new_neurecore.md`, `EAOS-NUWS-principles.md` (v1.2), `EAOS-frontend-data-layer.md` (v1.1, redirect), `EAOS-implementation-roadmap.md` (v1.1)
+**Supersedes:** v2.7 (D-023: `frontend-tenant/` deleted in full per NeureCore having no production users and no release. Eliminates the "frozen" intermediate state, the 90-day redirect, and Phase 10 decommission tasks. Single tenant frontend: `frontend-eaos/`. All file structure references in §11 already point to `frontend-eaos/` from v2.7.)
+**Related:** `daily-tools-integration-plan.md`, `agent-implementation.md`, `new_neurecore.md`, `EAOS-NUWS-principles.md` (v1.4), `EAOS-frontend-data-layer.md` (v1.2), `EAOS-implementation-roadmap.md` (v1.2)
 
 ---
 
@@ -2195,6 +2195,8 @@ frontend-tenant/src/
 
 **Legend:** `[NEW]` = must be created | `[EXTEND]` = exists, must be modified | `[REUSE]` = exists as-is
 
+> **Historical note (v2.8, D-023):** The references to `frontend-tenant/src/...` in the trees below describe the **previous** tenant frontend, which was **deleted in full** on 2026-06-27 per D-023. NeureCore has no production users; the folder's contents are gone. The active tenant frontend is `frontend-eaos/`, defined in §11.2 above. The `frontend-tenant/` references are kept here as historical context (what existed before EAOS) — they are not a plan to modify those paths.
+
 ### 11.1 Backend Module Structure
 
 ```
@@ -2329,19 +2331,17 @@ EXISTING — NO CHANGE NEEDED:
   └── onboarding/                   # REUSE: onboarding state machine
 ```
 
-### 11.2 Frontend File Structure (v2.7 — D-022)
+### 11.2 Frontend File Structure (v2.8 — D-023)
 
-**Architecture (per D-022):** EAOS is built in a new app `frontend-eaos/`. The old `frontend-tenant/` is **frozen** (no new features, critical security fixes only). Both consume a shared `packages/ui/` package. Backend switches to httpOnly + Secure + SameSite=Strict cookie auth FIRST; both frontends use cookies from day 1.
+**Architecture (per D-022 + D-023):** EAOS is built in a new app `frontend-eaos/`. The old `frontend-tenant/` was **deleted in full** per D-023 (NeureCore has no production users, no release). Single tenant frontend. `packages/ui/` is the shared design system. Backend ships httpOnly + Secure + SameSite=Strict cookies as the **sole** auth path for `frontend-eaos/` (no dual-support window, no `Authorization: Bearer` fallback needed).
 
-**Monorepo layout (after v2.7):**
+**Monorepo layout (after v2.8):**
 
 ```
 neurecore-base/neurecore/
 ├── backend/                    # shared; refactored in place (Phases 0-7)
 ├── frontend-admin/             # platform console; RBAC updates only
-├── frontend-tenant/            # OLD — FROZEN. No new features. Critical security fixes only.
-│                                # Decommissioned only after frontend-eaos reaches feature parity + 90-day 301 redirect.
-├── frontend-eaos/              # NEW — full EAOS implementation. Served at eaos.neurecore.com/{tenantCompanyName}.
+├── frontend-eaos/              # EAOS — the only tenant frontend. Served at eaos.neurecore.com/{tenantCompanyName}.
 └── packages/
     └── ui/                     # shared design system + permission hooks + query keys factory
 ```
@@ -2385,151 +2385,12 @@ packages/ui/
 │   └── index.ts
 ```
 
-### 11.2 Frontend File Structure (LEGACY v2.6 — for reference only)
+### 11.2 Frontend File Structure (LEGACY v2.6 — REMOVED in v2.8)
 
-> **NOTE:** The structure below is the v2.6 layout. As of v2.7 (D-022), all new EAOS work goes into `frontend-eaos/`. The v2.6 structure is preserved here for reference to existing code in `frontend-tenant/`. It will not receive new features.
+> **NOTE:** The legacy v2.6 layout (the previous `frontend-tenant/`) was **deleted in full** per D-023. This section previously preserved it for reference, but with the folder gone, the section is removed. The active file structure is `frontend-eaos/` above.
 
-```
-frontend-tenant/src/
-├── app/
-│   ├── [EXTEND] command-center/     # EAOS-1: replace with 8-pillar + Mission Feed (NEW in v2.5)
-│   │                                # Mission Feed at top, then 8-pillar grid below
-│   │                                # Mission Feed = tenant-level default + per-user opt-in (§14.2 Q1)
-│   ├── [NEW] ai-roster/            # NEW in v2.6: dedicated route (per §14.2 Q6 + Pricing §0a)
-│   │   ├── page.tsx                # Full AI Roster management surface
-│   │   └── [aiEmployeeId]/page.tsx # Redirect to /entity/ai-employee/{id}
-│   ├── [EXTEND] marketplace/         # EAOS-5: add 5 tabs (Solutions, Workflows, etc.)
-│   ├── [NEW] entity/[type]/[id]/   # EAOS-1: universal entity workspace
-│   │   ├── page.tsx                # WorkspaceShell — renders 10 capability panels
-│   │   ├── graph/page.tsx          # NEW in v2.5: full mini-graph (P2; v1 = slide-over only)
-│   │   └── compare/page.tsx        # NEW in v2.5: /compare?ids=... route (read-only v1 per §14.2 Q3)
-│   ├── [NEW] knowledge/            # EAOS-4
-│   │   ├── page.tsx
-│   │   ├── search/page.tsx
-│   │   └── [entryId]/page.tsx      # Target of citation chip "Open full page" link (§14.2 Q8)
-│   └── [EXTEND] departments/[id]/workspace/  # EAOS-1: refactor INTO entity workspace
-│
-├── components/
-│   ├── [NEW] workspace/
-│   │   ├── WorkspaceShell.tsx       # Universal shell — two-tier tab system, left icon rail
-│   │   ├── WorkspaceProvider.tsx    # React context: current entity + capabilities
-│   │   ├── IdentityPanel.tsx        # Includes Health Signals sub-section (NEW in v2.5)
-│   │   ├── ContextPanel.tsx
-│   │   ├── IntelligencePanel.tsx    # Streaming + citation chips + sticky Do-First CTA
-│   │   ├── OperationsPanel.tsx      # Kanban default + per-task AI delegation
-│   │   ├── ResourcesPanel.tsx       # Human + AI team rendered with identical card component
-│   │   ├── CollaborationPanel.tsx   # Persistent AI chat input docked at top
-│   │   ├── InsightsPanel.tsx        # Max 4 KPIs first paint, inline-expand, per-KPI Explain
-│   │   ├── AutomationPanel.tsx      # Workflow thumbnails, AI quick-fire row
-│   │   ├── ActivityPanel.tsx        # Filter chips, AI 🤖 badges
-│   │   ├── LifecyclePanel.tsx       # NEW in v2.5: state badge, transition buttons, timeline, whyNotActive
-│   │   └── AdministrationModal.tsx  # Renamed in v2.5: gear-icon modal (NOT a panel)
-│   │
-│   ├── [NEW] mission-feed/          # NEW in v2.5
-│   │   ├── MissionFeed.tsx          # Dashboard-only persistent banner
-│   │   └── MissionItem.tsx          # Severity icon + breadcrumb + 3 actions
-│   │
-│   ├── [NEW] command-palette/       # Refactored in v2.5
-│   │   ├── CommandPalette.tsx       # ⌘K overlay, Navigate + Ask-AI modes
-│   │   ├── NavigateMode.tsx
-│   │   ├── AskAIMode.tsx            # Streaming answer inline
-│   │   └── useCommandPalette.ts
-│   │
-│   ├── [NEW] mini-graph/            # NEW in v2.5
-│   │   ├── MiniGraph.tsx            # Slide-over from workspace header
-│   │   └── FullGraph.tsx            # /entity/[type]/[id]/graph page
-│   │
-│   ├── [NEW] compare/               # NEW in v2.5
-│   │   └── CompareView.tsx          # /compare?ids=... page (read-only v1 per §14.2 Q3)
-│   │
-│   ├── [NEW] ai-roster/             # NEW in v2.6
-│   │   ├── RosterGrid.tsx           # Filterable grid (by dept/role/status/sub-state)
-│   │   ├── RosterGroup.tsx          # Group-by-template grouping
-│   │   ├── RosterRow.tsx            # Avatar, name, sub-state, credits consumed, lifecycle controls
-│   │   └── CostAttribution.tsx      # Per-AI-Employee credit consumption this period
-│   │
-│   ├── [NEW] citation/              # NEW in v2.6
-│   │   ├── CitationChip.tsx         # Superscript inline chip rendering
-│   │   └── CitationSlideOver.tsx    # Slide-over with "Open full page" link (§14.2 Q8)
-│   │
-│   ├── [NEW] density/               # NEW in v2.6
-│   │   ├── DensityProvider.tsx      # Global density context (Compact/Default/Comfortable)
-│   │   ├── useDensity.ts            # Hook: returns current density + per-workspace override
-│   │   └── DensityToggle.tsx        # UI: 3-state segmented control in user settings
-│   │
-│   ├── [NEW] charts/                # Locked in v2.6: Tremor (per §14.2 Q7)
-│   │   ├── TremorProvider.tsx       # Wraps <TremorRaw> with theme/density tokens
-│   │   ├── KpiCard.tsx              # Tremor <Card> wrapper, dark-mode-aware
-│   │   ├── LineAreaChart.tsx        # Tremor <AreaChart>
-│   │   ├── BarChart.tsx             # Tremor <BarChart>
-│   │   └── DonutChart.tsx           # Tremor <DonutChart>
-│   │
-│   ├── [DEPRECATE] charts/ (old)    # Phase out in v2.6 — replace imports with Tremor wrappers
-│   │   └── (legacy) LineChart.tsx, BarChart.tsx, AreaChart.tsx, Sparkline.tsx
-│   │
-│   ├── [RENAME] ai-actions/ → ask-ai/  # v2.5: directory rename to reflect UI terminology
-│   │   ├── AskAIPanel.tsx           # Was AIActionsPanel
-│   │   ├── QuickActionButton.tsx    # Was AIActionButton
-│   │   ├── AskAIOutput.tsx          # Was AIActionOutput (streaming, citation chips)
-│   │   ├── ActionHistory.tsx
-│   │   └── ActionConfig.tsx
-│   │
-│   ├── [NEW] widgets/
-│   │   ├── WidgetRegistry.ts         # Widget definitions (12 visualization types)
-│   │   ├── WidgetRenderer.tsx       # Selects visualization: Card | Line | Bar | Gauge | Table | Heatmap | Kanban | Gantt | Sparkline | Badge
-│   │   ├── WidgetGrid.tsx           # Drag-drop layout (react-grid-layout)
-│   │   ├── WidgetPicker.tsx         # Add widget modal
-│   │   ├── WidgetConfig.tsx         # Widget-specific config form
-│   │   └── visualizations/
-│   │       ├── Card.tsx            # Imports: components/kpi/KpiTile.tsx
-│   │       ├── LineChart.tsx        # Imports: components/charts/LineChart.tsx
-│   │       ├── BarChart.tsx         # Imports: components/charts/BarChart.tsx
-│   │       ├── Gauge.tsx            # [NEW]
-│   │       ├── Table.tsx            # [NEW] based on DataTable
-│   │       ├── Heatmap.tsx          # [NEW]
-│   │       ├── Kanban.tsx            # Imports: existing kanban logic
-│   │       ├── Gantt.tsx            # [NEW]
-│   │       ├── Sparkline.tsx         # Imports: components/charts/Sparkline.tsx
-│   │       └── StatusBadge.tsx       # Imports: components/creatio/StatusBadge.tsx
-│   │
-│   ├── [NEW] design-system/         # NEW in v2.5: bind NUWS §7.5 design tokens
-│   │   ├── tokens.ts                # Spacing, color, type scale, density exports
-│   │   ├── themes.ts                # Light + dark mode + per-tenant overrides
-│   │   ├── EmptyStates/             # 6 canonical illustrations (NUWS §3.1a)
-│   │   │   ├── FirstRun.tsx
-│   │   │   ├── NoData.tsx
-│   │   │   ├── NoPermission.tsx
-│   │   │   ├── NoResults.tsx
-│   │   │   ├── IntegrationDisconnected.tsx
-│   │   │   └── AIGeneratedNothing.tsx
-│   │   └── DensityProvider.tsx      # Compact / Default / Comfortable context
-│   │
-│   ├── [EXTEND] kpi/               # EAOS-2: rename KpiTile → Card in widget registry
-│   ├── [EXTEND] charts/            # EAOS-2: replace legacy charts with Tremor wrappers (locked in v2.6 §14.2 Q7)
-│   ├── [EXTEND] creatio/           # EAOS-2: KpiCard → deprecate, use Card.tsx
-│   ├── [EXTEND] inspector/         # EAOS-1: split into capability panels
-│   ├── [EXTEND] forms/             # EAOS-2: widget config forms
-│   ├── [EXTEND] layout/            # EAOS-1: TopBar, IconRail (now left icon rail per NUWS §5.1)
-│   │
-│   └── [NEW] knowledge/
-│       ├── KnowledgePanel.tsx        # Capability panel
-│       ├── KnowledgeSearch.tsx
-│       ├── KnowledgeEditor.tsx
-│       ├── KnowledgeViewer.tsx
-│       └── RAGAnswer.tsx            # With mandatory citation chips (NUWS §2.3)
-│
-└── services/
-    ├── [NEW] entity.service.ts     # Entity CRUD (wraps API)
-    ├── [NEW] widget.service.ts     # Widget registry client
-    ├── [NEW] ai-actions.service.ts # Renamed mentally to ask-ai.service.ts in v2.5; registry name unchanged
-    ├── [EXTEND] agents.service.ts # Keep for agent-specific ops
-    ├── [EXTEND] knowledge.service.ts # [NEW] — or create new if separate from memory
-    ├── [NEW] mission-feed.service.ts # NEW in v2.5 (tenant-default + per-user opt-in per §14.2 Q1)
-    ├── [NEW] compare.service.ts     # NEW in v2.5 (read-only v1 per §14.2 Q3)
-    ├── [NEW] ai-roster.service.ts   # NEW in v2.6: AI Roster queries (by dept/role/status/template)
-    ├── [NEW] density.service.ts     # NEW in v2.6: persists per-user density preference
-    └── [EXTEND] marketplace.service.ts # EAOS-5: extend for packs
-```
+
+(End of legacy v2.6 file structure — removed in v2.8 per D-023.)
 
 ### 11.2b `frontend-eaos/` File Structure (NEW in v2.7 — D-022)
 

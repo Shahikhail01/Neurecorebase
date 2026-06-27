@@ -17,7 +17,7 @@
 
 These are the 7 tasks from [`EAOS-implementation-roadmap.md` §4](./EAOS-implementation-roadmap.md). All must complete in Week 1 before any new feature work.
 
-**Per D-022 (2026-06-27):** tasks 0.6 and 0.7 are **N/A** in the new `frontend-eaos/` (built correctly from day 1). They are skipped for the old `frontend-tenant/` (which is now frozen). The other 5 tasks (0.1–0.5) proceed on the backend regardless.
+**Per D-022 + D-023 (2026-06-27):** tasks 0.6 and 0.7 are **ELIMINATED** by deleting `frontend-tenant/`. The bugs they addressed (wrong-token-key, Toaster wiring) cannot exist in the new `frontend-eaos/` because it uses httpOnly cookies from day 1 and includes a wired Toaster in the initial scaffold. The other 5 tasks (0.1–0.5) proceed on the backend regardless.
 
 ### FIX-001 · `tools.controller.ts:execute` and related endpoints are unauthenticated
 
@@ -63,26 +63,26 @@ These are the 7 tasks from [`EAOS-implementation-roadmap.md` §4](./EAOS-impleme
 ### FIX-005 · Wrong-token-key bug: 11+ frontend files silently send unauthenticated requests
 
 - **Severity:** 🟠 High (silent data corruption)
-- **Status:** ⛔ **N/A in new `frontend-eaos/`** (per D-022)
-- **Files (in frozen `frontend-tenant/`):**
+- **Status:** ✅ **Fixed** (by deletion of `frontend-tenant/` per D-023, 2026-06-27)
+- **Files (in deleted `frontend-tenant/`):**
   - `frontend-tenant/src/app/service-desk/page.tsx:107-120`
   - `frontend-tenant/src/app/finance/page.tsx:178`
   - `frontend-tenant/src/app/intelligence/page.tsx:301, 409, 534, 647`
   - `frontend-tenant/src/app/intelligence/page.tsx` (multiple other places)
 - **Description:** Raw `fetch()` calls read `localStorage.getItem('accessToken')` (wrong key). The canonical `TokenManager` uses `hq_access_token` (being renamed to `nc_access_token`). The wrong-key reads return `null`; the request runs unauthenticated; backend returns 200 with empty data; page silently renders zeros.
-- **Resolution per D-022:** Old `frontend-tenant/` is FROZEN. Bug is not fixed there. New `frontend-eaos/` uses httpOnly cookies from day 1, so this bug class is impossible. Bug will be eliminated when `frontend-tenant/` is decommissioned.
+- **Resolution per D-023:** `frontend-tenant/` deleted in full. The bug class is impossible in the new `frontend-eaos/` because it uses httpOnly cookies from day 1 (no `localStorage` at all).
 - **Doc ref:** [`EAOS-frontend-data-layer.md` §4.2](./EAOS-frontend-data-layer.md)
 
 ### FIX-006 · Toaster silently drops all toasts
 
 - **Severity:** 🟡 Medium
-- **Status:** ⛔ **N/A in new `frontend-eaos/`** (per D-022)
-- **Files (in frozen `frontend-tenant/`):**
+- **Status:** ✅ **Fixed** (by deletion of `frontend-tenant/` per D-023, 2026-06-27)
+- **Files (in deleted `frontend-tenant/`):**
   - `frontend-tenant/src/core/services/notification/NotificationService.ts`
   - `frontend-tenant/src/core/services/notification/ToastStrategy.ts`
   - `frontend-tenant/src/app/layout.tsx`
 - **Description:** `NotificationService` with `ToastStrategy` is fully implemented; `ToastStrategy` fires `window` CustomEvent `hq:toast`; no listener exists. Toasts are silently dropped. In-app notifications DO work (via `notificationStore`).
-- **Resolution per D-022:** Old `frontend-tenant/` is FROZEN. Bug is not fixed there. New `frontend-eaos/` includes the Toaster wiring in the initial scaffold.
+- **Resolution per D-023:** `frontend-tenant/` deleted in full. The new `frontend-eaos/` includes the Toaster wiring in the initial scaffold.
 - **Doc ref:** [`EAOS-frontend-data-layer.md` §8.3](./EAOS-frontend-data-layer.md)
 
 ### FIX-007 · Inconsistent tenant-isolation enforcement; only one `findOne` explicitly checks cross-tenant

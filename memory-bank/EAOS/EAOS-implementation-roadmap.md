@@ -1,11 +1,11 @@
 # NeureCore — EAOS Implementation Roadmap
 
-**Document Version:** 1.1
+**Document Version:** 1.2
 **Date:** 2026-06-27
 **Status:** EAOS Operational Plan — phasing, sequencing, risk gates
 **Audience:** Engineering leads, product, release manager
-**Supersedes:** v1.0 (D-022: build EAOS in new `frontend-eaos/`; freeze `frontend-tenant/`; extract `packages/ui/`; Phase 9 httpOnly cookie auth is pulled forward and lands BEFORE `frontend-eaos` ships; Phase 10 adds `frontend-tenant/` decommission after parity)
-**Related (read on demand):** `EAOS-implementation-plan.md` v2.7, `EAOS-NUWS-principles.md` v1.3, `EAOS-pricing-plans.md` v1.2, `EAOS-api-contract.md` v1.0, `EAOS-rbac-model.md` v1.0, `EAOS-frontend-data-layer.md` v1.1
+**Supersedes:** v1.1 (D-023: `frontend-tenant/` deleted in full. Phase 0 tasks 0.6 and 0.7 eliminated. Phase 9 dual-support window eliminated — cookies are the sole auth path. Phase 10 decommission tasks 10.13–10.15 already done. No "frozen" intermediate state.)
+**Related (read on demand):** `EAOS-implementation-plan.md` v2.8, `EAOS-NUWS-principles.md` v1.4, `EAOS-pricing-plans.md` v1.2, `EAOS-api-contract.md` v1.0, `EAOS-rbac-model.md` v1.0, `EAOS-frontend-data-layer.md` v1.2
 
 ---
 
@@ -21,15 +21,15 @@ It is intentionally short. Every phase links to the relevant section of the cano
 3. **Best practice** — feature flags, observability, rollback, and security review gates are non-negotiable.
 4. **Speed** — last, not first. A 2-week delay is better than a 2-day outage.
 
-## 0a. Architecture note (D-022)
+## 0a. Architecture note (D-022 + D-023)
 
-Per D-022 (2026-06-27), EAOS is built in a **new app `frontend-eaos/`** at `eaos.neurecore.com/{tenantCompanyName}`. The old `frontend-tenant/` is **frozen** — no new features; critical security fixes only. Both consume a shared `packages/ui/` package for design tokens, components, permission hooks, and query keys. The backend switches to **httpOnly + Secure + SameSite=Strict cookie auth FIRST** (Phase 9 work pulled forward) so the new app is cookie-auth from day 1.
+Per D-022 (2026-06-27) and D-023 (2026-06-27), EAOS is built in a **new app `frontend-eaos/`** at `eaos.neurecore.com/{tenantCompanyName}`. The old `frontend-tenant/` was **deleted in full** per D-023 (NeureCore has no production users, no release). The shared `packages/ui/` package is the canonical source for design tokens, components, permission hooks, and query keys. The backend ships **httpOnly + Secure + SameSite=Strict cookie auth as the sole auth path** for `frontend-eaos/` — no `Authorization: Bearer` fallback, no dual-support window.
 
 **Implications for the roadmap:**
-- **Phase 0 frontend tasks 0.6 and 0.7 are N/A** in `frontend-eaos/`; they are intentionally skipped in the frozen `frontend-tenant/`.
+- **Phase 0 frontend tasks 0.6 and 0.7 are ELIMINATED.** No `frontend-tenant/` to fix.
 - **Phase 1 gains a frontend scaffolding step** for `frontend-eaos/` and `packages/ui/`. The original Phase 2 (TanStack Query migration) is essentially free for the new app.
-- **Phase 9 is pulled forward** to land BEFORE `frontend-eaos` ships. Dual-support window = 90 days for any existing tenant on `frontend-tenant/`.
-- **Phase 10 (cleanup) includes** decommissioning `frontend-tenant/` after feature parity + 90-day 301 redirect.
+- **Phase 9 ships cookies as the sole auth path** (not pulled forward — it IS the path). No dual-support window.
+- **Phase 10 (cleanup) reduces scope** — no `frontend-tenant/` decommission tasks; the folder is already gone. The remaining cleanup is deleting legacy data stores, dead code, and feature flags at 100%.
 
 ---
 
@@ -71,7 +71,7 @@ Per D-022 (2026-06-27), EAOS is built in a **new app `frontend-eaos/`** at `eaos
 
 1. **Phase 0 must ship first.** No new features until existing security gaps are closed.
 2. **Phase 1 must precede Phase 2/3/5.** OpenAPI types and shared schemas are required by everything else.
-3. **Phase 9 (httpOnly cookies) does NOT block EAOS work.** It can run in parallel with Phase 5/6/7 because the dual-support period is 90 days.
+3. **Phase 9 (httpOnly cookies) does NOT block EAOS work.** It can run in parallel with Phase 5/6/7. Per D-023, there is no dual-support window — cookies are the only auth path.
 4. **EAOS-1 (Phase 3) blocks EAOS-2/3/4.** The workspace shell is the container for everything else.
 5. **EAOS-2 (widgets) blocks EAOS-3 only for the Operations/Resources/Insights panels.** AI Actions can ship without widget registry if the Intelligence panel uses bespoke cards.
 6. **EAOS-4 (Knowledge) blocks EAOS-5 (Solution Packs).** Packs ship knowledge; no Knowledge = no Pack knowledge extension.
@@ -85,6 +85,8 @@ Per D-022 (2026-06-27), EAOS is built in a **new app `frontend-eaos/`** at `eaos
 **Goal:** Close every active security gap identified in the codebase audits. **No new features, no refactors.**
 
 **Why this is Phase 0, not a side-task:** The audits found real, exploitable issues (unauthenticated `/tools/execute`, SSE without auth, `AuditInterceptor` not writing to DB, two divergent `UserRole` enums). These cannot wait for the larger refactors.
+
+**Per D-023:** the original Phase 0 frontend tasks 0.6 and 0.7 are **eliminated** (they targeted the now-deleted `frontend-tenant/`). Phase 0 is now backend-only (5 tasks).
 
 ### Backend
 
@@ -437,11 +439,11 @@ This is the phase where every prior foundation gets exercised for the first time
 
 ---
 
-## 13. Phase 9 — Auth Hardening (PULLED FORWARD per D-022)
+## 13. Phase 9 — Auth Hardening (Sole Auth Path — Per D-023)
 
-**Goal:** Switch from `localStorage` JWT to httpOnly + Secure + SameSite=Strict cookies. CSRF protection.
+**Goal:** Backend ships httpOnly + Secure + SameSite=Strict cookies as the **only** auth path for `frontend-eaos/`. CSRF protection.
 
-**Why this is pulled forward (D-022):** `frontend-eaos/` is being built from day 1 with cookie auth. We don't want the new app to inherit the `localStorage` XSS problem. So the backend switches to cookies **before** `frontend-eaos` ships, in parallel with Phase 1 (foundations). The dual-support window is 90 days; any existing tenant still on `frontend-tenant/` continues to work via the legacy `Authorization: Bearer` header during that window.
+**Why this is the sole auth path (D-023):** `frontend-tenant/` was deleted in full. There is no "old" client to support. The backend ships cookies as the only mechanism; no `Authorization: Bearer` fallback header is needed. This is a strict improvement over the previous design (no XSS-vulnerable `localStorage` ever).
 
 ### Pre-reqs
 
@@ -459,7 +461,7 @@ This is the phase where every prior foundation gets exercised for the first time
 | 9.5 | Frontend: remove `localStorage` token reads; rely on cookies | frontend-data-layer §4.1 |
 | 9.6 | Frontend: Socket.IO client switches to `withCredentials: true` | frontend-data-layer §5.1 |
 | 9.7 | Frontend: SSE client uses cookies (no token param) | frontend-data-layer §5.2 |
-| 9.8 | Roll out per tenant behind `USE_HTTPONLY_AUTH` flag; dual-support 90 days | api-contract §4.1 |
+| 9.8 | Roll out per tenant behind `USE_HTTPONLY_AUTH` flag (no dual-support window; flag toggles on/off per tenant) | api-contract §4.1 |
 
 ### Exit criteria
 
@@ -469,13 +471,13 @@ This is the phase where every prior foundation gets exercised for the first time
 - [ ] Penetration test signed off: tokens are not XSS-exfiltratable
 - [ ] `__Host-` prefix prevents subdomain cookie theft
 
-**Rollback plan:** the `USE_HTTPONLY_AUTH` flag lets us roll back per tenant. During dual-support, the legacy `Authorization` header path still works.
+**Rollback plan:** the `USE_HTTPONLY_AUTH` flag lets us roll back per tenant. There is no legacy `Authorization` header path to support (D-023); the flag is binary on/off.
 
 ---
 
-## 14. Phase 10 — Cleanup + `frontend-tenant` Decommission (Weeks 41–42)
+## 14. Phase 10 — Cleanup (Week 41)
 
-**Goal:** Remove all legacy code paths. Decommission `frontend-tenant/`. Tighten the codebase.
+**Goal:** Remove all legacy code paths. Tighten the codebase. (`frontend-tenant/` is already gone per D-023.)
 
 ### Tasks
 
@@ -493,9 +495,9 @@ This is the phase where every prior foundation gets exercised for the first time
 | 10.10 | Delete all `@deprecated` JSDoc tags | grep |
 | 10.11 | Tighten all `as any` casts to typed alternatives | frontend-data-layer §8 |
 | 10.12 | Lock all file:line references in this document that say "exists" — if the file is gone, the reference is gone | this doc |
-| 10.13 | **Verify `frontend-eaos` reaches feature parity** with `frontend-tenant` (entity workspace, AI roster, knowledge, marketplace, etc.) | D-022 |
-| 10.14 | **Add 301 redirect from `frontend-tenant` routes to `frontend-eaos` routes** for 90 days | D-022 |
-| 10.15 | **Delete `frontend-tenant/`** after the 90-day redirect window expires | D-022 |
+| ~~10.13~~ | ~~Verify `frontend-eaos` reaches feature parity with `frontend-tenant`~~ — **DONE** (N/A per D-023; no parity check needed) | D-023 |
+| ~~10.14~~ | ~~Add 301 redirect from `frontend-tenant` routes to `frontend-eaos` routes for 90 days~~ — **DONE** (N/A per D-023; no redirect needed) | D-023 |
+| ~~10.15~~ | ~~Delete `frontend-tenant/` after the 90-day redirect window expires~~ — **DONE** (deleted immediately per D-023) | D-023 |
 
 ### Exit criteria
 
