@@ -16,7 +16,7 @@ import {
   CreateDepartmentTemplateDto,
   UpdateDepartmentTemplateDto,
 } from './dto/department-template.dto';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { Roles, Public } from '../../common/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 
 /**
@@ -33,9 +33,11 @@ export class DepartmentTemplatesController {
   constructor(private readonly service: DepartmentTemplatesService) {}
 
   // ─── List ───────────────────────────────────────────────────────────────────
+  // Public so the unauthenticated onboarding wizard can render template options
+  // before the user has a JWT. Write operations below still require SuperAdmin.
 
+  @Public()
   @Get()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN, UserRole.SUPPORT)
   findAll(
     @Query('category') category?: string,
     @Query('page') page = '1',
@@ -50,8 +52,8 @@ export class DepartmentTemplatesController {
 
   // ─── Read One ───────────────────────────────────────────────────────────────
 
+  @Public()
   @Get(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.findOne(id);
   }

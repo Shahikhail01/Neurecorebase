@@ -27,7 +27,7 @@ import {
 } from './dto/tier.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../security/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { Roles, Public } from '../../common/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 
 @Controller({ path: 'tiers', version: '1' })
@@ -36,22 +36,29 @@ export class TiersController {
   constructor(private readonly tiersService: TiersService) {}
 
   // ─── Read ────────────────────────────────────────────────────────────────
+  // Tier catalog is global, non-tenant-scoped data needed by the unauthenticated
+  // onboarding wizard. Made public so the wizard can render plan options before
+  // the user has a JWT. Write operations below still require SuperAdmin.
 
+  @Public()
   @Get()
   findAll() {
     return this.tiersService.findAll();
   }
 
+  @Public()
   @Get('default')
   getDefault() {
     return this.tiersService.getDefault();
   }
 
+  @Public()
   @Get(':id')
   findById(@Param('id', ParseUUIDPipe) id: string) {
     return this.tiersService.findById(id);
   }
 
+  @Public()
   @Get('slug/:slug')
   findBySlug(@Param('slug') slug: string) {
     return this.tiersService.findBySlug(slug);

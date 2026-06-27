@@ -43,6 +43,10 @@ export default function OnboardingSetupPage() {
 
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [templates, setTemplates] = useState<DepartmentTemplate[]>([]);
+  const [tiersLoading, setTiersLoading] = useState(false);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [tiersError, setTiersError] = useState<string | null>(null);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState('');
   const [industry, setIndustry] = useState('');
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
@@ -59,48 +63,99 @@ export default function OnboardingSetupPage() {
   >([]);
   const [inviteErrors, setInviteErrors] = useState<string[]>([]);
 
+  // Fetch state first (gates the stepper), but render Step 1 immediately.
+  // Tiers/templates load in parallel after first paint — they don't block the
+  // initial Company step, which is why the wizard feels slow otherwise.
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
     void (async () => {
       try {
-        const [state, tierList, tmplList] = await Promise.all([
-          onboardingService.getState(),
-          tiersService.list(),
-          departmentTemplatesService.list(),
-        ]);
-        setTiers(tierList);
-        setTemplates(tmplList);
+        const state = await onboardingService.getState();
+        if (cancelled) return;
         setStep(state.step === 'account' ? 'company' : state.step);
         if (state.company?.name) setCompanyName(state.company.name);
         if (state.company?.industry) setIndustry(state.company.industry);
         if (state.tierId) setSelectedTierId(state.tierId);
       } catch (err) {
         console.error(err);
-        setError('Failed to load onboarding data.');
+        if (!cancelled) setError('Failed to load onboarding state.');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+
+    // Fire tiers + templates in parallel (non-blocking on the stepper render).
+    setTiersLoading(true);
+    setTemplatesLoading(true);
+    void tiersService
+      .list()
+      .then((list) => {
+        if (!cancelled) setTiers(list);
+      })
+      .catch((e) => {
+        if (!cancelled) setTiersError(e instanceof Error ? e.message : 'Failed to load plans.');
+      })
+      .finally(() => {
+        if (!cancelled) setTiersLoading(false);
+      });
+    void departmentTemplatesService
+      .list()
+      .then((list) => {
+        if (!cancelled) setTemplates(list);
+      })
+      .catch((e) => {
+        if (!cancelled) setTemplatesError(e instanceof Error ? e.message : 'Failed to load templates.');
+      })
+      .finally(() => {
+        if (!cancelled) setTemplatesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
+
+  const retryTiers = () => {
+    setTiersLoading(true);
+    setTiersError(null);
+    void tiersService
+      .list()
+      .then(setTiers)
+      .catch((e) => setTiersError(e instanceof Error ? e.message : 'Failed to load plans.'))
+      .finally(() => setTiersLoading(false));
+  };
+
+  const retryTemplates = () => {
+    setTemplatesLoading(true);
+    setTemplatesError(null);
+    void departmentTemplatesService
+      .list()
+      .then(setTemplates)
+      .catch((e) => setTemplatesError(e instanceof Error ? e.message : 'Failed to load templates.'))
+      .finally(() => setTemplatesLoading(false));
+  };
 
   const currentIndex = STEPS.findIndex((s) => s.id === step);
 
-  const goTo = async (next: OnboardingStep) => {
+  // Optimistic navigation — advance the stepper immediately and fire the
+  // server-side update in the background. Eliminates the "few seconds to
+  // continue" delay caused by awaiting PATCH /onboarding/state.
+  const goTo = (next: OnboardingStep) => {
     setError(null);
     if (step === 'company') {
-      try {
-        await onboardingService.updateState({
-          step: next,
-          company: { name: companyName, industry },
-        } as never);
-      } catch {
-        // continue optimistically
-      }
+      const payload = {
+        step: next,
+        company: { name: companyName, industry },
+      } as never;
+      onboardingService.updateState(payload).catch((e) => {
+        console.warn('Background updateState failed:', e);
+      });
     }
     setStep(next);
   };
 
-  const handleSelectTier = async (tierId: string) => {
+  const handleSelectTier = (tierId: string) => {
     setSelectedTierId(tierId);
     setError(null);
   };
@@ -111,7 +166,7 @@ export default function OnboardingSetupPage() {
     setError(null);
     try {
       await onboardingService.selectTier(selectedTierId);
-      await goTo('template');
+      setStep('template');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to select tier.');
     } finally {
@@ -126,7 +181,7 @@ export default function OnboardingSetupPage() {
       setSelectedTemplateSlug(slug);
       const result = await onboardingService.selectTemplate(slug);
       setDeploymentSummary(result);
-      await goTo('review');
+      setStep('review');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to deploy template.');
     } finally {
@@ -134,8 +189,8 @@ export default function OnboardingSetupPage() {
     }
   };
 
-  const handleFinishReview = async () => {
-    await goTo('team');
+  const handleFinishReview = () => {
+    setStep('team');
   };
 
   const handleSendInvites = async () => {
@@ -187,12 +242,10 @@ export default function OnboardingSetupPage() {
     }
   };
 
-  if (!user || loading) {
+  if (!user) {
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-4">
         <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-32 w-full" />
       </div>
     );
   }
@@ -293,16 +346,25 @@ export default function OnboardingSetupPage() {
                   You can upgrade anytime. Limits shown are hard caps.
                 </p>
               </div>
-              {tiers.length === 0 ? (
+              {tiersLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[0, 1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-44 w-full" />
+                  ))}
+                </div>
+              ) : tiersError ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+                  <p className="text-sm text-destructive">{tiersError}</p>
+                  <Button variant="outline" size="sm" onClick={retryTiers}>
+                    Retry
+                  </Button>
+                </div>
+              ) : tiers.length === 0 ? (
                 <div className="rounded-lg border border-dashed p-6 text-center space-y-2">
                   <p className="text-sm text-muted-foreground">
                     No plans are available right now. Please retry in a moment.
                   </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.location.reload()}
-                  >
+                  <Button variant="outline" size="sm" onClick={retryTiers}>
                     Retry
                   </Button>
                 </div>
@@ -365,7 +427,30 @@ export default function OnboardingSetupPage() {
                   We will deploy these departments and agents for you automatically.
                 </p>
               </div>
-              {templates.length === 0 ? (
+              {templatesLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {[0, 1].map((i) => (
+                    <Skeleton key={i} className="h-24 w-full" />
+                  ))}
+                </div>
+              ) : templatesError ? (
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+                    <p className="text-sm text-destructive">{templatesError}</p>
+                    <Button variant="outline" size="sm" onClick={retryTemplates}>
+                      Retry
+                    </Button>
+                  </div>
+                  <div className="flex justify-between pt-2">
+                    <Button variant="ghost" onClick={() => setStep('plan')}>
+                      <ArrowLeft className="w-4 h-4 mr-1" /> Back
+                    </Button>
+                    <Button onClick={handleFinishReview}>
+                      Skip templates <ArrowRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              ) : templates.length === 0 ? (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
                     No department templates available. You can continue and

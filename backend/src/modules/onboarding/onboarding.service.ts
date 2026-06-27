@@ -31,18 +31,19 @@ export class OnboardingService implements IOnboardingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getState(tenantId: string): Promise<OnboardingStatePayload> {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      include: { tier: true },
-    });
+    const [tenant, agentCount, deptCount] = await Promise.all([
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        include: { tier: true },
+      }),
+      this.prisma.agent.count({
+        where: { tenantId, isSelected: true },
+      }),
+      this.prisma.department.count({
+        where: { tenantId },
+      }),
+    ]);
     if (!tenant) throw new NotFoundException('Tenant not found');
-
-    const agentCount = await this.prisma.agent.count({
-      where: { tenantId, isSelected: true },
-    });
-    const deptCount = await this.prisma.department.count({
-      where: { tenantId },
-    });
 
     return {
       step: (tenant.onboardingStep as OnboardingStatePayload['step']) ?? 'plan',
