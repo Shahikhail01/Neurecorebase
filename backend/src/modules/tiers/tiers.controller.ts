@@ -18,6 +18,7 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { TiersService } from './tiers.service';
 import {
   CreateTierDto,
@@ -31,6 +32,7 @@ import { Roles, Public } from '../../common/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 
 @Controller({ path: 'tiers', version: '1' })
+@ApiCommon('tiers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TiersController {
   constructor(private readonly tiersService: TiersService) {}

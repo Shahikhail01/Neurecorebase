@@ -13,6 +13,7 @@ import {
   Logger,
   Redirect,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { IntegrationsService } from './integrations.service';
 import { ConnectGoogleDto, ConnectBrevoDto } from './dto/integration.dto';
 import { GoogleGmailService } from './google/google-gmail.service';
@@ -29,6 +30,7 @@ import type { JwtPayload } from '../auth/interfaces/token.interface';
 import { UserRole } from '@prisma/client';
 
 @Controller({ path: 'integrations', version: '1' })
+@ApiCommon('integrations')
 export class IntegrationsController {
   private readonly logger = new Logger(IntegrationsController.name);
 

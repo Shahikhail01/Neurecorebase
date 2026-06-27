@@ -20,6 +20,7 @@ import {
   ParseUUIDPipe,
   Headers,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
@@ -43,6 +44,7 @@ import {
  * `resolveTenantId()` helper for SUPER_ADMIN cross-tenant access.
  */
 @Controller({ path: 'routines', version: '1' })
+@ApiCommon('routines')
 @UseGuards(JwtAuthGuard)
 export class RoutinesController {
   constructor(

@@ -21,11 +21,13 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GoalsService } from './goals.service';
 import { CreateGoalDto, UpdateGoalDto, ListGoalsDto } from './dto/goal.dto';
 
 @Controller({ path: 'goals', version: '1' })
+@ApiCommon('goals')
 @UseGuards(JwtAuthGuard)
 export class GoalsController {
   constructor(private readonly goalsService: GoalsService) {}

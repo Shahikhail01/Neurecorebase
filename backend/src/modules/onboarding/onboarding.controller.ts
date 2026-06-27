@@ -8,6 +8,7 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { OnboardingService } from './onboarding.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/roles.decorator';
@@ -21,6 +22,7 @@ import {
 } from './dto/onboarding.dto';
 
 @Controller({ path: 'onboarding', version: '1' })
+@ApiCommon('onboarding')
 export class OnboardingController {
   constructor(private readonly onboarding: OnboardingService) {}
 

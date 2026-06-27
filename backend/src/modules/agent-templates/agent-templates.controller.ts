@@ -13,6 +13,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { AgentTemplatesService } from './agent-templates.service';
 import {
   CreateAgentTemplateDto,
@@ -32,6 +33,7 @@ import { UserRole } from '@prisma/client';
  * All mutations are restricted to ADMIN/OWNER roles.
  */
 @Controller({ path: 'agent-templates', version: '1' })
+@ApiCommon('agent_templates')
 export class AgentTemplatesController {
   constructor(private readonly templatesService: AgentTemplatesService) {}
 

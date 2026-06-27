@@ -8,6 +8,7 @@ import {
   Param,
   Query,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { SettingsService } from './settings.service';
 
 // AI Provider DTOs
@@ -101,6 +102,7 @@ class ToggleEmailTemplateDto {
 }
 
 @Controller({ path: 'settings', version: '1' })
+@ApiCommon('settings')
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 

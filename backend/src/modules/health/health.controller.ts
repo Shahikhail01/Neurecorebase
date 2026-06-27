@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Header } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { Public } from '../../common/decorators/roles.decorator';
 import * as os from 'os';
 
@@ -16,6 +17,7 @@ import * as os from 'os';
  * - GET /health/metrics - Prometheus metrics
  */
 @Controller({ path: 'health', version: '1' })
+@ApiCommon('health')
 @Public()
 export class HealthController {
   private readonly startTime = Date.now();

@@ -10,6 +10,7 @@ import {
   UseGuards,
   ForbiddenException,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { ToolsService } from './tools.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles, Public } from '../../common/decorators/roles.decorator';
@@ -37,6 +38,7 @@ import type { JwtPayload } from '../auth/interfaces/token.interface';
  * - `getStatus` requires any tenant user; the service enforces ownership.
  */
 @Controller({ path: 'tools', version: '1' })
+@ApiCommon('tools')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ToolsController {
   constructor(private readonly toolsService: ToolsService) {}

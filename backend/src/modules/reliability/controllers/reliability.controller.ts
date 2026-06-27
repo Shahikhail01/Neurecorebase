@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ApiCommon } from '../../../common/decorators/api-common.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -43,6 +44,7 @@ function resolveTenantId(user: JwtPayload, explicit?: string): string {
  * and circuit breaker introspection.
  */
 @Controller({ path: 'reliability', version: '1' })
+@ApiCommon('controllers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReliabilityController {
   constructor(

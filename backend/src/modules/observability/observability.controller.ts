@@ -5,12 +5,14 @@ import {
   ForbiddenException,
   Header,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { ObservabilityService } from './services/observability.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
 
 @Controller({ path: 'observability', version: '1' })
+@ApiCommon('observability')
 export class ObservabilityController {
   constructor(private readonly observabilityService: ObservabilityService) {}
 

@@ -10,6 +10,7 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ApiCommon } from '../../../common/decorators/api-common.decorator';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from '../services/auth.service';
 import { RegisterDto } from '../dto/register.dto';
@@ -24,6 +25,7 @@ import type { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 
 @Controller({ path: 'auth', version: '1' })
+@ApiCommon('controllers')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
   private readonly googleClientId: string;

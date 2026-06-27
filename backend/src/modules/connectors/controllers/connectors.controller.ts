@@ -12,6 +12,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiCommon } from '../../../common/decorators/api-common.decorator';
 import { ConnectorService } from '../services/connector.service';
 import {
   RegisterConnectorDto,
@@ -28,6 +29,7 @@ import { OAuthService } from '../services/oauth.service';
  * SRP: HTTP routing only — all business logic in ConnectorService.
  */
 @Controller({ path: 'connectors', version: '1' })
+@ApiCommon('controllers')
 export class ConnectorsController {
   constructor(
     private readonly connectorService: ConnectorService,

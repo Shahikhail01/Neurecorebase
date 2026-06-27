@@ -13,6 +13,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { TasksService } from './services/tasks.service';
 import { WorkflowsService } from './services/workflows.service';
 import { CreateTaskDto, UpdateTaskDto } from './dto/task.dto';
@@ -27,6 +28,7 @@ import type { TaskStatus, WorkflowStatus } from '@prisma/client';
 // ─────────────────────────────────────────────────────────────
 
 @Controller({ path: 'tasks', version: '1' })
+@ApiCommon('orchestration')
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 

@@ -22,12 +22,14 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CostsService } from './services/costs.service';
 import { CreateBudgetPolicyDto, UpdateBudgetPolicyDto } from './dto/cost.dto';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
 
 @Controller({ path: 'costs', version: '1' })
+@ApiCommon('costs')
 @UseGuards(JwtAuthGuard)
 export class CostsController {
   constructor(private readonly costsService: CostsService) {}

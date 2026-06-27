@@ -22,6 +22,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProjectsService } from './projects.service';
 import {
@@ -35,6 +36,7 @@ import {
  * `resolveTenantId()` helper for SUPER_ADMIN cross-tenant access.
  */
 @Controller({ path: 'projects', version: '1' })
+@ApiCommon('projects')
 @UseGuards(JwtAuthGuard)
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}

@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiCommon } from '../../../common/decorators/api-common.decorator';
 import { AnalyticsService } from '../services/analytics.service';
 import { ScoreRequestDto } from '../dto/score-request.dto';
 import { ForecastRequestDto } from '../dto/forecast-request.dto';
@@ -24,6 +25,7 @@ import { UserRole } from '@prisma/client';
  * ISP: each endpoint accepts a minimal, purpose-specific DTO.
  */
 @Controller({ path: 'analytics', version: '1' })
+@ApiCommon('controllers')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 

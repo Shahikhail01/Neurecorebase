@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   ForbiddenException,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { AuditService } from './audit.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -16,6 +17,7 @@ import type { JwtPayload } from '../auth/interfaces/token.interface';
  * RBAC: tenant users see their own logs; admins see platform-wide.
  */
 @Controller({ path: 'audit-logs', version: '1' })
+@ApiCommon('audit')
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 

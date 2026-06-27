@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { MemoryService } from './memory.service';
 import { CreateMemoryDto, SearchMemoryDto } from './dto/memory.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -17,6 +18,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
 
 @Controller({ path: 'memory', version: '1' })
+@ApiCommon('memory')
 export class MemoryController {
   constructor(private readonly memoryService: MemoryService) {}
 

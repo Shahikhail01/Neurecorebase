@@ -30,6 +30,7 @@ import type { JwtPayload } from '../auth/interfaces/token.interface';
 import { AgentStatus, AgentType } from '@prisma/client';
 import { UserRole } from '@prisma/client';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiOkResponse, ApiProduces } from '@nestjs/swagger';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { IsArray, IsOptional, IsString } from 'class-validator';
 
 class UpdatePermissionsDto {
@@ -43,7 +44,7 @@ class UpdatePermissionsDto {
 }
 
 @Controller({ path: 'agents', version: '1' })
-@ApiTags('agents')
+@ApiCommon('agents')
 @ApiBearerAuth('JWT')
 export class AgentsController {
   constructor(

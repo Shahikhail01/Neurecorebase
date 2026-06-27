@@ -13,6 +13,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { UsersService } from './users.service';
 import {
   CreateUserDto,
@@ -33,6 +34,7 @@ import { ValidatedUser } from '../auth/interfaces/auth.interface';
 type AuthenticatedUser = ValidatedUser & { sub: string; jti: string };
 
 @Controller({ path: 'users', version: '1' })
+@ApiCommon('users')
 @UseGuards(JwtAuthGuard, RolesGuard, TierLimitsGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}

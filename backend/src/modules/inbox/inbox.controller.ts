@@ -19,6 +19,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { InboxService } from './inbox.service';
 import { IsIn, IsOptional, IsString } from 'class-validator';
@@ -63,6 +64,7 @@ class SendNotificationDto {
  * `resolveTenantId()` helper for SUPER_ADMIN cross-tenant access.
  */
 @Controller({ path: 'inbox', version: '1' })
+@ApiCommon('inbox')
 @UseGuards(JwtAuthGuard)
 export class InboxController {
   constructor(private readonly inboxService: InboxService) {}

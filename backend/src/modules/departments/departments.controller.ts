@@ -14,6 +14,7 @@ import {
   BadRequestException,
   UseGuards,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { DepartmentsService } from './services/departments.service';
 import { CreateDepartmentDto, UpdateDepartmentDto } from './dto/department.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -26,6 +27,7 @@ import type { JwtPayload } from '../auth/interfaces/token.interface';
 import { UserRole } from '@prisma/client';
 
 @Controller({ path: 'departments', version: '1' })
+@ApiCommon('departments')
 @UseGuards(TierLimitsGuard)
 export class DepartmentsController {
   constructor(private readonly departmentsService: DepartmentsService) {}

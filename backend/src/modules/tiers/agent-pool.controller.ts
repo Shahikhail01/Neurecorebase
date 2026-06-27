@@ -19,6 +19,7 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import {
   AgentPoolService,
   AddToPoolInput,
@@ -97,6 +98,7 @@ class ReorderPoolDto {
 }
 
 @Controller({ path: 'tiers', version: '1' })
+@ApiCommon('tiers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AgentPoolController {
   constructor(private readonly agentPoolService: AgentPoolService) {}

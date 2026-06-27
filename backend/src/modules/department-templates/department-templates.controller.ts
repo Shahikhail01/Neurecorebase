@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { DepartmentTemplatesService } from './department-templates.service';
 import {
   CreateDepartmentTemplateDto,
@@ -29,6 +30,7 @@ import { UserRole } from '@prisma/client';
  * GET (list + read) is accessible to any authenticated admin.
  */
 @Controller({ path: 'department-templates', version: '1' })
+@ApiCommon('department_templates')
 export class DepartmentTemplatesController {
   constructor(private readonly service: DepartmentTemplatesService) {}
 

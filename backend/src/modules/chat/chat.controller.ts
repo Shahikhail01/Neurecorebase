@@ -9,6 +9,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { SendChatMessageDto } from './dto/chat.dto';
 import { ChatService } from './chat.service';
 
@@ -35,6 +36,7 @@ interface AuthedRequest {
  * LLM is grounded in real tenant data instead of hallucinating.
  */
 @Controller({ version: '1' })
+@ApiCommon('chat')
 export class ChatController {
   constructor(private readonly chat: ChatService) {}
 

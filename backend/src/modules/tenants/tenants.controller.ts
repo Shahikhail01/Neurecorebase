@@ -11,6 +11,7 @@ import {
   DefaultValuePipe,
   UseGuards,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { TenantsService } from './tenants.service';
 import {
   CreateTenantDto,
@@ -24,6 +25,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
 
 @Controller({ path: 'tenants', version: '1' })
+@ApiCommon('tenants')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}

@@ -1,4 +1,5 @@
 import { Controller, Post, Body, Param, ParseUUIDPipe } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { DeploymentService } from './services/deployment.service';
 import {
   SpawnAgentFromTemplateDto,
@@ -22,6 +23,7 @@ import { UserRole } from '@prisma/client';
  *   - deployDeptTemplate: SUPER_ADMIN only (cross-tenant org restructure)
  */
 @Controller({ path: 'deploy', version: '1' })
+@ApiCommon('agents')
 export class DeploymentController {
   constructor(private readonly deploymentService: DeploymentService) {}
 

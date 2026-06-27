@@ -8,11 +8,13 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { NotificationsService } from './services/notifications.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
 
 @Controller({ path: 'notifications', version: '1' })
+@ApiCommon('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 

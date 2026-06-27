@@ -29,6 +29,7 @@ import {
   ForbiddenException,
   UseGuards,
 } from '@nestjs/common';
+import { ApiCommon } from '../../../common/decorators/api-common.decorator';
 import type { Response } from 'express';
 import { UserRole } from '@prisma/client';
 import {
@@ -51,6 +52,7 @@ const PLATFORM_ROLES: UserRole[] = [
 ];
 
 @Controller({ path: 'agents/streaming', version: '1' })
+@ApiCommon('streaming')
 @SkipThrottle()
 @UseGuards(JwtAuthGuard)
 export class AgentStreamingController {

@@ -12,6 +12,7 @@ import {
   HttpStatus,
   ForbiddenException,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { GovernanceRulesService } from './services/governance-rules.service';
 import { ApprovalsService } from './services/approvals.service';
 import {
@@ -26,6 +27,7 @@ import type { ApprovalStatus } from '@prisma/client';
 // ─── Governance Rules ─────────────────────────────────────────────────────────
 
 @Controller({ path: 'governance/rules', version: '1' })
+@ApiCommon('governance')
 export class GovernanceRulesController {
   constructor(private readonly rulesService: GovernanceRulesService) {}
 

@@ -16,6 +16,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { ConfigService } from '@nestjs/config';
 import type { Response, Request } from 'express';
 import { SecurityEventSeverity } from '../../shared/types/security.types';
@@ -28,6 +29,7 @@ import { DataMaskingService } from './services/data-masking.service';
 
 @SkipThrottle()
 @Controller('security')
+@ApiCommon('security')
 export class SecurityController {
   constructor(
     private readonly rateLimitService: RateLimitService,
