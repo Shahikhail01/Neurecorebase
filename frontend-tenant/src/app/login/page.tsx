@@ -242,6 +242,12 @@ function LoginForm() {
             Register
           </Link>
         </p>
+        <p className="mt-2 text-center text-xs text-gray-400">
+          By signing in, you agree to our{" "}
+          <Link href="/privacy" className="text-gray-500 hover:underline">
+            Privacy Policy
+          </Link>
+        </p>
       </div>
 
       {linkPrompt && (
