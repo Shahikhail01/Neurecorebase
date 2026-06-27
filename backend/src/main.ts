@@ -2,6 +2,9 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { AppModule } from './app.module';
 import { initTracing } from './infrastructure/tracing/tracing';
 
@@ -69,6 +72,53 @@ async function bootstrap() {
     }),
   );
 
+  // ─── Phase 1, Task 1.7: OpenAPI generation ───────────────────────
+  // Per `EAOS-api-contract.md` §11, we generate the OpenAPI 3.1 spec
+  // at boot and persist it to `backend/openapi/openapi.json` so the
+  // frontend codegen pipeline can consume a committed artifact.
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('NeureCore API')
+    .setDescription('Enterprise AI Operating System — REST + WebSocket + SSE')
+    .setVersion('1.0.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'JWT',
+    )
+    .addApiKey(
+      { type: 'apiKey', name: 'X-Tenant-ID', in: 'header' },
+      'X-Tenant-ID',
+    )
+    .addApiKey(
+      { type: 'apiKey', name: 'Idempotency-Key', in: 'header' },
+      'Idempotency-Key',
+    )
+    .addServer('http://localhost:3000/api/v1', 'Local dev')
+    .addServer('https://brain.neurecore.com/api/v1', 'Production (Contabo)')
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+
+  // Persist OpenAPI artifact to backend/openapi/openapi.json (per spec §11.4).
+  try {
+    const outDir = join(process.cwd(), 'openapi');
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(
+      join(outDir, 'openapi.json'),
+      JSON.stringify(document, null, 2),
+    );
+    // eslint-disable-next-line no-console
+    console.log(
+      `[OpenAPI] Wrote backend/openapi/openapi.json (${Object.keys((document as { paths?: Record<string, unknown> }).paths ?? {}).length} paths)`,
+    );
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[OpenAPI] Failed to write openapi.json (request flow NOT blocked): ${String(err)}`,
+    );
+  }
+
+  // Serve Swagger UI at /api/docs (dev + prod per spec §11.4).
+  SwaggerModule.setup('api/docs', app, document);
+
   // Add a lightweight root handler for `/api` so the base path returns useful info
   try {
     const adapter = app.getHttpAdapter().getInstance();
@@ -77,7 +127,13 @@ async function bootstrap() {
         res.json({
           status: 'ok',
           api: 'NeureCore Backend',
-          endpoints: ['/api/health', '/api/health/ready', '/api/health/live'],
+          endpoints: [
+            '/api/health',
+            '/api/health/ready',
+            '/api/health/live',
+            '/api/docs',
+            '/api/docs-json',
+          ],
         });
       });
     }
@@ -88,5 +144,6 @@ async function bootstrap() {
   const port = config.get<number>('PORT', 3000);
   await app.listen(port);
   console.log(`🚀 NeureCore API running on: http://localhost:${port}/api`);
+  console.log(`📘 OpenAPI UI:  http://localhost:${port}/api/docs`);
 }
 bootstrap();
