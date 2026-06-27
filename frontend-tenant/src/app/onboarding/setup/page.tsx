@@ -54,7 +54,10 @@ export default function OnboardingSetupPage() {
   const [invites, setInvites] = useState<InviteDraft[]>([
     { email: '', role: 'USER' },
   ]);
-  const [issuedTokens, setIssuedTokens] = useState<string[]>([]);
+  const [issuedTokens, setIssuedTokens] = useState<
+    { email: string; token: string }[]
+  >([]);
+  const [inviteErrors, setInviteErrors] = useState<string[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -98,11 +101,16 @@ export default function OnboardingSetupPage() {
   };
 
   const handleSelectTier = async (tierId: string) => {
+    setSelectedTierId(tierId);
+    setError(null);
+  };
+
+  const handleConfirmTier = async () => {
+    if (!selectedTierId) return;
     setSubmitting(true);
     setError(null);
     try {
-      setSelectedTierId(tierId);
-      await onboardingService.selectTier(tierId);
+      await onboardingService.selectTier(selectedTierId);
       await goTo('template');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to select tier.');
@@ -133,14 +141,32 @@ export default function OnboardingSetupPage() {
   const handleSendInvites = async () => {
     setSubmitting(true);
     setError(null);
+    setInviteErrors([]);
     try {
-      const valid = invites.filter((i) => i.email.trim().length > 0);
+      const valid = invites
+        .map((i) => ({ ...i, email: i.email.trim() }))
+        .filter((i) => i.email.length > 0);
       if (valid.length === 0) {
         await goTo('complete');
         return;
       }
+      const invalid = valid.filter(
+        (i) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(i.email),
+      );
+      if (invalid.length > 0) {
+        setInviteErrors(
+          invalid.map((i) => `Invalid email: ${i.email || '(empty)'}`),
+        );
+        setSubmitting(false);
+        return;
+      }
       const res = await onboardingService.inviteMembers(valid);
-      setIssuedTokens(res.tokens);
+      setIssuedTokens(
+        (res.tokens ?? []).map((t, idx) => ({
+          email: valid[idx]?.email ?? `invite-${idx + 1}`,
+          token: typeof t === 'string' ? t : (t as { token: string }).token,
+        })),
+      );
       await goTo('complete');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send invites.');
@@ -267,37 +293,66 @@ export default function OnboardingSetupPage() {
                   You can upgrade anytime. Limits shown are hard caps.
                 </p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {tiers.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => handleSelectTier(t.id)}
-                    disabled={submitting}
-                    className={`text-left p-4 rounded-lg border transition ${
-                      selectedTierId === t.id
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/40'
-                    }`}
+              {tiers.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-center space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    No plans are available right now. Please retry in a moment.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.location.reload()}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">{t.name}</span>
-                      {t.isDefault && (
-                        <Badge variant="secondary" className="text-xs">Default</Badge>
-                      )}
-                    </div>
-                    <div className="mt-2 text-2xl font-bold">
-                      ${Number(t.monthlyPrice).toFixed(0)}
-                      <span className="text-xs font-normal text-muted-foreground">/mo</span>
-                    </div>
-                    <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-                      <li>👥 {t.maxUsers} users</li>
-                      <li>🤖 {t.maxAgents} agents</li>
-                      <li>📁 {t.maxDepartments} departments</li>
-                      <li>💾 {t.maxStorageGB} GB storage</li>
-                      <li>🔁 {t.maxApiCalls.toLocaleString()} API calls/day</li>
-                    </ul>
-                  </button>
-                ))}
+                    Retry
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {tiers.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => handleSelectTier(t.id)}
+                      disabled={submitting}
+                      aria-pressed={selectedTierId === t.id}
+                      className={`text-left p-4 rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+                        selectedTierId === t.id
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                          : 'border-border hover:border-primary/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold">{t.name}</span>
+                        {t.isDefault && (
+                          <Badge variant="secondary" className="text-xs">Default</Badge>
+                        )}
+                      </div>
+                      <div className="mt-2 text-2xl font-bold">
+                        ${Number(t.monthlyPrice).toFixed(0)}
+                        <span className="text-xs font-normal text-muted-foreground">/mo</span>
+                      </div>
+                      <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                        <li>👥 {t.maxUsers} users</li>
+                        <li>🤖 {t.maxAgents} agents</li>
+                        <li>📁 {t.maxDepartments} departments</li>
+                        <li>💾 {t.maxStorageGB} GB storage</li>
+                        <li>🔁 {t.maxApiCalls.toLocaleString()} API calls/day</li>
+                      </ul>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-between pt-2">
+                <Button variant="ghost" onClick={() => setStep('company')}>
+                  <ArrowLeft className="w-4 h-4 mr-1" /> Back
+                </Button>
+                <Button
+                  onClick={handleConfirmTier}
+                  disabled={!selectedTierId || submitting}
+                >
+                  {submitting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                  Continue <ArrowRight className="w-4 h-4 ml-1" />
+                </Button>
               </div>
             </Card>
           )}
@@ -311,34 +366,56 @@ export default function OnboardingSetupPage() {
                 </p>
               </div>
               {templates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No templates available.</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {templates.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => handleSelectTemplate(t.slug)}
-                      disabled={submitting}
-                      className={`text-left p-4 rounded-lg border transition ${
-                        selectedTemplateSlug === t.slug
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:border-primary/40'
-                      }`}
-                    >
-                      <div className="font-semibold">{t.name}</div>
-                      {t.description && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {t.description}
-                        </p>
-                      )}
-                      <div className="mt-2 text-xs">
-                        <Badge variant="outline">
-                          {(t.structure ?? []).length} departments
-                        </Badge>
-                      </div>
-                    </button>
-                  ))}
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    No department templates available. You can continue and
+                    create departments manually later.
+                  </p>
+                  <div className="flex justify-between pt-2">
+                    <Button variant="ghost" onClick={() => setStep('plan')}>
+                      <ArrowLeft className="w-4 h-4 mr-1" /> Back
+                    </Button>
+                    <Button onClick={handleFinishReview}>
+                      Skip templates <ArrowRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {templates.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => handleSelectTemplate(t.slug)}
+                        disabled={submitting}
+                        aria-pressed={selectedTemplateSlug === t.slug}
+                        className={`text-left p-4 rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+                          selectedTemplateSlug === t.slug
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                            : 'border-border hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="font-semibold">{t.name}</div>
+                        {t.description && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {t.description}
+                          </p>
+                        )}
+                        <div className="mt-2 text-xs">
+                          <Badge variant="outline">
+                            {(t.structure ?? []).length} departments
+                          </Badge>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex justify-between pt-2">
+                    <Button variant="ghost" onClick={() => setStep('plan')}>
+                      <ArrowLeft className="w-4 h-4 mr-1" /> Back
+                    </Button>
+                  </div>
+                </>
               )}
             </Card>
           )}
@@ -388,6 +465,15 @@ export default function OnboardingSetupPage() {
                 </p>
               </div>
               <div className="space-y-3">
+                {inviteErrors.length > 0 && (
+                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 text-xs text-destructive">
+                    <ul className="list-disc list-inside space-y-1">
+                      {inviteErrors.map((m, i) => (
+                        <li key={i}>{m}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {invites.map((inv, idx) => (
                   <div key={idx} className="flex gap-2">
                     <Input
@@ -456,12 +542,31 @@ export default function OnboardingSetupPage() {
               <CheckCircle2 className="w-12 h-12 mx-auto text-green-500" />
               <h2 className="text-xl font-semibold">You are all set!</h2>
               <p className="text-sm text-muted-foreground">
-                Your workspace is ready. {issuedTokens.length > 0 && (
-                  <>
-                    {issuedTokens.length} invitation{issuedTokens.length === 1 ? '' : 's'} sent.
-                  </>
-                )}
+                Your workspace is ready.
+                {issuedTokens.length > 0 &&
+                  ` ${issuedTokens.length} invitation${issuedTokens.length === 1 ? '' : 's'} sent.`}
               </p>
+              {issuedTokens.length > 0 && (
+                <div className="text-left bg-muted/40 border rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Share these invite links with your teammates:
+                  </p>
+                  <ul className="space-y-1 max-h-40 overflow-auto">
+                    {issuedTokens.map((t, i) => (
+                      <li key={i} className="text-xs flex items-center gap-2">
+                        <span className="font-mono text-muted-foreground w-32 truncate">
+                          {t.email}
+                        </span>
+                        <code className="bg-background border rounded px-2 py-0.5 truncate flex-1">
+                          {typeof window !== 'undefined'
+                            ? `${window.location.origin}/invite/${t.token}`
+                            : `/invite/${t.token}`}
+                        </code>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <Button onClick={handleFinish} disabled={submitting}>
                 {submitting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
                 Open command center

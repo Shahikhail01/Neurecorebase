@@ -316,7 +316,10 @@ pnpm exec playwright test
 
 # Production build via Vercel
 git push origin main  # Vercel auto-deploys
-```
+
+# ⚠️ Don't run `vercel deploy --prod` directly — the CLI has a duplicate-path
+# bug when the dashboard sets rootDirectory. Git-push auto-deploy works correctly.
+# See memory-bank/vercel-operations.md for full procedure + pitfalls.
 
 ### 4.2 Adding a new service file
 
@@ -567,6 +570,8 @@ sudo systemctl restart redis
 - `memory-bank/deployment-guide.md` — full deployment guide
 - `memory-bank/verification-checklist.md` — pre-deploy QA
 - `memory-bank/phase1–12-implementation-summary.md` — phase details
+- `memory-bank/contabo-operations.md` — Contabo backend ops reference (READ before any Contabo work)
+- `memory-bank/vercel-operations.md` — Vercel frontend ops reference (READ before any Vercel work)
 
 ### Backend reference
 - `backend/prisma/schema.prisma` — data model

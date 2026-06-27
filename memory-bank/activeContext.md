@@ -2,7 +2,30 @@
 
 ## Last Updated
 
-2026-06-27T06:43:00Z (Session 13 — Daily Tools + Onboarding deployed to Contabo ✅)
+2026-06-27T07:07:00Z (Session 14 — Onboarding wizard UX fixes)
+
+## Session 14 Recap (2026-06-27)
+
+**Onboarding wizard UX audit + fixes** — `frontend-tenant/src/app/onboarding/setup/page.tsx`
+
+User reported Step 2 ("Choose your plan") rendered empty with no Continue button. Root cause + full-step audit revealed 7 issues, all fixed in one commit:
+
+| # | Step | Issue | Fix |
+|---|---|---|---|
+| 1 | Plan | `tiers` empty → blank card, no Continue, no Back, no retry | Added empty-state card with Retry, explicit Continue button (disabled until tier selected), Back button to Company |
+| 2 | Plan | Tier card click auto-advanced — no chance to compare/review before committing | Split into `handleSelectTier` (sets selection) + `handleConfirmTier` (calls API + advances). Added `aria-pressed` + primary ring on selection |
+| 3 | Template | No Back button — dead-end if user wanted to change tier | Added Back button → Plan step |
+| 4 | Template | Empty templates list was silent dead-end | Added explicit empty-state + Skip button |
+| 5 | Team | No email validation; bad emails silently rejected by backend with generic error | Client-side regex validation, inline per-email error list |
+| 6 | Complete | Issued invite tokens were displayed only as a count; admin couldn't actually share the links | `issuedTokens` now `{email, token}[]`; Complete step renders `${origin}/invite/${token}` per recipient for copy/share |
+| 7 | All selectable cards | `<button>` without `type="button"` (form-submit risk) and no focus ring / a11y state | Added `type="button"`, `aria-pressed`, `focus:ring-2 focus:ring-primary/40` |
+
+**Deploy:**
+- Frontend-only fix → `git push origin main` triggers Vercel auto-deploy per `vercel-operations.md`.
+- Backend untouched; no Contabo restart needed.
+- TypeScript: 0 new errors introduced in `page.tsx` (pre-existing errors in other files unchanged).
+
+**Reference doc added:** `memory-bank/onboarding-flow.md` — onboarding architecture, step-by-step data flow, common failure modes, troubleshooting.
 
 ## Session 13 Recap (2026-06-27)
 
@@ -14,7 +37,8 @@
 | Onboarding wizard (`/onboarding/setup`) | ✅ Live | OnboardingModule initialized; tier/template/invite/complete endpoints registered |
 | Brevo daily counter + 300/day cap | ✅ Live | `GET /integrations/usage/brevo` returns `{sentToday, dailyLimit:300, isAtLimit}` |
 | Agent integration config (`PATCH /agents/:id/integration-config`) | ✅ Live | Accepts `emailAlias`, `emailProvider`, `emailDisplayName`, `emailSignature`, `googleDriveFolderId` |
-| Manage Google page (`/settings/integrations/google`) | ⚠️ Pending frontend deploy to Vercel | Backend endpoint ready |
+| Manage Google page (`/settings/integrations/google`) | ✅ Live (Vercel auto-deploy) | `https://hq.neurecore.com/settings/integrations/google` → 200 |
+| Onboarding wizard (`/onboarding/setup`) | ✅ Live (Vercel auto-deploy) | `https://hq.neurecore.com/onboarding/setup` → 200 |
 | "Link or different account?" Google Sign-In prompt | ✅ Live | Backend returns `{status:'existing_unlinked', email, ...}` on conflict |
 | Drive cleanup cron (24h, terminates only) | ✅ Live | DriveCleanupService started; first run at 3 AM UTC |
 | TierLimitsGuard + `@TierLimit` decorator | ✅ Live | `maxUsers`, `maxDepartments` enforced; others stubbed |
@@ -23,11 +47,15 @@
 | `EmailProvider` interface + factory | ✅ Live | `GmailEmailProvider` + `BrevoEmailProvider` + `EmailProviderFactory`; EmailTool no longer references concrete services |
 | `ICredentialStore` + `IDriveService` interfaces | ✅ Live | Concrete classes implement them |
 | `TelemetryService` | ✅ Live | Tracks `auth.*` events to `TenantMetric` table |
+| Frontend tenant (Vercel) | ✅ Live | Git push → auto-deploy; alias `hq.neurecore.com` |
 
-**Issue encountered & fixed during deploy:**
+**Issues encountered & fixed during deploy:**
 - `EmailTool` injected `PrismaIntegrationCredentialStore` in constructor but never used it (leftover from old `resolveSender`). Caused `UnknownDependenciesException` on first restart. Fixed by removing unused param from constructor + dist rebuild.
+- Vercel CLI `vercel deploy --prod` failed with duplicate-path error (`...frontend-tenant/frontend-tenant`) because the dashboard sets `rootDirectory: "frontend-tenant"`. **Fix:** use `git push` instead — Vercel's git integration handles the rootDirectory correctly.
 
-**Reference:** See `memory-bank/contabo-operations.md` for the canonical Contabo deploy procedure.
+**References:**
+- `memory-bank/contabo-operations.md` — Contabo backend deploy/debug/recovery
+- `memory-bank/vercel-operations.md` — Vercel frontend deploy/debug/recovery (new in Session 13)
 
 ## Most Recent Operations (Session 12 — 2026-06-27)
 
