@@ -48,6 +48,8 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
+import { TenantContextMiddleware } from './common/context/tenant-context.middleware';
+import { TenantContextService } from './common/context/tenant-context.service';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
 
@@ -134,6 +136,10 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     // Global role guard
     { provide: APP_GUARD, useClass: RolesGuard },
 
+    // Phase 1, Task 1.4: TenantContextService is a singleton
+    // (ALS store is per-instance; the service itself is stateless).
+    TenantContextService,
+
     // Global exception → ApiResponse envelope
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
 
@@ -150,6 +156,14 @@ export class AppModule implements NestModule {
     // Using *path avoids noisy startup warnings like "Unsupported route path: /api/*".
     consumer
       .apply(RequestLoggerMiddleware)
+      .forRoutes({ path: '*path', method: RequestMethod.ALL });
+
+    // Phase 1, Task 1.4: bind the AsyncLocalStorage tenant context for
+    // every request after the JWT guard has populated req.user. Services
+    // read `tenantContext.tenantId` instead of receiving tenantId as a
+    // parameter on every method (EAOS-rbac-model.md §10).
+    consumer
+      .apply(TenantContextMiddleware)
       .forRoutes({ path: '*path', method: RequestMethod.ALL });
   }
 }
