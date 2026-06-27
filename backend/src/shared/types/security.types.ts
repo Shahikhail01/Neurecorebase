@@ -2,181 +2,17 @@
  * ═══════════════════════════════════════════════════════════════════════════
  * Security Types - Shared TypeScript Interfaces
  * ═══════════════════════════════════════════════════════════════════════════
- * Type-safe security interfaces following SOLID principles.
- * Used by both backend and frontend applications.
- */
-
-/**
- * ═══════════════════════════════════════════════════════════════════════════
- * Permission Types
- * ═══════════════════════════════════════════════════════════════════════════
- */
-
-export enum Permission {
-  // User Management
-  USER_CREATE = 'user:create',
-  USER_READ = 'user:read',
-  USER_UPDATE = 'user:update',
-  USER_DELETE = 'user:delete',
-  USER_LIST = 'user:list',
-
-  // Tenant Management
-  TENANT_CREATE = 'tenant:create',
-  TENANT_READ = 'tenant:read',
-  TENANT_UPDATE = 'tenant:update',
-  TENANT_DELETE = 'tenant:delete',
-  TENANT_LIST = 'tenant:list',
-
-  // Department Management
-  DEPARTMENT_CREATE = 'department:create',
-  DEPARTMENT_READ = 'department:read',
-  DEPARTMENT_UPDATE = 'department:update',
-  DEPARTMENT_DELETE = 'department:delete',
-
-  // Agent Management
-  AGENT_CREATE = 'agent:create',
-  AGENT_READ = 'agent:read',
-  AGENT_UPDATE = 'agent:update',
-  AGENT_DELETE = 'agent:delete',
-  AGENT_EXECUTE = 'agent:execute',
-
-  // Tool Management
-  TOOL_CREATE = 'tool:create',
-  TOOL_READ = 'tool:read',
-  TOOL_UPDATE = 'tool:update',
-  TOOL_DELETE = 'tool:delete',
-  TOOL_EXECUTE = 'tool:execute',
-
-  // Audit & Compliance
-  AUDIT_READ = 'audit:read',
-  AUDIT_EXPORT = 'audit:export',
-
-  // Settings
-  SETTINGS_READ = 'settings:read',
-  SETTINGS_UPDATE = 'settings:update',
-
-  // Analytics
-  ANALYTICS_READ = 'analytics:read',
-  ANALYTICS_EXPORT = 'analytics:export',
-
-  // Billing
-  BILLING_READ = 'billing:read',
-  BILLING_MANAGE = 'billing:manage',
-
-  // File Upload
-  FILE_UPLOAD = 'file:upload',
-  FILE_DELETE = 'file:delete',
-}
-
-export type PermissionKey = keyof typeof Permission;
-export type PermissionValue = (typeof Permission)[PermissionKey];
-
-/**
- * ═══════════════════════════════════════════════════════════════════════════
- * Role Types
+ * Type-safe security interfaces used by the security module.
+ *
+ * NOTE (Phase 0, D-016): The previously-exported `UserRole` enum and `Permission`
+ * enum have been removed. `UserRole` is sourced from `@prisma/client` (single
+ * source of truth). The old `ROLE_PERMISSIONS` map and `PermissionsGuard` are
+ * removed per `EAOS-rbac-model.md` §3.1; authorization is now via `@Roles(...)`
+ * decorator (uses Prisma UserRole) and the new guards introduced in EAOS-1+.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-export enum UserRole {
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  OWNER = 'OWNER',
-  ADMIN = 'ADMIN',
-  MANAGER = 'MANAGER',
-  USER = 'USER',
-  GUEST = 'GUEST',
-}
-
-/**
- * Role to Permission mapping
- */
-export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
-  [UserRole.SUPER_ADMIN]: Object.values(Permission),
-  [UserRole.OWNER]: [
-    Permission.USER_CREATE,
-    Permission.USER_READ,
-    Permission.USER_UPDATE,
-    Permission.USER_DELETE,
-    Permission.USER_LIST,
-    Permission.TENANT_READ,
-    Permission.TENANT_UPDATE,
-    Permission.DEPARTMENT_CREATE,
-    Permission.DEPARTMENT_READ,
-    Permission.DEPARTMENT_UPDATE,
-    Permission.DEPARTMENT_DELETE,
-    Permission.AGENT_CREATE,
-    Permission.AGENT_READ,
-    Permission.AGENT_UPDATE,
-    Permission.AGENT_DELETE,
-    Permission.AGENT_EXECUTE,
-    Permission.TOOL_CREATE,
-    Permission.TOOL_READ,
-    Permission.TOOL_UPDATE,
-    Permission.TOOL_DELETE,
-    Permission.TOOL_EXECUTE,
-    Permission.AUDIT_READ,
-    Permission.AUDIT_EXPORT,
-    Permission.SETTINGS_READ,
-    Permission.SETTINGS_UPDATE,
-    Permission.ANALYTICS_READ,
-    Permission.ANALYTICS_EXPORT,
-    Permission.BILLING_READ,
-    Permission.BILLING_MANAGE,
-    Permission.FILE_UPLOAD,
-    Permission.FILE_DELETE,
-  ],
-  [UserRole.ADMIN]: [
-    Permission.USER_CREATE,
-    Permission.USER_READ,
-    Permission.USER_UPDATE,
-    Permission.USER_DELETE,
-    Permission.USER_LIST,
-    Permission.DEPARTMENT_CREATE,
-    Permission.DEPARTMENT_READ,
-    Permission.DEPARTMENT_UPDATE,
-    Permission.DEPARTMENT_DELETE,
-    Permission.AGENT_CREATE,
-    Permission.AGENT_READ,
-    Permission.AGENT_UPDATE,
-    Permission.AGENT_DELETE,
-    Permission.AGENT_EXECUTE,
-    Permission.TOOL_CREATE,
-    Permission.TOOL_READ,
-    Permission.TOOL_UPDATE,
-    Permission.TOOL_DELETE,
-    Permission.TOOL_EXECUTE,
-    Permission.AUDIT_READ,
-    Permission.SETTINGS_READ,
-    Permission.SETTINGS_UPDATE,
-    Permission.ANALYTICS_READ,
-    Permission.ANALYTICS_EXPORT,
-    Permission.BILLING_READ,
-    Permission.FILE_UPLOAD,
-    Permission.FILE_DELETE,
-  ],
-  [UserRole.MANAGER]: [
-    Permission.USER_READ,
-    Permission.USER_LIST,
-    Permission.DEPARTMENT_READ,
-    Permission.AGENT_READ,
-    Permission.AGENT_EXECUTE,
-    Permission.TOOL_READ,
-    Permission.TOOL_EXECUTE,
-    Permission.AUDIT_READ,
-    Permission.SETTINGS_READ,
-    Permission.ANALYTICS_READ,
-    Permission.FILE_UPLOAD,
-  ],
-  [UserRole.USER]: [
-    Permission.USER_READ,
-    Permission.AGENT_READ,
-    Permission.AGENT_EXECUTE,
-    Permission.TOOL_READ,
-    Permission.TOOL_EXECUTE,
-    Permission.ANALYTICS_READ,
-    Permission.FILE_UPLOAD,
-  ],
-  [UserRole.GUEST]: [Permission.AGENT_READ, Permission.TOOL_READ],
-};
+import { UserRole } from '@prisma/client';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -324,13 +160,17 @@ export interface ISessionConfig {
 
 /**
  * Token Payload Interface
+ *
+ * NOTE (Phase 0, D-016): `permissions: Permission[]` was removed because the
+ * `Permission` enum is deleted. Permissions are now derived from `role` via the
+ * `ROLE_PERMISSIONS` matrix in `EAOS-rbac-model.md` §3.3 (frontend mirror). The
+ * JWT does NOT carry a permission list; the backend derives it from `role`.
  */
 export interface ITokenPayload {
   sub: string;
   email: string;
   role: UserRole;
   tenantId?: string;
-  permissions: Permission[];
   iat?: number;
   exp?: number;
   iss?: string;
@@ -357,13 +197,14 @@ export interface IAuthResult {
 
 /**
  * User Security Info Interface
+ *
+ * NOTE (Phase 0, D-016): `permissions: Permission[]` was removed; see ITokenPayload.
  */
 export interface IUserSecurityInfo {
   id: string;
   email: string;
   role: UserRole;
   tenantId?: string;
-  permissions: Permission[];
   isActive: boolean;
   lastLoginAt?: Date;
 }

@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { HttpRequestTool } from './built-in/http-request.tool';
 import { CalculatorTool } from './built-in/calculator.tool';
@@ -44,10 +49,42 @@ export class ToolsService {
     this.logger.log(`Registered tool: ${tool.name}`);
   }
 
-  async execute(toolName: string, input: ToolInput): Promise<ToolOutput> {
+  async execute(
+    toolName: string,
+    input: ToolInput,
+    context?: { tenantId?: string },
+  ): Promise<ToolOutput> {
     const tool = this.registry.get(toolName);
     if (!tool) throw new NotFoundException(`Tool "${toolName}" not found`);
     return tool.execute(input);
+  }
+
+  /**
+   * Phase 0 (FIX-001): tenant-ownership check helper. Returns the integration
+   * if it exists AND either is built-in OR belongs to the caller's tenant.
+   * Throws NotFoundException if not found; throws ForbiddenException if
+   * cross-tenant.
+   */
+  async assertIntegrationAccess(
+    integrationId: string,
+    tenantId: string,
+  ): Promise<{ id: string; isBuiltIn: boolean; tenantId: string | null }> {
+    const integration = await this.prisma.toolIntegration.findUnique({
+      where: { id: integrationId },
+      select: { id: true, tenantId: true, isBuiltIn: true },
+    });
+    if (!integration) {
+      throw new NotFoundException(
+        `Tool integration ${integrationId} not found`,
+      );
+    }
+    if (!integration.isBuiltIn && integration.tenantId !== tenantId) {
+      this.logger.warn(
+        `Cross-tenant tool access attempt: tenantId=${tenantId} attempted toolIntegrationId=${integrationId} (owner=${integration.tenantId})`,
+      );
+      throw new ForbiddenException('Cross-tenant tool access denied');
+    }
+    return integration;
   }
 
   list(): Array<{ name: string; description: string; category: string }> {
