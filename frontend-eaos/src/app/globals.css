@@ -1,0 +1,38 @@
+/**
+ * Global styles — Phase 1, Task 1.23.
+ *
+ * Per `EAOS-NUWS-principles.md` §7.5, the design system uses:
+ * - Inter for UI text
+ * - JetBrains Mono for code/entity IDs
+ * - Neutral chrome (light + dark via .dark class from next-themes)
+ * - Spacing scale 4/8/12/16/24/32/48/64/96 (no other values)
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans:
+      'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+  }
+}
+
+@layer utilities {
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-state-info focus-visible:ring-offset-2 focus-visible:ring-offset-canvas-50 dark:focus-visible:ring-offset-canvas-950;
+  }
+}
