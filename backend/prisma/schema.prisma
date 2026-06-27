@@ -324,6 +324,19 @@ model Tenant {
   goals    Goal[]
   projects Project[]
 
+  // EAOS-1 back-relations - Universal entity model
+  entityStates        EntityState[]
+  stateHistoryEntries StateHistory[]
+  entityOwnerships    EntityOwnership[]
+  entityLabels        EntityLabel[]
+  userFavorites       UserFavorite[]
+  userRecentAccesses  UserRecentAccess[]
+  entityWatchers      EntityWatcher[]
+  entityHealths       EntityHealth[]
+  entityRelationships EntityRelationship[]
+  workspaceLayouts    WorkspaceLayout[]
+  capabilityConfigs   CapabilityConfig[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -377,6 +390,18 @@ model User {
 
   // WS-2: Onboarding invitations sent by this user
   onboardingInvitations OnboardingInvitation[]
+
+  // EAOS-1 back-relations - Universal entity model
+  entityStatesEntered       EntityState[]      @relation("EntityStateEnteredBy")
+  stateHistoryTransitions   StateHistory[]     @relation("StateHistoryTransitionedBy")
+  ownedEntities             EntityOwnership[]  @relation("EntityOwnershipOwner")
+  managedEntities           EntityOwnership[]  @relation("EntityOwnershipManager")
+  createdLabels             EntityLabel[]      @relation("EntityLabelCreatedBy")
+  favorites                 UserFavorite[]     @relation("UserFavorites")
+  recentAccesses            UserRecentAccess[] @relation("UserRecentAccesses")
+  entityWatchers            EntityWatcher[]    @relation("EntityWatcherUser")
+  workspaceLayouts          WorkspaceLayout[]  @relation("WorkspaceLayoutUser")
+  capabilityConfigs         CapabilityConfig[] @relation("CapabilityConfigUser")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -751,6 +776,10 @@ model Department {
   // Phase 5 back-relations - Goals & Projects
   goals    Goal[]
   projects Project[]
+
+  // EAOS-1 back-relation - Universal entity model (departments are
+  // the "responsible team" for any entity).
+  ownedAsTeam EntityOwnership[] @relation("EntityOwnershipTeam")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1545,3 +1574,363 @@ model BrevoUsageCounter {
   @@index([tenantId])
   @@map("brevo_usage_counters")
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EAOS-1 — Universal Entity Model
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 1, Task 1.38 (per EAOS-implementation-roadmap.md v1.3 + EAOS-
+// implementation-plan.md §1.3-1.5). Every entity in EAOS exposes:
+//   - state (state machine, transitions, history)
+//   - ownership (owner, team, manager, AI assistant)
+//   - labels (standard + custom + priority + quarters)
+//   - favorites / recents / watching (per user)
+//   - health (computed status with signals, trend, alerts)
+//   - relationships (typed edges between entities)
+//   - workspace layout (per user per entity)
+//
+// All models are tenant-scoped (every row has tenantId). The
+// tenantId is on the model itself rather than only on related models
+// because it makes tenant-scoped queries simpler and more obvious.
+//
+// All EAOS-1 migrations are ADDITIVE — no existing model is modified.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── Enums ────────────────────────────────────────────────────────────────
+
+// Universal state machine every entity follows. Sub-state is per-entity.
+enum UniversalStateValue {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  PAUSED
+  SUSPENDED
+  ARCHIVED
+  DELETED
+
+  @@map("universal_state_value")
+}
+
+// What kind of entity this row is. Maps to the EAOS resource taxonomy.
+enum EntityType {
+  DEPARTMENT
+  AGENT
+  USER
+  PROJECT
+  GOAL
+  TASK
+  WORKFLOW
+  ROUTINE
+  TOOL_INTEGRATION
+  EXPENSE
+  INVOICE
+  KNOWLEDGE_ENTRY
+  TEMPLATE
+
+  @@map("entity_type")
+}
+
+// Severity for EntityHealth.
+enum HealthSeverity {
+  HEALTHY
+  WARNING
+  CRITICAL
+
+  @@map("health_severity")
+}
+
+// Trend for EntityHealth.
+enum HealthTrend {
+  IMPROVING
+  STABLE
+  DEGRADING
+
+  @@map("health_trend")
+}
+
+// Label kind: STANDARD (built-in enum like priority), CUSTOM (user-defined).
+enum LabelKind {
+  STANDARD
+  CUSTOM
+  PRIORITY
+  QUARTER
+
+  @@map("label_kind")
+}
+
+// Type of typed relationship between two entities.
+enum RelationshipType {
+  PARENT_OF
+  CHILD_OF
+  SIBLING_OF
+  OPERATES_IN
+  COLLABORATES_WITH
+  ASSIGNED_TO
+  REFERENCES
+  DEPENDS_ON
+
+  @@map("relationship_type")
+}
+
+// ─── EntityState — the universal state machine ──────────────────────────
+
+model EntityState {
+  id           String            @id @default(uuid())
+  tenantId     String
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityType   EntityType
+  entityId     String
+  currentState UniversalStateValue @default(DRAFT)
+  subState     String?           // Entity-specific (e.g. "on_track", "idle")
+  enteredAt    DateTime          @default(now())
+  enteredById  String?
+  enteredBy    User?             @relation("EntityStateEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  metadata     Json              @default("{}")
+
+  history      StateHistory[]
+
+  // One state row per entity.
+  @@unique([tenantId, entityType, entityId])
+  @@index([tenantId, entityType, currentState])
+  @@index([tenantId, currentState])
+  @@map("entity_states")
+}
+
+// ─── StateHistory — append-only log of state transitions ──────────────────
+
+model StateHistory {
+  id            String              @id @default(uuid())
+  tenantId      String
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityType    EntityType
+  entityId      String
+  fromState     UniversalStateValue
+  toState       UniversalStateValue
+  transitionedAt DateTime           @default(now())
+  transitionedById String?
+  transitionedBy User?              @relation("StateHistoryTransitionedBy", fields: [transitionedById], references: [id], onDelete: SetNull)
+  reason        String?             // human-readable explanation
+  isAuto        Boolean             @default(false) // true for system-driven transitions
+  metadata      Json                @default("{}")
+
+  // Optional back-link to EntityState for unified queries.
+  entityStateId String?
+  entityState   EntityState?        @relation(fields: [entityStateId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, entityType, entityId, transitionedAt])
+  @@index([tenantId, transitionedAt])
+  @@map("state_history")
+}
+
+// ─── EntityOwnership — owner, team, manager, AI assistant ────────────────
+
+model EntityOwnership {
+  id              String      @id @default(uuid())
+  tenantId        String
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityType      EntityType
+  entityId        String
+  ownerId         String?
+  owner           User?       @relation("EntityOwnershipOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  responsibleTeamId String?
+  responsibleTeam Department? @relation("EntityOwnershipTeam", fields: [responsibleTeamId], references: [id], onDelete: SetNull)
+  managerId       String?
+  manager         User?       @relation("EntityOwnershipManager", fields: [managerId], references: [id], onDelete: SetNull)
+  aiAssistantId   String?     // FK to Agent (AI Employee) when AI owns/co-owns the entity
+  notes           String?     // free-form notes about the ownership structure
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([tenantId, entityType, entityId])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, responsibleTeamId])
+  @@map("entity_ownerships")
+}
+
+// ─── EntityLabel — standard + custom + priority + quarters ───────────────
+
+model EntityLabel {
+  id         String      @id @default(uuid())
+  tenantId   String
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityType EntityType
+  entityId   String
+  kind       LabelKind   @default(CUSTOM)
+  // key: namespace slug ("priority", "quarter", or user-defined).
+  // value: the label's value ("high", "Q3-2026", or user-defined).
+  // Examples:
+  //   kind=PRIORITY, key="priority", value="high"
+  //   kind=QUARTER,  key="quarter",  value="Q3-2026"
+  //   kind=CUSTOM,   key="region",   value="EMEA"
+  key        String
+  value      String
+  color      String?     // optional hex color override (e.g. "#FF5733")
+  createdById String?
+  createdBy   User?       @relation("EntityLabelCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime    @default(now())
+
+  @@unique([tenantId, entityType, entityId, kind, key])
+  @@index([tenantId, kind, key])
+  @@index([tenantId, entityType, entityId])
+  @@map("entity_labels")
+}
+
+// ─── UserFavorite — pinned entities per user ─────────────────────────────
+
+model UserFavorite {
+  id         String      @id @default(uuid())
+  tenantId   String
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User        @relation("UserFavorites", fields: [userId], references: [id], onDelete: Cascade)
+  entityType EntityType
+  entityId   String
+  pinnedAt   DateTime    @default(now())
+  // For ordering within a user's favorites.
+  sortOrder  Int         @default(0)
+
+  @@unique([userId, entityType, entityId])
+  @@index([userId, sortOrder])
+  @@index([tenantId, userId])
+  @@map("user_favorites")
+}
+
+// ─── UserRecentAccess — recent access log per user (with TTL cleanup) ───
+
+model UserRecentAccess {
+  id         String      @id @default(uuid())
+  tenantId   String
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User        @relation("UserRecentAccesses", fields: [userId], references: [id], onDelete: Cascade)
+  entityType EntityType
+  entityId   String
+  accessedAt DateTime    @default(now())
+
+  // Compound unique: a user can only have ONE row per entity; repeated
+  // access updates accessedAt via upsert.
+  @@unique([userId, entityType, entityId])
+  @@index([userId, accessedAt(sort: Desc)])
+  @@index([tenantId, userId])
+  @@map("user_recent_accesses")
+}
+
+// ─── EntityWatcher — watch subscriptions (notifications on changes) ─────
+
+model EntityWatcher {
+  id           String      @id @default(uuid())
+  tenantId     String
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  watcherId    String
+  watcher      User        @relation("EntityWatcherUser", fields: [watcherId], references: [id], onDelete: Cascade)
+  entityType   EntityType
+  entityId     String
+  // What events to watch for (subset of universal events).
+  watchOnStateChange Boolean @default(true)
+  watchOnUpdate      Boolean @default(true)
+  watchOnComment     Boolean @default(false)
+  watchOnAssign      Boolean @default(false)
+  createdAt   DateTime    @default(now())
+
+  @@unique([watcherId, entityType, entityId])
+  @@index([tenantId, entityType, entityId])
+  @@map("entity_watchers")
+}
+
+// ─── EntityHealth — computed health with signals, trend, alerts ──────────
+
+model EntityHealth {
+  id          String         @id @default(uuid())
+  tenantId    String
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityType  EntityType
+  entityId    String
+  // Overall severity (healthy / warning / critical).
+  severity    HealthSeverity @default(HEALTHY)
+  // Trend (improving / stable / degrading).
+  trend       HealthTrend    @default(STABLE)
+  // Numeric health score 0-100 (0 = critical, 100 = perfect).
+  score       Int            @default(100)
+  // Open alerts (count of unresolved issues).
+  openAlerts  Int            @default(0)
+  // Computed signal snapshot — flexible JSON for per-entity signals.
+  // Examples:
+  //   - { error_rate: 0.4, budget_usage: 62, goal_progress: 78 }
+  //   - { open_tasks: 12, overdue_tasks: 3, blocked_tasks: 1 }
+  signals     Json           @default("{}")
+  // Last signal update timestamp.
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([tenantId, entityType, entityId])
+  @@index([tenantId, severity])
+  @@index([tenantId, updatedAt(sort: Desc)])
+  @@map("entity_healths")
+}
+
+// ─── EntityRelationship — typed edges between entities ──────────────────
+
+model EntityRelationship {
+  id          String           @id @default(uuid())
+  tenantId    String
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Source
+  fromType    EntityType
+  fromId      String
+  // Target
+  toType      EntityType
+  toId        String
+  // Type of edge.
+  type        RelationshipType
+  // Optional: hierarchical ordering (for parent/child trees).
+  position    Int              @default(0)
+  // Optional metadata (e.g. "since 2024-01-15", "primary: true").
+  metadata    Json             @default("{}")
+  createdAt   DateTime         @default(now())
+
+  @@unique([tenantId, fromType, fromId, toType, toId, type])
+  @@index([tenantId, fromType, fromId])
+  @@index([tenantId, toType, toId])
+  @@index([tenantId, type])
+  @@map("entity_relationships")
+}
+
+// ─── WorkspaceLayout — per-user per-entity-type layout persistence ──────
+
+model WorkspaceLayout {
+  id          String      @id @default(uuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User        @relation("WorkspaceLayoutUser", fields: [userId], references: [id], onDelete: Cascade)
+  // Layout is per-user per-entity-type (e.g. workspace layout for "agent" entities).
+  entityType  EntityType
+  // Layout JSON: left rail expanded, intelligence expanded, density, etc.
+  // Per EAOS-NUWS-principles.md §5.1 + §7.5.4.
+  layout      Json        @default("{}")
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([userId, entityType])
+  @@index([tenantId, userId])
+  @@map("workspace_layouts")
+}
+
+// ─── CapabilityConfig — per-user per-entity-type panel/config toggles ───
+
+model CapabilityConfig {
+  id          String      @id @default(uuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User        @relation("CapabilityConfigUser", fields: [userId], references: [id], onDelete: Cascade)
+  // The 10 capability panels (identity, context, intelligence, operations,
+  // resources, collaboration, insights, automation, activity, lifecycle)
+  // — per EAOS-NUWS-principles.md §1.2.
+  capability   String      // e.g. "intelligence", "operations"
+  // Per-capability config: collapsed, ordering, custom widgets, etc.
+  config      Json        @default("{}")
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([userId, capability])
+  @@index([tenantId, userId])
+  @@map("capability_configs")
+}
+
