@@ -1,6 +1,6 @@
 # NeureCore — Onboarding Wizard Reference
 
-**Last Updated:** 2026-06-27 (Session 15)
+**Last Updated:** 2026-06-27 (Session 16)
 **Audience:** Frontend + backend engineers maintaining `/onboarding/setup`
 **Status:** Live on `hq.neurecore.com` (Vercel auto-deploy) + `brain.neurecore.com/api/v1` (Contabo PID 672683)
 
@@ -155,9 +155,81 @@ Before merging an onboarding change:
 - [ ] Step 2 with `tiers=[]` (temporarily delete from localStorage cache and force fresh state): empty-state card shows with Retry button.
 - [ ] Step 3: select template → backend creates departments/agents → Review shows correct counts.
 - [ ] Step 5: invalid email → blocked with inline error, no API call made.
+- [ ] Step 5: **empty invites + Send Invites → must advance to Complete (NOT stuck on disabled spinner).**
+- [ ] Step 5: **Skip for now → must advance to Complete (NOT backward to Review).**
 - [ ] Step 5: valid emails → Complete step shows `${origin}/invite/${token}` per email.
 - [ ] Reload mid-flow on each step → state restored, no duplicate deploy calls.
 - [ ] Browser back button works between all steps without losing selections.
+
+### How to verify the Step 5 buttons WITHOUT logging in as a real user
+
+Inspect the deployed wizard bundle directly (Vercel serves it under a content-hashed path):
+
+```bash
+HASH=$(curl -s https://hq.neurecore.com/onboarding/setup | grep -oE '_next/static/chunks/app/onboarding/setup/page-[^"]+')
+curl -s "https://hq.neurecore.com/$HASH" > /tmp/wizard-bundle.js
+
+# Bug regression check: "Skip for now" must call goTo("complete"), not setStep("review")
+grep -oE '"Skip for now".{0,200}' /tmp/wizard-bundle.js
+
+# Bug regression check: handleSendInvites early-return path must reset submitting state
+grep -oE '0===t.length.{0,80}' /tmp/wizard-bundle.js
+```
+
+Expected (fixed) output:
+- `"Skip for now"`: followed by `onClick:()=>{D(!1),ei("complete")}` — `D(!1)` is `setSubmitting(false)`, `ei("complete")` is `goTo("complete")`.
+- `0===t.length`: followed by `D(!1),ei("complete");return` — no missing `setSubmitting(false)`.
+
+---
+
+## 8. Session 16 audit — Step 5 bugs
+
+**Date:** 2026-06-27
+**Triggered by:** User reported "nothing happens on Send Invites" + "Skip for now doesn't move forward".
+
+### Bugs found
+
+#### Bug A — `handleSendInvites` stuck on empty invites
+
+**Location:** `frontend-tenant/src/app/onboarding/setup/page.tsx` (was lines 196-231)
+
+```js
+// BROKEN:
+if (valid.length === 0) {
+  await goTo('complete');  // async — but goTo is sync and returns void
+  return;                  // ⚠️ BUG: setSubmitting(true) was set earlier but never reset
+}
+```
+
+**Symptom:** When a user clicked "Send invites" without filling any email (the default state has one empty row), the step transitioned to "complete" silently, but the button stayed in `submitting=true` state with the spinner forever. User saw no progress.
+
+**Root cause:** `setSubmitting(true)` at the top of the handler. The early-return path for the empty-invites case forgot to call `setSubmitting(false)` (and the surrounding `finally` block was skipped because of the bare `return;`).
+
+**Fix:** Added `setSubmitting(false)` before the early `return`. Also removed the now-meaningless `await` on `goTo` (which is synchronous).
+
+#### Bug B — "Skip for now" navigates backward instead of forward
+
+**Location:** Same file, the Team-step footer (was line 614).
+
+```jsx
+// BROKEN:
+<Button variant="ghost" onClick={() => setStep('review')}>
+  Skip for now
+</Button>
+```
+
+**Symptom:** "Skip for now" sent the user BACK to the Review step instead of forward to Complete. Confusing UX — the button label says "skip" which implies "skip this step and continue", but the click went backward.
+
+**Root cause:** Original implementation had a single `setStep('review')` call. This is semantically wrong — the user clicked Skip expecting to be DONE with the invites step, not to undo progress.
+
+**Fix:** Extracted into a dedicated `handleSkipInvites()` handler that calls `setSubmitting(false)` then `goTo('complete')`. Added a Back button (ghost variant) so users can still return to Review if they want.
+
+### General lesson — audit pattern
+
+When fixing wizard handlers, ALWAYS check:
+1. Every `setSubmitting(true)` call has a matching `setSubmitting(false)` on every code path (including early `return`s inside `try` blocks).
+2. "Skip", "Continue", "Next", "Back" button labels match the navigation direction they actually perform.
+3. After making optimistic UI changes (Session 14 turned `goTo` from async to sync fire-and-forget), re-verify every callsite — `await` on a sync function is harmless but indicates the caller assumed async semantics.
 
 ---
 

@@ -2,7 +2,43 @@
 
 ## Last Updated
 
-2026-06-27T07:36:00Z (Session 15 — Onboarding wizard root-cause fix + Contabo deploy)
+2026-06-27T08:25:00Z (Session 16 — Step 5 Send Invites stuck + Skip-for-now direction bug)
+
+## Session 16 Recap (2026-06-27)
+
+**Two real bugs in Step 5 (Team) of the onboarding wizard**, found by inspecting the deployed JS bundle on Vercel. My Session 14/15 fixes were NOT tested by actually clicking buttons — only by API smoke tests. This session fixed the gap.
+
+### Bug A — Send Invites stuck on empty invites
+
+- `handleSendInvites` early-return path (when all invite emails empty) did `setSubmitting(true)` at the top but never reset it.
+- Visible symptom: nothing happens on click of Send Invites (button stays disabled with spinner, even though the step actually advanced internally).
+- Verified in production bundle: `if(0===t.length)return void await ei("complete")` — bare `return` after sync call, no `D(!1)` (setSubmitting(false)).
+- Fix: `if(0===t.length){D(!1),ei("complete");return}` — explicit `setSubmitting(false)` + `goTo('complete')`.
+
+### Bug B — Skip for now goes BACKWARD to Review
+
+- Original `<Button onClick={() => setStep('review')}>Skip for now</Button>` sent the user back instead of forward.
+- Visible symptom: clicking "Skip for now" moves backward through the wizard instead of skipping the invite step.
+- Verified in production bundle: `"Skip for now"` was followed by `onClick:()=>p("review")`.
+- Fix: Extracted dedicated `handleSkipInvites()` handler that does `setSubmitting(false)` then `goTo('complete')`. Team step footer now has 3 buttons: Back (ghost, → Review), Skip for now (outline, → Complete), Send invites (primary, → Complete with API call).
+
+### Verification (post-fix, on production Vercel bundle)
+
+Inspected `/_next/static/chunks/app/onboarding/setup/page-57f816819ed5d021.js`:
+- ✓ `Skip for now` now → `onClick:()=>{D(!1),ei("complete")}` (setSubmitting(false) + goTo(complete))
+- ✓ `handleSendInvites` early return → `0===t.length){D(!1),ei("complete");return}`
+
+### Lessons
+
+- **Bundle inspection is the cheapest reliable verification** for shipped React handlers. No Playwright, no fake auth, no DB — just curl the page, find the content-hashed chunk, grep for the minified handler logic.
+- **Don't trust "the API works" as proof the wizard works.** The Session 14/15 work shipped several handler bugs because I only smoke-tested the backend endpoints, never clicked buttons.
+- **Audit pattern for optimistic-UI handlers**: every `setSubmitting(true)` must have a matching `setSubmitting(false)` on every code path including early `return`s inside `try` blocks. Bug A is a textbook example.
+
+### Memory-bank updated
+
+- `onboarding-flow.md` — new "Session 16 audit" section + verification checklist updated + "how to verify Step 5 buttons without logging in" recipe (curl the bundle, grep for the minified handlers).
+
+## Session 15 Recap (2026-06-27)
 
 ## Session 15 Recap (2026-06-27)
 
