@@ -2,7 +2,62 @@
 
 ## Last Updated
 
-2026-06-27T07:07:00Z (Session 14 — Onboarding wizard UX fixes)
+2026-06-27T07:36:00Z (Session 15 — Onboarding wizard root-cause fix + Contabo deploy)
+
+## Session 15 Recap (2026-06-27)
+
+**Onboarding wizard root-cause + deploy** — fully fixed and live on Contabo.
+
+### Root cause discovered
+
+The Step 2 "No plans are available" symptom was NOT a frontend issue — it was a backend auth bug:
+
+- `GET /api/v1/tiers` was protected by the global `JwtAuthGuard` (APP_GUARD).
+- The onboarding wizard user has no JWT yet (it loads `/onboarding/state` first, then renders Step 2).
+- Anon call → 401 → axios rejects → `tiersService.list()` returns `[]` → empty-state shown.
+- Same bug affected `GET /department-templates`.
+
+Confirmed live: `curl https://brain.neurecore.com/api/v1/tiers` returned `401 AUTHENTICATION_FAILED` despite the user being on the wizard.
+
+### Fixes (backend)
+
+| File | Change |
+|---|---|
+| `backend/src/modules/tiers/tiers.controller.ts` | Added `@Public()` to all read endpoints (`GET /`, `/default`, `/:id`, `/slug/:slug`). Write endpoints still SuperAdmin. |
+| `backend/src/modules/department-templates/department-templates.controller.ts` | Same — `@Public()` on `GET /` and `GET /:id`. |
+| `backend/src/modules/onboarding/onboarding.service.ts` | Parallelized the 3 sequential DB queries in `getState` (`tenant`, `agentCount`, `deptCount`) into one `Promise.all` — ~2-3× faster. |
+
+### Fixes (frontend)
+
+| Issue | Fix |
+|---|---|
+| Page blocked on `Promise.all([state, tiers, templates])` before ANY step renders | Step 1 (Company) renders immediately; tiers + templates load in parallel in background. Plan/Template steps show their own inline skeleton only while loading. |
+| Continue buttons awaited `PATCH /onboarding/state` before advancing | Optimistic transition — `setStep()` runs immediately, API fires in background. |
+| Continue flow felt slow on every step | Removed the round-trip wait; total visible latency drops to 0. |
+| Empty/error states used `window.location.reload()` (loses selections) | Added per-step inline Retry buttons (`retryTiers`, `retryTemplates`). |
+
+### Contabo deploy (PID 672683)
+
+- Discovered Contabo's `src/` was missing the `onboarding` module entirely (prior session claimed it was deployed but it never made it). Also had 29 uncommitted stale files from a prior session.
+- **Resolution:** rsynced local `src/` over Contabo's `src/` (excluding `node_modules`/`dist`/`.env`), rebuilt with `nest build`, regenerated Prisma client, restarted PM2. Migration status: up to date.
+- Live verification:
+  - `GET /tiers` (anon) → 4 tiers ✅
+  - `GET /tiers/default` → Starter ✅
+  - `GET /department-templates` → 9 templates ✅
+  - `GET /onboarding/state` → 401 (correct, JWT required)
+- Pre-existing schema drift discovered: `tier_agent_pools.defaultBudgetPerDay` column missing from DB (causes 500 on `GET /tiers/slug/:slug`). Does NOT affect the wizard. Logged for follow-up — needs a forward-only migration.
+
+### Lessons (added to runbook mental model)
+
+- **Always check Contabo `src/` against local before assuming "already deployed".** Uncommitted + missing-module state on Contabo can mask whether a feature is live.
+- **`Promise.all` on page mount is the #1 cause of slow wizard UX.** Render the first step immediately, lazy-load dependent data.
+- **`@Public()` is the right escape hatch for global-catalog endpoints** (tiers, templates) that must be readable during unauthenticated flows (signup, onboarding, marketing).
+
+### Frontend
+
+Vercel auto-deploy triggered by `git push origin main` — new build live at `hq.neurecore.com/onboarding/setup` within ~60s (commit `f2d227c2`, asset `last-modified: 02:36:04 GMT`).
+
+## Session 14 Recap (2026-06-27)
 
 ## Session 14 Recap (2026-06-27)
 

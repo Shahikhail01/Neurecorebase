@@ -1,8 +1,8 @@
 # NeureCore — Onboarding Wizard Reference
 
-**Last Updated:** 2026-06-27 (Session 14)
+**Last Updated:** 2026-06-27 (Session 15)
 **Audience:** Frontend + backend engineers maintaining `/onboarding/setup`
-**Status:** Live on `hq.neurecore.com` (Vercel auto-deploy)
+**Status:** Live on `hq.neurecore.com` (Vercel auto-deploy) + `brain.neurecore.com/api/v1` (Contabo PID 672683)
 
 ---
 
@@ -84,10 +84,14 @@ Because the wizard is a single monolithic page, any change to "Step X" means edi
 
 ### Symptom: "Choose your plan" step is empty
 
-**Most likely causes (in order):**
-1. **Backend `GET /tiers` returning `[]`.** Check Contabo: `curl -H "Authorization: Bearer $TOKEN" https://brain.neurecore.com/api/v1/tiers | jq '.data | length'`. If zero, the seed migration didn't run or tiers were deactivated.
-2. **Backend `/tiers` endpoint down.** Check `pm2 logs neurecore-backend --lines 200` for stack traces.
-3. **JWT expired / wrong tenant.** The wizard calls `Promise.all` for state + tiers + templates; if auth fails for any one, the whole `useEffect` rejects. Look in browser DevTools Network tab for the actual response code.
+**Most likely causes (in order, with confirmed live root cause from Session 15):**
+1. **`GET /tiers` returns 401 — the wizard user has no JWT yet.** The global `JwtAuthGuard` blocks anon reads. Fixed in Session 15 by adding `@Public()` to the read endpoints. Verify on Contabo:
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" https://brain.neurecore.com/api/v1/tiers
+   # Should be 200. If 401, the @Public() decorator got lost during a build/dist sync.
+   ```
+2. **Backend `GET /tiers` returning `[]`.** Check Contabo: `curl -H "Authorization: Bearer $TOKEN" https://brain.neurecore.com/api/v1/tiers | jq '.data | length'`. If zero, the seed migration didn't run or tiers were deactivated.
+3. **Backend `/tiers` endpoint down.** Check `pm2 logs neurecore-backend --lines 200` for stack traces.
 4. **Vercel env var missing.** `NEXT_PUBLIC_API_BASE_URL` (or equivalent) not set in Vercel dashboard → CORS / 404 from API. Check browser console for the base URL being hit.
 
 **Quick sanity check from the browser console:**
