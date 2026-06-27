@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   title: 'NeureCore — Tenant Portal',
   description: 'Tenant workspace',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+  },
 };
 
 export const viewport: Viewport = {

@@ -12,6 +12,7 @@ import { LocalStrategy } from './strategies/local.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { SecretProviderService } from '../security/providers/secret.provider';
+import { ObservabilityModule } from '../observability/observability.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { SecretProviderService } from '../security/providers/secret.provider';
         },
       }),
     }),
+    ObservabilityModule,
   ],
   controllers: [AuthController],
   providers: [

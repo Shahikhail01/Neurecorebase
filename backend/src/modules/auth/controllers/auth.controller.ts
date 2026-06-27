@@ -62,15 +62,18 @@ export class AuthController {
   @Public()
   @Post('google')
   @HttpCode(HttpStatus.OK)
-  async googleSignIn(@Body() dto: GoogleSignInDto) {
+  async googleSignIn(@Body() dto: GoogleSignInDto & { intent?: 'signin' | 'link' }) {
     const payload = await this.verifyGoogleToken(dto.idToken);
-    return this.authService.googleSignIn({
-      googleId: payload.sub,
-      email: payload.email,
-      firstName: payload.given_name,
-      lastName: payload.family_name,
-      googlePicture: payload.picture,
-    });
+    return this.authService.googleSignIn(
+      {
+        googleId: payload.sub,
+        email: payload.email,
+        firstName: payload.given_name,
+        lastName: payload.family_name,
+        googlePicture: payload.picture,
+      },
+      { intent: dto.intent ?? 'signin' },
+    );
   }
 
   @Public()

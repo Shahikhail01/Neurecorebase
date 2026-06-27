@@ -108,9 +108,7 @@ export function TopBar({ title, departmentName }: TopBarProps) {
     <header className="topbar-surface h-14 flex items-center px-4 gap-2 flex-shrink-0 z-20">
       {/* ── Left: brand + breadcrumb ─────────────────────────── */}
       <Link href="/command-center" className="flex items-center gap-2 shrink-0">
-        <span className="text-sm font-bold tracking-widest text-accent-500 uppercase">
-          NeureCore
-        </span>
+        <img src="/logo.png" alt="NeureCore" className="h-6 w-auto object-contain" />
       </Link>
 
       {(departmentName || title) && (

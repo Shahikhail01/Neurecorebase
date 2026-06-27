@@ -1,10 +1,95 @@
 # Progress Tracking — NeureCore
 
-**Last Updated**: 2026-06-26
-**Current Phase**: All implementation phases complete (Phase 1-12 + Phase 2 R2 + Phase 3 perf) + AI Tool Calling P1 (66 tools)
-**Overall Status**: 🟢 **Production-live** with 7-8× dashboard performance improvement (12-14s → 1.5-2s) + 72 AI tools
+**Last Updated**: 2026-06-27
+**Current Phase**: 🎉 ALL Daily Tools phases (A–F) shipped. AI Tool Calling P1 (72 tools) + Phase 1-12 UI rebuild + perf improvements deployed.
+**Overall Status**: 🟢 **Production-live** — 79 AI tools total (72 P1 + 7 new from Phases C/D/E/F). All 6 Daily Tools phases backend-ready for single deploy.
 
-> **Note on scope:** This document was originally the Phase 1 Foundation tracker. The actual current state is the production-deployed UI rebuild (Phases 1-12) + Add/Detail UI (Phase 2 R2) + Performance (Phase 3) + AI Tool Calling P1. For the comprehensive implementation plan, see `memory-bank/new_neurecore.md` v4.0. For deploy records, see `memory-bank/production-deployment-log.md`.
+> **Note on scope:** This document was originally the Phase 1 Foundation tracker. The actual current state is the production-deployed UI rebuild (Phases 1-12) + Add/Detail UI (Phase 2 R2) + Performance (Phase 3) + AI Tool Calling P1 + **all 6 Daily Tools phases (A/B/C/D/E/F) shipped**. For the comprehensive implementation plan, see `memory-bank/new_neurecore.md` v4.0. For deploy records, see `memory-bank/production-deployment-log.md`. For Daily Tools tracking, see `memory-bank/daily-tools-integration-plan.md`.
+
+---
+
+## Most Recent — Session 11 (2026-06-27) — Daily Tools Phase F: Internal AI Chat 🎉 PLAN COMPLETE
+
+| Item | Status | Notes |
+|---|---|---|
+| `ContextTool` (Phase F) | ✅ Implemented | 4 actions: `search_memory`, `load_drive`, `load_history`, `load_all` |
+| `ChatTool` (Phase F) | ✅ Implemented | 2 actions: `ask`, `remember` |
+| Context-awareness | ✅ Done | MemoryService.search (vector+keyword) + Drive doc snippets + prior conversation turns |
+| Multi-turn persistence | ✅ Done | Q&A pairs stored as `MemoryEntry` rows with `metadata.conversationTopic` + `metadata.role` |
+| Topic-keyed continuity | ✅ Done | Same `topic` across teammates → vector search finds them via ContextTool |
+| ToolsModule wiring | ✅ Done | Both tools registered; `MemoryModule` imported so tools use `MemoryService` + `ContextTool` |
+| TypeScript check | ✅ 0 errors in Phase F files | 4 pre-existing errors unrelated |
+| Files modified | ✅ | `context.tool.ts` (NEW), `chat.tool.ts` (NEW), `tools.module.ts` |
+
+**🎉 Daily Tools & Integration Plan: ALL 6 PHASES COMPLETE 🎉**
+
+See: `memory-bank/daily-tools-integration-plan.md` (v1.10)
+
+---
+
+## Most Recent — Session 10 (2026-06-27) — Daily Tools Phase E: Data Tables + NL Queries
+
+| Item | Status | Notes |
+|---|---|---|
+| `QueryTool` (Phase E) | ✅ Implemented | 3 actions: `translate`, `execute`, `ask` — NL→structured query→Prisma |
+| `ExplainTool` (Phase E) | ✅ Implemented | 2 actions: `explain_rows`, `explain_aggregation` — LLM narrates results |
+| Security model | ✅ Done | Entity/field/operator allow-list; tenantId force-injected; 200-row cap; read-only |
+| Queryable entities | ✅ 6 | `task`, `agent`, `department`, `project`, `user`, `costRecord` |
+| Aggregations | ✅ 5 types | `count`, `sum`, `avg`, `min`, `max` over numeric fields |
+| ToolsModule wiring | ✅ Done | Both tools registered; `ModelsModule` imported so tools can use `LLMFactory.invoke` |
+| TypeScript check | ✅ 0 errors in Phase E files | 4 pre-existing errors unrelated |
+| Files modified | ✅ | `query.tool.ts` (NEW), `explain.tool.ts` (NEW), `tools.module.ts` |
+
+**Deploy steps remaining:**
+1. (Same as Phase C) `npx prisma migrate deploy` on Contabo — apply `20260627_agent_email_alias`
+2. (Same as Phase C/D) Rebuild + restart backend on Contabo — registers all 6 new tools
+
+See: `memory-bank/daily-tools-integration-plan.md` (v1.9)
+
+---
+
+## Most Recent — Session 9 (2026-06-27) — Daily Tools Phase D: Documents & Reports
+
+| Item | Status | Notes |
+|---|---|---|
+| `DocumentsTool` (Phase D) | ✅ Implemented | 3 actions: `create`, `list`, `read` — wraps `GoogleDriveService` with agent folder resolution |
+| `ReportsTool` (Phase D) | ✅ Implemented | 2 actions: `generate`, `export_pdf` — Prisma aggregations + HTML rendering + Drive PDF export |
+| Report types | ✅ 4 supported | `task_summary`, `cost_summary`, `agent_workload`, `pipeline_overview` |
+| HTML rendering | ✅ Done | Styled CSS, tables, bar charts, AI-narrative slot, executive-summary section |
+| PDF export | ✅ Done | Drive-native `export?mimeType=application/pdf` — no new npm deps |
+| Drive auto-save | ✅ Done | Reports saved to `NeureCore/<Agent>/Reports/<title>-<date>.html` (HTML → Doc) |
+| ToolsModule registration | ✅ Done | Both tools wired into providers, constructor injection, and `onModuleInit` |
+| TypeScript check | ✅ 0 errors in Phase D files | 4 pre-existing errors unrelated |
+| Files modified | ✅ | `documents.tool.ts` (NEW), `reports.tool.ts` (NEW), `tools.module.ts` |
+
+**Deploy steps remaining:**
+1. (Same as Phase C) `npx prisma migrate deploy` on Contabo
+2. (Same as Phase C) Rebuild + restart backend — registers both new tools
+
+See: `memory-bank/daily-tools-integration-plan.md` (v1.8)
+
+---
+
+## Most Recent — Session 8 (2026-06-27) — Daily Tools Phase C: Email Agent
+
+| Item | Status | Notes |
+|---|---|---|
+| `EmailTool` (Phase C) | ✅ Implemented | 4 actions: `read_inbox`, `get_message`, `send`, `flag` — extends `BaseStructuredTool` |
+| `Agent.emailAlias` + `emailProvider` + `emailDisplayName` | ✅ Schema updated | Migration `20260627_agent_email_alias` ready |
+| Provider routing | ✅ Done | Gmail API or Brevo SMTP, selected by `Agent.emailProvider` + connection state |
+| Priority flagging | ✅ Done | Hybrid: LLM-decision + Gmail label persistence (`flag` action applies IMPORTANT/STARRED) |
+| ToolsModule ↔ IntegrationsModule | ✅ Wired | `forwardRef` import — no circular dependency |
+| TypeScript check | ✅ 0 errors in Phase C files | 4 pre-existing errors unrelated |
+| `prisma generate` | ✅ Ran locally | New Agent columns now in generated client |
+| Logo / favicon assets | ✅ Deployed | `memory-bank/public/{favicon.ico,favicon.png,logo.png}` → `frontend-{tenant,admin}/public/` |
+| Files modified | ✅ | `email.tool.ts` (NEW), `tools.module.ts`, `schema.prisma`, `memory-bank/daily-tools-integration-plan.md` |
+
+**Deploy steps remaining:**
+1. ⚠️ `npx prisma migrate deploy` on Contabo — apply `20260627_agent_email_alias`
+2. ⚠️ Rebuild + restart backend on Contabo
+3. ⚠️ Frontend no changes needed — EmailTool is consumed by existing AI agent flows
+
+See: `memory-bank/daily-tools-integration-plan.md` (v1.7)
 
 ---
 

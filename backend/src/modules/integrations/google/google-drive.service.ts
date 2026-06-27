@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
 import { GoogleAuthClient } from './google-auth.client';
+import type { IDriveService } from './drive-service.interface';
 
 export interface DriveFile {
   id: string;
@@ -30,7 +31,7 @@ const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 const NEURECORE_ROOT_FOLDER = 'NeureCore';
 
 @Injectable()
-export class GoogleDriveService {
+export class GoogleDriveService implements IDriveService {
   private readonly logger = new Logger(GoogleDriveService.name);
   private readonly DRIVE_API = 'https://www.googleapis.com/drive/v3';
   private readonly DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
@@ -302,5 +303,63 @@ export class GoogleDriveService {
         folderId: a.googleDriveFolderId!,
       })),
     };
+  }
+
+  /**
+   * WS-6.2: Permanently delete a Drive file or folder (used by cleanup cron).
+   * Caller should have already verified the file is empty.
+   */
+  async deleteFile(tenantId: string, fileId: string): Promise<void> {
+    const res = await this.authFetch(
+      tenantId,
+      `${this.DRIVE_API}/files/${encodeURIComponent(fileId)}`,
+      { method: 'DELETE' },
+    );
+    if (!res.ok && res.status !== 404) {
+      const err = await res.text().catch(() => 'unknown');
+      this.logger.error(`Drive delete failed for ${fileId}: ${res.status} ${err}`);
+      throw new BadRequestException('Failed to delete Drive file');
+    }
+  }
+
+  /**
+   * WS-3: List the full Drive folder tree under the tenant's NeureCore root.
+   * Returns root + immediate children + nested agent subfolders (1 level deep).
+   */
+  async listRootTree(tenantId: string): Promise<{
+    rootFolderId: string | null;
+    children: { id: string; name: string; mimeType: string; webViewLink?: string; children: DriveFile[] }[];
+  }> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { googleDriveRootFolderId: true },
+    });
+    const rootFolderId = tenant?.googleDriveRootFolderId ?? null;
+    if (!rootFolderId) {
+      return { rootFolderId: null, children: [] };
+    }
+
+    let rootChildren: DriveFile[];
+    try {
+      rootChildren = await this.listFiles(tenantId, rootFolderId, { pageSize: 50 });
+    } catch {
+      return { rootFolderId, children: [] };
+    }
+
+    const childrenWithNested = await Promise.all(
+      rootChildren.map(async (folder) => {
+        let nested: DriveFile[] = [];
+        if (folder.mimeType === FOLDER_MIME_TYPE) {
+          try {
+            nested = await this.listFiles(tenantId, folder.id, { pageSize: 20 });
+          } catch {
+            nested = [];
+          }
+        }
+        return { ...folder, children: nested };
+      }),
+    );
+
+    return { rootFolderId, children: childrenWithNested };
   }
 }

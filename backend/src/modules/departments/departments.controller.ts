@@ -12,15 +12,19 @@ import {
   Query,
   ForbiddenException,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { DepartmentsService } from './services/departments.service';
 import { CreateDepartmentDto, UpdateDepartmentDto } from './dto/department.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { TierLimit } from '../../common/decorators/tier-limit.decorator';
+import { TierLimitsGuard } from '../../common/guards/tier-limits.guard';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
 import { UserRole } from '@prisma/client';
 
 @Controller({ path: 'departments', version: '1' })
+@UseGuards(TierLimitsGuard)
 export class DepartmentsController {
   constructor(private readonly departmentsService: DepartmentsService) {}
 
@@ -58,6 +62,7 @@ export class DepartmentsController {
 
   @Post()
   @Roles(UserRole.SUPER_ADMIN)
+  @TierLimit('maxDepartments')
   create(
     @Body() dto: CreateDepartmentDto,
     @CurrentUser() user: JwtPayload,

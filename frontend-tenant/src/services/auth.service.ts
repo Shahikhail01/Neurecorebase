@@ -3,6 +3,11 @@ import type { AuthResult, LoginPayload, RegisterPayload, AuthUser } from '@/type
 import { unwrapItem } from '@/services/unwrap';
 import { tokenManager } from '@/core/infrastructure/auth/TokenManager';
 
+export type GoogleSignInResponse =
+  | { status: 'ok'; user: AuthUser; tokens: { accessToken: string; refreshToken: string; expiresIn: number } }
+  | { status: 'existing_unlinked'; email: string; firstName: string; lastName: string; googlePicture?: string; googleId: string }
+  | { status: 'conflict'; email: string; message: string };
+
 export const authService = {
   async login(payload: LoginPayload): Promise<AuthResult> {
     const res = await api.post('/auth/login', payload);
@@ -13,10 +18,13 @@ export const authService = {
     return result;
   },
 
-  async googleSignIn(idToken: string): Promise<AuthResult> {
-    const res = await api.post('/auth/google', { idToken });
-    const result = unwrapItem(res) as AuthResult;
-    if (result?.tokens) {
+  async googleSignIn(
+    idToken: string,
+    intent: 'signin' | 'link' = 'signin',
+  ): Promise<GoogleSignInResponse> {
+    const res = await api.post('/auth/google', { idToken, intent });
+    const result = unwrapItem(res) as GoogleSignInResponse;
+    if (result?.status === 'ok' && result.tokens) {
       tokenManager.setTokens(result.tokens.accessToken, result.tokens.refreshToken);
     }
     return result;

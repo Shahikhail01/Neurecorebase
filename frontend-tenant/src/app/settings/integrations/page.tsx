@@ -144,6 +144,12 @@ function BrevoIntegrationCard({
 }) {
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [usage, setUsage] = useState<{
+    sentToday: number;
+    dailyLimit: number;
+    isAtWarning: boolean;
+    isAtLimit: boolean;
+  } | null>(null);
 
   const handleConnect = () => {
     if (apiKey.trim()) {
@@ -152,6 +158,18 @@ function BrevoIntegrationCard({
       setApiKey('');
     }
   };
+
+  // Fetch usage when connected
+  useEffect(() => {
+    if (!integration.connected) {
+      setUsage(null);
+      return;
+    }
+    void integrationsService
+      .getBrevoUsage()
+      .then(setUsage)
+      .catch(() => setUsage(null));
+  }, [integration.connected]);
 
   return (
     <>
@@ -181,10 +199,20 @@ function BrevoIntegrationCard({
 
         <div className="mt-4 flex gap-2">
           {integration.connected ? (
-            <Button variant="destructive" size="sm" onClick={onDisconnect} disabled={loading}>
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
-              Disconnect
-            </Button>
+            <div className="flex items-center gap-2">
+              {usage && (
+                <Badge
+                  variant={usage.isAtLimit ? 'destructive' : usage.isAtWarning ? 'secondary' : 'outline'}
+                  className="text-xs"
+                >
+                  {usage.sentToday}/{usage.dailyLimit} today
+                </Badge>
+              )}
+              <Button variant="destructive" size="sm" onClick={onDisconnect} disabled={loading}>
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+                Disconnect
+              </Button>
+            </div>
           ) : (
             <Button size="sm" onClick={() => setShowApiKeyDialog(true)} disabled={loading}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}

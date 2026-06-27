@@ -20,6 +20,7 @@ import type { SendEmailInput } from './google/google-gmail.service';
 import { GoogleCalendarService } from './google/google-calendar.service';
 import type { CreateEventInput } from './google/google-calendar.service';
 import { GoogleDriveService } from './google/google-drive.service';
+import { BrevoUsageService } from './brevo/brevo-usage.service';
 
 type CreateEventBody = CreateEventInput;
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -36,6 +37,7 @@ export class IntegrationsController {
     private readonly gmailService: GoogleGmailService,
     private readonly calendarService: GoogleCalendarService,
     private readonly driveService: GoogleDriveService,
+    private readonly brevoUsage: BrevoUsageService,
   ) {}
 
   private resolveTenantId(user: JwtPayload, dtoTenantId?: string): string {
@@ -72,6 +74,15 @@ export class IntegrationsController {
   ) {
     const tid = this.resolveTenantId(user, tenantId);
     return this.integrationsService.getBrevoConnectionStatus(tid);
+  }
+
+  @Get('usage/brevo')
+  async getBrevoUsage(
+    @CurrentUser() user: JwtPayload,
+    @Query('tenantId') tenantId?: string,
+  ) {
+    const tid = this.resolveTenantId(user, tenantId);
+    return this.brevoUsage.getStatus(tid);
   }
 
   @Post('google/authorize')
@@ -270,6 +281,15 @@ export class IntegrationsController {
   ) {
     const tid = this.resolveTenantId(user, tenantId);
     return this.driveService.listAgentFolders(tid);
+  }
+
+  @Get('google/drive-folders')
+  async getGoogleDriveFolders(
+    @CurrentUser() user: JwtPayload,
+    @Query('tenantId') tenantId?: string,
+  ) {
+    const tid = this.resolveTenantId(user, tenantId);
+    return this.driveService.listRootTree(tid);
   }
 
   @Post('drive/folders/agents/:agentId/setup')

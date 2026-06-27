@@ -9,7 +9,10 @@ export interface IAuthService {
     password: string,
     meta: RequestMeta,
   ): Promise<AuthResult>;
-  googleSignIn(data: GoogleSignInInput): Promise<AuthResult>;
+  googleSignIn(
+    data: GoogleSignInInput,
+    options?: { intent?: 'signin' | 'link' },
+  ): Promise<GoogleSignInResult>;
   refresh(refreshToken: string): Promise<TokenPair>;
   logout(userId: string, jti: string): Promise<void>;
   validateUser(email: string, password: string): Promise<ValidatedUser | null>;
@@ -36,6 +39,11 @@ export interface AuthResult {
   user: ValidatedUser;
   tokens: TokenPair;
 }
+
+export type GoogleSignInResult =
+  | { status: 'ok'; user: ValidatedUser; tokens: TokenPair }
+  | { status: 'existing_unlinked'; email: string; firstName: string; lastName: string; googlePicture?: string; googleId: string }
+  | { status: 'conflict'; email: string; message: string };
 
 export interface ValidatedUser {
   id: string;

@@ -345,4 +345,24 @@ export class MiMoClientService implements ILLMClient {
       finishReason: 'stop',
     };
   }
+
+  async invokeWithTools(
+    _messages: Array<{ role: string; content: string }>,
+    _tools: Array<{
+      type: 'function';
+      function: {
+        name: string;
+        description: string;
+        parameters: {
+          type: 'object';
+          properties: Record<string, unknown>;
+          required: string[];
+        };
+      };
+    }>,
+    _temperature?: number,
+    _maxTokens?: number,
+  ): Promise<import('../interfaces/llm-client.interface').LLMWithToolsResponse> {
+    throw new Error('invokeWithTools not implemented for MiMo');
+  }
 }

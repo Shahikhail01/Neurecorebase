@@ -37,6 +37,12 @@ export interface UpdateAgentInput {
   config?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   isActive?: boolean;
+  // WS-3.3 / WS-5 — per-agent integration identity
+  emailAlias?: string;
+  emailProvider?: string;
+  emailDisplayName?: string;
+  emailSignature?: string;
+  googleDriveFolderId?: string | null;
 }
 
 export interface AgentFilter {

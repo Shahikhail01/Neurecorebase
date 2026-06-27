@@ -64,6 +64,20 @@ export class TenantsController {
     return this.tenantsService.findOne(id);
   }
 
+  @Get('me/current')
+  @Roles(
+    UserRole.OWNER,
+    UserRole.ADMIN,
+    UserRole.USER,
+    UserRole.AUDITOR,
+  )
+  async getCurrent(@CurrentUser() user: { tenantId?: string | null }) {
+    if (!user?.tenantId) {
+      throw new ForbiddenException('No tenant context for current user');
+    }
+    return this.tenantsService.findOne(user.tenantId);
+  }
+
   @Post()
   @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN)
   create(@Body() dto: CreateTenantDto) {

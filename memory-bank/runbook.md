@@ -91,14 +91,43 @@ pnpm prisma generate
 pnpm prisma migrate dev --name add_<field>_to_department
 
 # 4. Apply to Contabo
-ssh contabo
-cd /opt/neurecore/backend
-git pull
-pnpm install
-pnpm prisma migrate deploy
-pnpm prisma generate
-pnpm build
-pm2 restart neurecore-backend
+
+**⚠️ Read `memory-bank/contabo-operations.md` FIRST.** It documents the canonical Contabo deploy procedure, including critical pitfalls (`pnpm` is broken, port 3000 is `nghttpx` not backend, `PrismaIntegrationCredentialStore` DI gotcha, etc.).
+
+**Quick reference for the typical case:**
+```bash
+# Backup first
+ssh contabo 'cd /opt/neurecore/backend/backend && git stash push -u -m "SNAPSHOT-$(date +%Y%m%d)" || echo "clean"'
+ssh contabo 'cd /opt/neurecore/backend/backend && tar -czf /tmp/dist-backup-$(date +%Y%m%d).tar.gz dist/'
+
+# Sync source + new migration + schema
+rsync -avz -e ssh --exclude='node_modules' --exclude='dist' \
+  /home/najeeb/Linux-Dev/neurecore-base/neurecore/backend/src/ \
+  contabo:/opt/neurecore/backend/backend/src/
+rsync -avz -e ssh /home/najeeb/Linux-Dev/neurecore-base/neurecore/backend/prisma/schema.prisma \
+  contabo:/opt/neurecore/backend/backend/prisma/schema.prisma
+rsync -avz -e ssh /home/najeeb/Linux-Dev/neurecore-base/neurecore/backend/prisma/migrations/<NEW_MIGRATION_DIR>/ \
+  contabo:/opt/neurecore/backend/backend/prisma/migrations/<NEW_MIGRATION_DIR>/
+
+# Apply migration FIRST (safer than code-only deploy — additive changes are safe with old code running)
+ssh contabo 'cd /opt/neurecore/backend/backend && export $(grep -v "^#" .env | grep -E "DATABASE_URL|DIRECT_URL" | xargs) && ./node_modules/.bin/prisma migrate deploy'
+
+# Build on Contabo (uses its node_modules, not local)
+ssh contabo 'cd /opt/neurecore/backend/backend && export $(grep -v "^#" .env | grep -E "DATABASE_URL|DIRECT_URL" | xargs) && ./node_modules/.bin/prisma generate'
+ssh contabo 'cd /opt/neurecore/backend/backend && ./node_modules/.bin/nest build'
+
+# Restart PM2
+ssh contabo 'pm2 restart neurecore-backend && sleep 12'
+ssh contabo 'pm2 list | grep neurecore-backend'   # expect: pid>0, status=online, uptime>5s
+ssh contabo 'grep "successfully started" /root/.pm2/logs/neurecore-backend-out.log | tail -1'
+ssh contabo 'curl -s http://localhost:3003/api/v1/health | head -1'  # expect: 200 healthy
+
+# See contabo-operations.md for:
+# - Why pnpm/git pull/.env uploads are dangerous on Contabo
+# - DI error troubleshooting
+# - Roll-back procedures (dist backup, stash pop, prisma migrate resolve --rolled-back)
+# - Diagnostic command cheat sheet
+```
 
 # 5. Verify
 curl -s -H "Authorization: Bearer $TOKEN" \

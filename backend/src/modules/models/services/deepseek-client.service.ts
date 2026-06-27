@@ -215,4 +215,24 @@ export class DeepSeekClientService implements ILLMClient {
       this.logger.warn('Streamed content is not valid structured output');
     }
   }
+
+  async invokeWithTools(
+    _messages: Array<{ role: string; content: string }>,
+    _tools: Array<{
+      type: 'function';
+      function: {
+        name: string;
+        description: string;
+        parameters: {
+          type: 'object';
+          properties: Record<string, unknown>;
+          required: string[];
+        };
+      };
+    }>,
+    _temperature?: number,
+    _maxTokens?: number,
+  ): Promise<import('../interfaces/llm-client.interface').LLMWithToolsResponse> {
+    throw new Error('invokeWithTools not implemented for DeepSeek');
+  }
 }

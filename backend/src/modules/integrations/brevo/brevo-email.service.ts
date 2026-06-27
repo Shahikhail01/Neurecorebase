@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { IntegrationProvider } from '@prisma/client';
 import { PrismaIntegrationCredentialStore } from '../services/integration-credential.store';
+import { BrevoUsageService } from './brevo-usage.service';
 
 export interface SendEmailDto {
   to: string;
@@ -8,6 +9,7 @@ export interface SendEmailDto {
   htmlContent: string;
   from: string;
   fromName?: string;
+  signature?: string;
 }
 
 @Injectable()
@@ -17,6 +19,7 @@ export class BrevoEmailService {
 
   constructor(
     private readonly credentialStore: PrismaIntegrationCredentialStore,
+    private readonly usage: BrevoUsageService,
   ) {}
 
   private async getApiKey(tenantId: string): Promise<string | null> {
@@ -32,6 +35,12 @@ export class BrevoEmailService {
       throw new BadRequestException('Brevo is not connected for this tenant');
     }
 
+    await this.usage.checkLimit(tenantId);
+
+    const finalHtml = dto.signature
+      ? `${dto.htmlContent}<br><br><div class="signature">${escapeHtml(dto.signature)}</div>`
+      : dto.htmlContent;
+
     const body = {
       to: [{ email: dto.to }],
       sender: {
@@ -39,7 +48,7 @@ export class BrevoEmailService {
         ...(dto.fromName ? { name: dto.fromName } : {}),
       },
       subject: dto.subject,
-      htmlContent: dto.htmlContent,
+      htmlContent: finalHtml,
     };
 
     const res = await fetch(`${this.BREVO_API_BASE}/smtp/email`, {
@@ -60,6 +69,7 @@ export class BrevoEmailService {
     const data = (await res.json()) as { messageId?: string };
     const messageId = data.messageId ?? 'unknown';
 
+    await this.usage.recordSend(tenantId);
     this.logger.log(`Email sent for tenant ${tenantId}: ${messageId}`);
     return { messageId };
   }
@@ -80,4 +90,13 @@ export class BrevoEmailService {
 
     return res.json() as Promise<Record<string, unknown>>;
   }
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }

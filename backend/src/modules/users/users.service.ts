@@ -170,7 +170,7 @@ export class UsersService {
 
     const valid = await this.passwordService.compare(
       dto.currentPassword,
-      user.passwordHash,
+      user.passwordHash ?? '',
     );
     if (!valid)
       throw new UnauthorizedException('Current password is incorrect');
@@ -186,7 +186,7 @@ async deactivate(id: string, tenantId?: string) {
     await this.findOne(id, tenantId);
 
     // Build unique where clause
-    const where: Prisma.UserUniqueWhereInput = { id };
+    const where: { id: string } = { id };
 
     return this.prisma.user.update({
       where,

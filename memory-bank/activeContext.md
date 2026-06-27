@@ -2,34 +2,151 @@
 
 ## Last Updated
 
-2026-06-26T17:04:00Z (Session 7 — P1 66 tools deployed)
+2026-06-27T06:43:00Z (Session 13 — Daily Tools + Onboarding deployed to Contabo ✅)
 
-## Most Recent Operations (Session 7 — 2026-06-26)
+## Session 13 Recap (2026-06-27)
 
-**AI Tool Calling P1: 66 Additional Tools** ✅ Deployed to production
-- Contabo `/opt/neurecore/backend/backend/`: 72 unique tools registered (66 new + 6 existing)
-- `neurecore-tools.ts` expanded from 8 to 74 tool classes across 10 domains
-- `tools.module.ts` updated to import and inject all 66 new tools
-- `StructuredToolRegistry` bug fixed: removed `OnModuleInit` (was running before `ToolsModule.onModuleInit`, causing 0 tools registered)
+**Backend deploy to Contabo — ALL 7 daily tools + Onboarding + Tier limits + Architecture refactors LIVE.**
 
-See `memory-bank/ai-tool-calling-implementation-plan.md` for P1 completion details.
+| Item | Status | Notes |
+|---|---|---|
+| Phase C–F tools (email, documents, reports, query, explain, context, chat) | ✅ Live | PID 647920, 81 tools registered (was 74) |
+| Onboarding wizard (`/onboarding/setup`) | ✅ Live | OnboardingModule initialized; tier/template/invite/complete endpoints registered |
+| Brevo daily counter + 300/day cap | ✅ Live | `GET /integrations/usage/brevo` returns `{sentToday, dailyLimit:300, isAtLimit}` |
+| Agent integration config (`PATCH /agents/:id/integration-config`) | ✅ Live | Accepts `emailAlias`, `emailProvider`, `emailDisplayName`, `emailSignature`, `googleDriveFolderId` |
+| Manage Google page (`/settings/integrations/google`) | ⚠️ Pending frontend deploy to Vercel | Backend endpoint ready |
+| "Link or different account?" Google Sign-In prompt | ✅ Live | Backend returns `{status:'existing_unlinked', email, ...}` on conflict |
+| Drive cleanup cron (24h, terminates only) | ✅ Live | DriveCleanupService started; first run at 3 AM UTC |
+| TierLimitsGuard + `@TierLimit` decorator | ✅ Live | `maxUsers`, `maxDepartments` enforced; others stubbed |
+| Migration `20260627_agent_email_alias` | ✅ Applied to Neon | Added `Agent.emailAlias/emailProvider/emailDisplayName` |
+| Migration `20260628_onboarding_signature_dept_limits` | ✅ Applied to Neon | Added `Tenant.onboardingCompletedAt/onboardingStep/retentionDays`, `Tier.maxDepartments`, `OnboardingInvitation`, `BrevoUsageCounter`, `Agent.emailSignature` |
+| `EmailProvider` interface + factory | ✅ Live | `GmailEmailProvider` + `BrevoEmailProvider` + `EmailProviderFactory`; EmailTool no longer references concrete services |
+| `ICredentialStore` + `IDriveService` interfaces | ✅ Live | Concrete classes implement them |
+| `TelemetryService` | ✅ Live | Tracks `auth.*` events to `TenantMetric` table |
+
+**Issue encountered & fixed during deploy:**
+- `EmailTool` injected `PrismaIntegrationCredentialStore` in constructor but never used it (leftover from old `resolveSender`). Caused `UnknownDependenciesException` on first restart. Fixed by removing unused param from constructor + dist rebuild.
+
+**Reference:** See `memory-bank/contabo-operations.md` for the canonical Contabo deploy procedure.
+
+## Most Recent Operations (Session 12 — 2026-06-27)
+
+**Daily Tools Phase F: Internal AI Chat** ✅ Backend implemented (pending deploy)
+- `ContextTool` (`backend/src/modules/tools/built-in/context.tool.ts`) — 4 actions: `search_memory`, `load_drive`, `load_history`, `load_all`
+  - Memory search uses `MemoryService.search` (vector + keyword fallback)
+  - Drive load lists + snippets files in agent's Documents/Drafts folders
+  - History load returns prior turns on a topic (MemoryEntry rows with metadata.conversationTopic)
+  - `load_all` bundles all three for comprehensive context pull
+- `ChatTool` (`backend/src/modules/tools/built-in/chat.tool.ts`) — 2 actions: `ask`, `remember`
+  - `ask` loads context via ContextTool, assembles bounded system prompt (4000 char cap), calls LLM, persists both user + assistant turns as MemoryEntry
+  - `remember` explicitly stores a fact/decision with importance score
+  - Multi-turn continuity: same `topic` across teammates → vector search finds them
+- `ToolsModule` now imports `MemoryModule` so tools can use `MemoryService`
+- TypeScript: 0 errors in Phase F files
+- Schema migration: NONE needed (uses existing `MemoryEntry` + metadata.conversationTopic pattern)
+
+**🎉 Daily Tools & Integration Plan: ALL 6 PHASES (A–F) COMPLETE 🎉**
+
+Summary of new tools shipped across Phases C–F (7 tools, 18 actions):
+- Phase C: `EmailTool` (4 actions) — read_inbox, get_message, send, flag
+- Phase D: `DocumentsTool` (3), `ReportsTool` (2)
+- Phase E: `QueryTool` (3), `ExplainTool` (2)
+- Phase F: `ContextTool` (4), `ChatTool` (2)
+
+**Pending Deploy (all phases C–F — single deploy unlocks everything):**
+1. ⚠️ `npx prisma migrate deploy` on Contabo — apply `20260627_agent_email_alias` (only Phase C needs this)
+2. ⚠️ Rebuild + restart backend on Contabo — registers all 7 new tools (79 total)
+3. (Optional) `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in Vercel dashboard (pending from Session 6)
+
+## Previous Operations (Session 11 — 2026-06-27)
+
+**Daily Tools Phase E: Data Tables + Plain English Queries** ✅ Backend implemented (pending deploy)
+- `QueryTool` (`backend/src/modules/tools/built-in/query.tool.ts`) — 3 actions: `translate`, `execute`, `ask`
+  - LLM (via `LLMFactory.invoke`) translates NL question → JSON query plan
+  - Plan validated against entity/field/operator allow-list (security)
+  - `tenantId` force-injected into every `where` clause — cross-tenant reads impossible
+  - 200-row cap; no writes; aggregations: count/sum/avg/min/max
+  - 6 queryable entities: `task`, `agent`, `department`, `project`, `user`, `costRecord`
+- `ExplainTool` (`backend/src/modules/tools/built-in/explain.tool.ts`) — 2 actions: `explain_rows`, `explain_aggregation`
+  - Takes query result + original question + audience → structured summary + key insights + recommendations
+  - Uses `LLMFactory.invoke` with low temperature (0.3) for consistent explanations
+- `ToolsModule` now imports `ModelsModule` so tools can use `LLMFactory`
+- TypeScript: 0 errors in Phase E files
+- Schema migration: NONE needed (no schema changes — uses existing Prisma entities + LLMFactory)
+
+## Previous Operations (Session 10 — 2026-06-27)
+
+**Daily Tools Phase D: Documents & Reports** ✅ Backend implemented (pending deploy)
+- `DocumentsTool` (`backend/src/modules/tools/built-in/documents.tool.ts`) — 3 actions: `create`, `list`, `read`
+  - Writes HTML/plaintext to agent's `NeureCore/<Agent>/Documents/` Drive folder
+  - Reads via Drive export API (handles Google-native Docs via `export?mimeType=text/html`)
+- `ReportsTool` (`backend/src/modules/tools/built-in/reports.tool.ts`) — 2 actions: `generate`, `export_pdf`
+  - 4 report types: `task_summary`, `cost_summary`, `agent_workload`, `pipeline_overview`
+  - Generates styled HTML with tables, bar charts, AI-narrative slot
+  - Auto-saves to `NeureCore/<Agent>/Reports/`
+  - PDF export via Drive-native `export?mimeType=application/pdf` — no new deps
+- Both tools registered in `ToolsModule` (providers + constructor + `onModuleInit`)
+- TypeScript: 0 errors in Phase D files
+- Schema migration: NONE needed (no new columns — tools use existing Drive + Prisma tables)
+
+## Previous Operations (Session 9 — 2026-06-27)
+
+**Daily Tools Phase C: Email Agent** ✅ Backend implemented (pending deploy)
+- `EmailTool` (`backend/src/modules/tools/built-in/email.tool.ts`) — 4 actions: `read_inbox`, `get_message`, `send`, `flag`
+- Per-agent email identity via `Agent.emailAlias` + `emailProvider` + `emailDisplayName`
+- Provider routing: Gmail API or Brevo SMTP based on `Agent.emailProvider` + connection state
+- Priority flagging: hybrid — LLM-decision + Gmail label persistence (`flag` action applies IMPORTANT/STARRED)
+- `ToolsModule` now imports `IntegrationsModule` via `forwardRef` (circular-safe)
+- Migration `20260627_agent_email_alias` ready (NOT YET applied to Contabo)
+- `npx prisma generate` ran locally — generated client has new columns
+- TypeScript: 0 errors in Phase C files
+
+**UI Logo/Favicon Assets** ✅ Deployed
+- Copied `favicon.ico`, `favicon.png`, `logo.png` from `memory-bank/public/` → `frontend-tenant/public/` and `frontend-admin/public/`
+- Updated tenant `layout.tsx` with `icons.ico/apple` metadata
+- Replaced text "N" badge in `IconRail.tsx` with `<img src="/logo.png">`
+- Replaced text "NeureCore" in `TopBar.tsx` with logo image
+- Tenant + admin login pages now display logo image
+
+**Memory-bank Updates** ✅
+- `daily-tools-integration-plan.md` bumped to v1.7 — Phase C marked ✅, Phase D–F marked 🔴
+- `progress.md` updated with Session 8 entry
+- This file (activeContext.md) updated
+
+## Previous Operations (Session 8 — 2026-06-26)
+
+**Vercel rootDirectory Fix** ✅ Deployed
+- Vercel project `neurecorebase-tenant` failed to build (No Next.js version detected)
+- Root cause: `rootDirectory` was `null` (repo root) instead of `frontend-tenant`
+- Fix: PATCH `/v9/projects/neurecorebase-tenant` with `rootDirectory: "frontend-tenant"`
+- Result: `hq.neurecore.com`, `hq.neurecore.com/settings/integrations`, `hq.neurecore.com/settings/integrations/google` — all HTTP 200
+
+See `memory-bank/production-deployment-log.md` Session 8 for full details.
+
+## Previous Operations (Session 7 — 2026-06-26)
+
+**Phase B: Google Workspace Core (Gmail + Calendar + Drive)** ✅ Deployed to production
+- Week 5-6 — Gmail backend: 5 endpoints (inbox, messages, send, labels)
+- Week 7-8 — Calendar backend: 4 endpoints (events CRUD + list)
+- Week 9-10 — Drive backend: 5 endpoints (folder/file management)
+- Migration `20260627_google_workspace_ids` applied to Neon
+- 17 new endpoints all mapped and smoke-tested
+- PM2 restarted on Contabo (pid 445508)
+
+See `memory-bank/production-deployment-log.md` Session 7 for full details.
 
 ## Previous Operations (Session 6 — 2026-06-26)
 
-**AI Tool Calling** ✅ Deployed to production
-- `neurecore-base/neurecore` (git): commit `7708523b` — feat(agents): AI tool calling - MiniMax function calling + NeureCore tools
-- Contabo `/opt/neurecore/backend/backend/`: synced via rsync, built with `npm run build`
-- 8 tools implemented: createTask, createProject, listDepartments, listAgents, pauseAgent, resumeAgent, listTasks, getTenantSnapshot
-- `OfficialAgentGraph.plannerNode` now calls `LLMFactory.invokeWithTools()` with tool definitions
-- `ChatService.send()` routes action requests to LangGraph via `detectIntent()`
-- Backend restarted (pid 333009), healthy — `GET /api/v1/health` returns 200
+**Phase A: Integrations Module (Google Sign-In + Google Workspace + Brevo)** ✅ Deployed to production
+- Week 0 — Google Sign-In: `POST /api/v1/auth/google` via GIS (no npm package)
+- Week 1 — Integration module skeleton: `IntegrationsModule` + `IntegrationsService` + `IntegrationsController`
+- Week 2 — Google OAuth flow: `GET /api/v1/integrations/google/authorize` + `/callback`
+- Week 3 — Encrypted credential storage: `PrismaIntegrationCredentialStore` (AES-256-GCM via existing `CryptoService`)
+- Week 4 — Brevo SMTP: `BrevoEmailService` + `api.brevo.com/v3/smtp/email`
+- Migrations applied: `20260626_add_google_signin` + `20260626_integration_credentials`
+- 4 critical fixes applied (uuid_generate_v4 → gen_random_uuid, null coalescing, path depth issues, app.module copy step)
 
-### Deploy Issues Fixed
-- Added `invokeWithTools()` stubs to `DeepSeekClientService` and `MiMoClientService` (satisfy `ILLMClient` interface)
-- Changed `TaskPriority.URGENT` → `CRITICAL` in neurecore-tools.ts (Prisma enum)
-- Fixed type predicate in tools.module.ts (cast filter result as `IStructuredTool[]`)
-
-See `memory-bank/ai-tool-calling-implementation-plan.md` for full details.
+See `memory-bank/production-deployment-log.md` Session 6 for full details.
 
 ## Previous Operations (Session 5 — 2026-06-26)
 

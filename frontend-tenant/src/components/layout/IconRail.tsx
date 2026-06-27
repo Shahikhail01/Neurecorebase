@@ -92,9 +92,7 @@ export function IconRail({ className = '' }: IconRailProps) {
       {/* Brand */}
       <div className="h-14 flex items-center px-3 border-b border-surface-border shrink-0">
         <Link href="/command-center" className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-md bg-accent-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
-            N
-          </div>
+          <img src="/logo.png" alt="NeureCore" className="w-7 h-7 rounded-md object-contain shrink-0" />
           {expanded && (
             <motion.span
               initial={{ opacity: 0 }}

@@ -39,7 +39,10 @@ export default function AdminLoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-950 p-4">
       <div className="w-full max-w-md rounded-2xl bg-gray-900 border border-gray-800 p-8 shadow-xl">
-        <h1 className="mb-2 text-2xl font-bold text-white">NeureCore Admin</h1>
+        <div className="flex justify-center mb-6">
+          <img src="/logo.png" alt="NeureCore" className="h-10 w-auto object-contain" />
+        </div>
+        <h1 className="mb-2 text-2xl font-bold text-white text-center">Admin Portal</h1>
         <p className="mb-6 text-sm text-gray-400">Super Admin access only</p>
         {error && (
           <div className="mb-4 rounded-lg bg-red-950 border border-red-800 p-3 text-sm text-red-300">{error}</div>

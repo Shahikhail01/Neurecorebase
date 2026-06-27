@@ -1,4 +1,4 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Module, OnModuleInit, forwardRef } from '@nestjs/common';
 import { ToolsController } from './tools.controller';
 import { ToolsService } from './tools.service';
 import { StructuredToolRegistry } from './structured-tool.registry';
@@ -6,6 +6,16 @@ import { HttpRequestTool } from './built-in/http-request.tool';
 import { CalculatorTool } from './built-in/calculator.tool';
 import { CalculatorEnhancedTool } from './built-in/calculator-enhanced.tool';
 import { HttpRequestEnhancedTool } from './built-in/http-request-enhanced.tool';
+import { EmailTool } from './built-in/email.tool';
+import { DocumentsTool } from './built-in/documents.tool';
+import { ReportsTool } from './built-in/reports.tool';
+import { QueryTool } from './built-in/query.tool';
+import { ExplainTool } from './built-in/explain.tool';
+import { ContextTool } from './built-in/context.tool';
+import { ChatTool } from './built-in/chat.tool';
+import { IntegrationsModule } from '../integrations/integrations.module';
+import { ModelsModule } from '../models/models.module';
+import { MemoryModule } from '../memory/memory.module';
 import {
   CreateTaskTool,
   CreateProjectTool,
@@ -81,12 +91,20 @@ import {
 import type { IStructuredTool } from './interfaces/structured-tool.interface';
 
 @Module({
+  imports: [forwardRef(() => IntegrationsModule), ModelsModule, MemoryModule],
   controllers: [ToolsController],
   providers: [
     HttpRequestTool,
     CalculatorTool,
     CalculatorEnhancedTool,
     HttpRequestEnhancedTool,
+    EmailTool,
+    DocumentsTool,
+    ReportsTool,
+    QueryTool,
+    ExplainTool,
+    ContextTool,
+    ChatTool,
     CreateTaskTool,
     CreateProjectTool,
     ListDepartmentsTool,
@@ -169,6 +187,13 @@ export class ToolsModule implements OnModuleInit {
     private readonly calcTool: CalculatorTool,
     private readonly calcEnhanced: CalculatorEnhancedTool,
     private readonly httpEnhanced: HttpRequestEnhancedTool,
+    private readonly emailTool: EmailTool,
+    private readonly documentsTool: DocumentsTool,
+    private readonly reportsTool: ReportsTool,
+    private readonly queryTool: QueryTool,
+    private readonly explainTool: ExplainTool,
+    private readonly contextTool: ContextTool,
+    private readonly chatTool: ChatTool,
     private readonly createTask: CreateTaskTool,
     private readonly createProject: CreateProjectTool,
     private readonly listDepts: ListDepartmentsTool,
@@ -247,6 +272,13 @@ export class ToolsModule implements OnModuleInit {
       this.calcTool,
       this.calcEnhanced,
       this.httpEnhanced,
+      this.emailTool,
+      this.documentsTool,
+      this.reportsTool,
+      this.queryTool,
+      this.explainTool,
+      this.contextTool,
+      this.chatTool,
       this.createTask,
       this.createProject,
       this.listDepts,

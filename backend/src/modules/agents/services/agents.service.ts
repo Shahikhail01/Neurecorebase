@@ -189,6 +189,19 @@ export class AgentsService implements IAgentService {
         ...(input.config && { config: input.config as never }),
         ...(input.metadata && { metadata: input.metadata as never }),
         ...(input.isActive !== undefined && { isActive: input.isActive }),
+        ...(input.emailAlias !== undefined && { emailAlias: input.emailAlias }),
+        ...(input.emailProvider !== undefined && {
+          emailProvider: input.emailProvider,
+        }),
+        ...(input.emailDisplayName !== undefined && {
+          emailDisplayName: input.emailDisplayName,
+        }),
+        ...(input.emailSignature !== undefined && {
+          emailSignature: input.emailSignature,
+        }),
+        ...(input.googleDriveFolderId !== undefined && {
+          googleDriveFolderId: input.googleDriveFolderId,
+        }),
       },
     });
   }

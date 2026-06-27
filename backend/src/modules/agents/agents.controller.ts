@@ -160,6 +160,36 @@ export class AgentsController {
     );
   }
 
+  /** PATCH /agents/:id/integration-config — WS-3.3 update per-agent integration identity */
+  @Patch(':id/integration-config')
+  @HttpCode(HttpStatus.OK)
+  updateIntegrationConfig(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body()
+    dto: {
+      emailAlias?: string;
+      emailProvider?: 'gmail' | 'brevo';
+      emailDisplayName?: string;
+      emailSignature?: string;
+      googleDriveFolderId?: string;
+    },
+    @CurrentUser() user: JwtPayload,
+    @Query('tenantId') tenantId?: string,
+  ) {
+    const tid = this.resolveTenantId(user, tenantId);
+    return this.agentsService.update(
+      id,
+      {
+        emailAlias: dto.emailAlias,
+        emailProvider: dto.emailProvider,
+        emailDisplayName: dto.emailDisplayName,
+        emailSignature: dto.emailSignature,
+        googleDriveFolderId: dto.googleDriveFolderId,
+      } as never,
+      tid,
+    );
+  }
+
   // ─── Pause ───────────────────────────────────────────────
 
   @Post(':id/pause')

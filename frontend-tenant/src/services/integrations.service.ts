@@ -133,6 +133,26 @@ class IntegrationsService {
     await api.post('/integrations/brevo/disconnect');
   }
 
+  async getBrevoUsage(): Promise<{
+    sentToday: number;
+    dailyLimit: number;
+    warningThreshold: number;
+    isAtWarning: boolean;
+    isAtLimit: boolean;
+    remaining: number;
+  }> {
+    const res = await api.get('/integrations/usage/brevo');
+    return unwrapItem(res) as never;
+  }
+
+  async getGoogleDriveFolders(): Promise<{
+    rootFolderId: string | null;
+    children: unknown[];
+  }> {
+    const res = await api.get('/integrations/google/drive-folders');
+    return unwrapItem(res) as { rootFolderId: string | null; children: unknown[] };
+  }
+
   // ─── Gmail ──────────────────────────────────────────────────────────
 
   async getInbox(options: { maxResults?: number; pageToken?: string; q?: string } = {}): Promise<{

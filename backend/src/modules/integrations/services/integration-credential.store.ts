@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { CryptoService } from '../../connectors/services/crypto.service';
 import { IntegrationProvider, IntegrationStatus } from '@prisma/client';
+import type { ICredentialStore } from './credential-store.interface';
 
 export interface GoogleCredentials {
   accessToken: string;
@@ -17,7 +18,7 @@ export interface BrevoCredentials {
 export type IntegrationCredentials = GoogleCredentials | BrevoCredentials;
 
 @Injectable()
-export class PrismaIntegrationCredentialStore {
+export class PrismaIntegrationCredentialStore implements ICredentialStore {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,

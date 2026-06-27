@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
+import { TelemetryService } from '../../observability/services/telemetry.service';
 import {
   IAuthService,
   RegisterInput,
@@ -15,6 +16,7 @@ import {
   ValidatedUser,
   RequestMeta,
   GoogleSignInInput,
+  GoogleSignInResult,
 } from '../interfaces/auth.interface';
 import { TokenPair } from '../interfaces/token.interface';
 import { UserRole } from '@prisma/client';
@@ -29,6 +31,7 @@ export class AuthService implements IAuthService {
     private readonly prisma: PrismaService,
     private readonly passwordService: PasswordService,
     private readonly tokenService: TokenService,
+    private readonly telemetry: TelemetryService,
   ) {}
 
   async validateUser(
@@ -93,8 +96,10 @@ export class AuthService implements IAuthService {
     password: string,
     meta: RequestMeta,
   ): Promise<AuthResult> {
+    const start = Date.now();
     const validated = await this.validateUser(email, password);
     if (!validated) {
+      await this.telemetry.track('auth.login.failure', { labels: { reason: 'invalid_credentials' } });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -109,6 +114,13 @@ export class AuthService implements IAuthService {
         userAgent: meta.userAgent,
         expiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
       },
+    });
+
+    await this.telemetry.timing('auth.login.duration_ms', Date.now() - start, {
+      tenantId: validated.tenantId ?? undefined,
+    });
+    await this.telemetry.track('auth.login.success', {
+      tenantId: validated.tenantId ?? undefined,
     });
 
     this.logger.log(`User logged in: ${email}`);
@@ -141,14 +153,37 @@ export class AuthService implements IAuthService {
     this.logger.log(`User logged out: ${userId}`);
   }
 
-  async googleSignIn(data: GoogleSignInInput): Promise<AuthResult> {
-    // Check if user exists by email
+  async googleSignIn(
+    data: GoogleSignInInput,
+    options: { intent?: 'signin' | 'link' } = {},
+  ): Promise<GoogleSignInResult> {
+    const start = Date.now();
+    const intent = options.intent ?? 'signin';
+
     const existingByEmail = await this.prisma.user.findUnique({
       where: { email: data.email },
     });
 
     if (existingByEmail) {
-      // User exists - link Google ID if not already linked
+      // WS-6.3: When user exists but Google not linked, return unlinked status
+      // unless caller explicitly chose intent='link' (the "Link this account" button).
+      if (!existingByEmail.googleId && intent !== 'link') {
+        this.logger.warn(
+          `Google sign-in for ${data.email} blocked — account exists without Google link. ` +
+          'Returning "existing_unlinked" to prompt user.',
+        );
+        await this.telemetry.track('auth.google_signin.existing_unlinked');
+        return {
+          status: 'existing_unlinked',
+          email: existingByEmail.email,
+          firstName: existingByEmail.firstName,
+          lastName: existingByEmail.lastName,
+          googlePicture: data.googlePicture,
+          googleId: data.googleId,
+        };
+      }
+
+      // Link (if needed) and issue tokens
       if (!existingByEmail.googleId) {
         await this.prisma.user.update({
           where: { id: existingByEmail.id },
@@ -158,15 +193,21 @@ export class AuthService implements IAuthService {
           },
         });
         this.logger.log(`Google ID linked: ${data.email}`);
+        await this.telemetry.track('auth.google_signin.linked');
       }
       const validated = this.toValidatedUser(existingByEmail);
       const tokens = await this.tokenService.issueTokenPair(validated);
+      await this.telemetry.timing('auth.google_signin.duration_ms', Date.now() - start, {
+        tenantId: validated.tenantId ?? undefined,
+      });
+      await this.telemetry.track('auth.google_signin.success', {
+        tenantId: validated.tenantId ?? undefined,
+      });
       this.logger.log(`User logged in via Google: ${data.email}`);
-      return { user: validated, tokens };
+      return { status: 'ok', user: validated, tokens };
     }
 
-    // User doesn't exist - create new account with tenant
-    // Find default tier for new tenants
+    // New user — create account + tenant
     const defaultTier = await this.prisma.tier.findFirst({
       where: { isDefault: true },
     });
@@ -198,8 +239,12 @@ export class AuthService implements IAuthService {
 
     const validated = this.toValidatedUser(user);
     const tokens = await this.tokenService.issueTokenPair(validated);
+    await this.telemetry.timing('auth.google_signin.duration_ms', Date.now() - start, {
+      tenantId: tenant.id,
+    });
+    await this.telemetry.track('auth.google_signin.new_user', { tenantId: tenant.id });
     this.logger.log(`User registered via Google: ${user.email} tenant=${tenant.id}`);
-    return { user: validated, tokens };
+    return { status: 'ok', user: validated, tokens };
   }
 
   private toValidatedUser(user: {

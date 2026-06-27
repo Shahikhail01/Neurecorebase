@@ -22,7 +22,9 @@ import {
 } from './dto/user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { TierLimitsGuard } from '../../common/guards/tier-limits.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { TierLimit } from '../../common/decorators/tier-limit.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '@prisma/client';
 import { ValidatedUser } from '../auth/interfaces/auth.interface';
@@ -31,7 +33,7 @@ import { ValidatedUser } from '../auth/interfaces/auth.interface';
 type AuthenticatedUser = ValidatedUser & { sub: string; jti: string };
 
 @Controller({ path: 'users', version: '1' })
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, TierLimitsGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -86,6 +88,7 @@ export class UsersController {
 
   @Post()
   @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN, UserRole.OWNER)
+  @TierLimit('maxUsers')
   create(@Body() dto: CreateUserDto, @CurrentUser() user: AuthenticatedUser) {
     // Enforce tenantId from JWT for tenant-level users
     if (user.tenantId && !dto.tenantId) {

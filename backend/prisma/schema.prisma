@@ -196,6 +196,7 @@ model Tier {
   // Limits
   maxUsers      Int      @default(2)
   maxAgents     Int      @default(3)
+  maxDepartments Int     @default(1)
   maxStorageGB  Int      @default(1)
   maxApiCalls   Int      @default(1000)
   maxConversationMessages Int @default(500)
@@ -264,6 +265,14 @@ model Tenant {
   googleDriveRootFolderId String?
   googleCalendarId        String?
 
+  // WS-2: Onboarding state machine
+  onboardingCompletedAt   DateTime?
+  onboardingStep          String?
+
+  // WS-6: Drive cleanup retention (days). Auto-cleanup only deletes Drive folders for
+  // TERMINATED agents older than this many days. ARCHIVED agents are preserved.
+  retentionDays           Int       @default(90)
+
   // Tier relation (Phase 6: replaces plan + agentLimit)
   tierId String
   tier   Tier   @relation(fields: [tierId], references: [id])
@@ -300,6 +309,8 @@ model Tenant {
   expenses          Expense[]
   billingEvents     BillingEvent[]
   quotaUsages       QuotaUsage[]
+  onboardingInvitations OnboardingInvitation[]
+  brevoUsageCounters BrevoUsageCounter[]
 
   // Phase 5 back-relations - Routines
   routines    Routine[]
@@ -363,6 +374,9 @@ model User {
 
   // Phase 5 back-relations - Goals
   goals Goal[]
+
+  // WS-2: Onboarding invitations sent by this user
+  onboardingInvitations OnboardingInvitation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -514,6 +528,14 @@ model Agent {
 
   // Phase B: Google Drive folder for this agent (auto-created on Google connect)
   googleDriveFolderId String?
+
+  // Phase C: Per-agent email identity (used when sending as this agent)
+  emailAlias          String? // e.g., sales-agent@company.com
+  emailProvider       String? @default("brevo") // 'brevo' | 'gmail' | null
+  emailDisplayName    String? // e.g., "Sales Agent" — used as From name
+
+  // WS-5: HTML or plain-text signature appended to outbound emails
+  emailSignature      String? @db.Text
 
   // Whether this agent slot is active for this tenant
   // Tenant can toggle selected agents within their tier allocation
@@ -1488,4 +1510,38 @@ model IntegrationCredential {
   @@index([tenantId])
   @@index([status])
   @@map("integration_credentials")
+}
+
+// ─── Onboarding Invitations (WS-2) ────────────────────────────────────────
+
+model OnboardingInvitation {
+  id        String    @id @default(uuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email     String
+  role      UserRole  @default(USER)
+  token     String    @unique
+  acceptedAt DateTime?
+  expiresAt DateTime
+  invitedById String?
+  invitedBy   User?    @relation(fields: [invitedById], references: [id], onDelete: SetNull)
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([token])
+  @@map("onboarding_invitations")
+}
+
+// ─── Brevo Usage Counters (WS-5) ───────────────────────────────────────────
+
+model BrevoUsageCounter {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  sentCount Int      @default(0)
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+  @@map("brevo_usage_counters")
 }
