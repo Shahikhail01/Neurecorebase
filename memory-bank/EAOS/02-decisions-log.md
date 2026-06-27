@@ -1,9 +1,37 @@
 # NeureCore — EAOS Decisions Log
 
-**Last updated:** 2026-06-27 16:11
+**Last updated:** 2026-06-27 18:00
 **Purpose:** Chronological log of all architectural, product, and process decisions made during EAOS planning and implementation. Each entry: decision, rationale, trade-offs, doc reference.
 
 **Format:** Newest first. Use ISO date prefix.
+
+---
+
+## 2026-06-27 (continued)
+
+### D-024 · Phase 1 v1.3 expansion: ship abstractions with consumers (correction to v1.2)
+
+**Decision:** Restructure Phase 1 from 27 tasks (v1.2) to 48 tasks (v1.3) across 5 sub-phases. v1.2 was insufficient because I shipped abstractions (`TenantContextService`, `@nestjs/swagger` setup, `frontend-eaos/` shell) without their consumers. v1.3 makes the consumer-side tasks explicit and marks the four "CRITICAL" deferrals from v1.2:
+
+1. **Task 1B (backend annotation roll-out, 9 tasks)** — annotating every controller + DTO so the OpenAPI artifact is comprehensive. Without this, the frontend codegen pipeline (Phase 2) cannot work.
+2. **Task 1C (frontend scaffold + design system, 19 tasks)** — `packages/ui` primitives (`<EmptyState>`, `<LoadingState>`, `<ErrorState>`, `<Can>`, query keys, hooks). Required by every page per NUWS §3.1a.
+3. **Task 1D (EAOS-1 Prisma schema, 3 tasks)** — 11 new models (`EntityState`, `StateHistory`, `EntityOwnership`, `EntityLabel`, `UserFavorite`, `UserRecentAccess`, `EntityWatcher`, `EntityHealth`, `EntityRelationship`, `WorkspaceLayout`, `CapabilityConfig`). Required for Phase 3 (entity workspace).
+4. **Task 1E (tenant-context migration, 8 tasks)** — actually consuming the `TenantContextService` by migrating 15+ duplicate `resolveTenantId` methods. Without this, the service is dead weight (DIP violation).
+
+**Rationale:** the user pointed out (verbatim): *"WHY DID YOU IN THE FIRST PLACE KEEP THESE TASKS IN PHASE 1, you should have anticipated things clearly."* I had rationalised each deferral individually but failed to see the systemic violation: every deferral was a **blocking dependency disguised as a deferral**.
+
+**Trade-offs accepted:**
+- Phase 1 grows from ~2 weeks to ~4 weeks. Worth it — the alternative was shipping an unusable foundation.
+- Each sub-phase is independently shippable and reviewable as its own commit, so the slower cadence doesn't block the rest of the team.
+- Every task in v1.3 has an explicit SOLID principle cited. The plan itself now embodies the same principles the code is held to.
+
+**Doc references:**
+- `EAOS-implementation-roadmap.md` v1.3 (this is the change)
+- `01-active-context.md` updated to reflect the v1.3 plan
+- `EAOS-NUWS-principles.md` §7.5 design tokens, §3.1a empty states, §7.5.4 density — all referenced
+- `EAOS-rbac-model.md` §3.3 ROLE_PERMISSIONS, §5 EntityOwnerGuard, §10 EntityOwnerGuard — all referenced
+
+**Status:** Approved by user feedback 2026-06-27 18:00. Awaiting user decision on which sub-phases to ship next.
 
 ---
 

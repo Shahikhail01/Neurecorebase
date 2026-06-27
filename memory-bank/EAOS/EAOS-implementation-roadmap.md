@@ -1,11 +1,56 @@
 # NeureCore — EAOS Implementation Roadmap
 
-**Document Version:** 1.2
+**Document Version:** 1.3
 **Date:** 2026-06-27
 **Status:** EAOS Operational Plan — phasing, sequencing, risk gates
 **Audience:** Engineering leads, product, release manager
-**Supersedes:** v1.1 (D-023: `frontend-tenant/` deleted in full. Phase 0 tasks 0.6 and 0.7 eliminated. Phase 9 dual-support window eliminated — cookies are the sole auth path. Phase 10 decommission tasks 10.13–10.15 already done. No "frozen" intermediate state.)
+**Supersedes:** v1.2 (Retrospective: I deferred too much in the original Phase 1. v1.3 expands Phase 1 to be complete and fully SOLID-compliant. See §0b for what was wrong and how v1.3 fixes it.)
 **Related (read on demand):** `EAOS-implementation-plan.md` v2.8, `EAOS-NUWS-principles.md` v1.4, `EAOS-pricing-plans.md` v1.2, `EAOS-api-contract.md` v1.0, `EAOS-rbac-model.md` v1.0, `EAOS-frontend-data-layer.md` v1.2
+
+---
+
+## 0b. Retrospective: v1.2 was insufficient (fixed in v1.3)
+
+**Why v1.2 was wrong.** I shipped Phase 1 Tier A + Tier B and deferred four task groups. Looking back, three of those deferrals violated SOLID principles and broke the plan's own success criteria. This is the v1.3 fix.
+
+### What I deferred and why it was wrong
+
+| Deferred | Original rationale | Why it was wrong (SOLID violation) |
+|---|---|---|
+| **Tasks 1.5/1.6 (annotate every controller/DTO)** | "Mechanical 3-5 days" | **DIP violation:** the entire reason for tasks 1.1 + 1.7 (OpenAPI bootstrap) is to produce a comprehensive spec. Annotating only `agents` means the generated `openapi.json` is empty for every other endpoint. Frontend codegen (task 1.22) cannot work without this. **It is a blocking dependency, not a deferral.** |
+| **Task 1.10 (EAOS-1 Prisma models)** | "Needs user review" | **LSP violation:** Phase 3 (entity workspace) cannot start without `EntityState`, `EntityHealth`, `EntityRelationship`, etc. The schema is just additive (new tables) with zero risk to existing data. Review ≠ block. |
+| **Tasks 1.11-1.17 (packages/ui internals)** | "Premature extraction" | **ISP violation:** `<Can>`, `<EmptyState>`, `<LoadingState>`, `<ErrorState>` are required by every page per NUWS §3.1a (the empty state library is **binding**). The Toaster was extracted; the others are equally required. |
+| **Migrating the 15+ duplicate `resolveTenantId` methods** | "Not in original plan" | **SRP violation:** I added a `TenantContextService` that nothing reads. Building abstractions without consumers is the textbook anti-pattern. |
+
+### The SOLID principle behind every Phase 1 task
+
+Every task in v1.3 has a SOLID justification. The phase is now complete and correct:
+
+- **S**ingle Responsibility: each task delivers one cohesive outcome.
+- **O**pen/Closed: Phase 1 is open to all 35+ controllers; closed only against controller internals.
+- **L**iskov Substitution: all list endpoints return `PaginatedResponse<T>`; all action endpoints return `ActionResult<T>` — clients don't need to special-case the agents controller.
+- **I**nterface Segregation: `packages/ui` ships the empty/loading/error states that pages actually need; not a kitchen sink.
+- **D**ependency Inversion: the OpenAPI artifact is the single source of truth for the frontend; controllers depend on the contract, not the other way around.
+
+### v1.3 changes
+
+- **Phase 1 expanded from 17 tasks to 38 tasks** across 5 sub-phases (A, B, C, D, E).
+- **Every task now has explicit SOLID adherence and dependency notes.**
+- **Three new "must-do" sub-phases added:** C (annotation roll-out, CRITICAL), D (Prisma EAOS-1 schema, CRITICAL for Phase 3), E (Prisma migration of 15+ `resolveTenantId` duplicates).
+- **Phase 2 simplified** to just feature-flag rollout of the canonical envelopes; the dual-layer removal is done in Phase 1 C now.
+
+---
+
+## 0. Purpose of this document
+
+The other 6 EAOS documents define **what to build** (entity model, capabilities, UI/UX, API, RBAC, data layer). This document defines **the order to build it in** and **how to ship it without breaking what exists**.
+
+**Optimisation priority (in order):**
+1. **Safety** — never ship a security regression; existing customer data must remain accessible.
+2. **Comprehensiveness** — every EAOS capability and every audit finding is addressed.
+3. **SOLID adherence** — every task has a SOLID justification. Abstractions ship with consumers.
+4. **Best practice** — feature flags, observability, rollback, and security review gates are non-negotiable.
+5. **Speed** — last, not first. A 2-week delay is better than a 2-day outage.
 
 ---
 
@@ -50,18 +95,18 @@ Per D-022 (2026-06-27) and D-023 (2026-06-27), EAOS is built in a **new app `fro
 | # | Phase | Goal | Weeks | Risk | Per-tenant flag |
 |---|---|---|---|---|---|
 | **0** | **Safety lockdown** | Fix existing security gaps before any new work | 1 | 🔴 High | None — forced rollout |
-| **1** | **Foundations** | OpenAPI, design tokens, shared schemas, contract tests | 2 | 🟢 Low | None |
-| **2** | **Frontend data layer** | TanStack Query migration; retire dual layers | 3 | 🟡 Med | `USE_REST_CLIENT` |
+| **1** | **Foundations** (5 sub-phases: A backend core, B annotation roll-out, C frontend scaffold, D EAOS-1 Prisma, E tenant-context migration) | Comprehensive OpenAPI spec, design system, Prisma schema, frontend-eaos shell, tenant context everywhere | 4 | 🟡 Med | None |
+| **2** | **Frontend data layer** | TanStack Query everywhere in `frontend-eaos`; permission hooks in `<Can>` | 1 | 🟢 Low | None (new app) |
 | **3** | **EAOS-1 entity model** | Universal entity workspace (10 panels + modal) | 6 | 🔴 High | `USE_NEW_WORKSPACE` |
 | **4** | **EAOS-2 widgets** | Widget registry + per-panel visualizations | 4 | 🟡 Med | Tied to Phase 3 |
 | **5** | **EAOS-3 AI Actions** | Ask AI surfaces + ActionAuthorizationGuard | 4 | 🔴 High | `USE_AI_ACTIONS` |
 | **6** | **EAOS-4 Knowledge Hub** | RAG pipeline + KnowledgeEntry model | 4 | 🟡 Med | None |
 | **7** | **EAOS-5 Solution Packs** | Marketplace + install lifecycle | 6 | 🟡 Med | Tied to tier |
 | **8** | **EAOS-6 Vertical Pack #1** | First industry pack (Retail recommended) | 8–10 | 🟢 Low | Tied to pack |
-| **9** | **Auth hardening** | httpOnly cookies + CSRF | 2 | 🔴 High | `USE_HTTPONLY_AUTH` |
-| **10** | **Cleanup** | Delete legacy code; consolidate | 2 | 🟢 Low | None |
+| **9** | **Auth hardening** | httpOnly cookies + CSRF (sole auth path per D-023) | 2 | 🔴 High | `USE_HTTPONLY_AUTH` |
+| **10** | **Cleanup** | Delete legacy code; consolidate | 1 | 🟢 Low | None |
 
-**Total:** ~44–46 weeks of focused work for 1 backend + 1 frontend engineer pair, or ~22–24 weeks for a 2-pair team. Phases 1, 2, 3, 5, 9 have some parallelism opportunities; the rest are mostly sequential.
+**Total:** ~48–52 weeks of focused work for 1 backend + 1 frontend engineer pair, or ~24–28 weeks for a 2-pair team. Phases 1 (sub-phases A, B, C can run in parallel; D, E are sequential), 2, 5, 9 have some parallelism opportunities; the rest are mostly sequential.
 
 **Not in scope here:** Tier 2/3 docs (component catalog, observability, i18n, a11y, performance budgets, testing strategy). Each gets its own plan when its phase starts.
 
@@ -70,13 +115,37 @@ Per D-022 (2026-06-27) and D-023 (2026-06-27), EAOS is built in a **new app `fro
 ## 3. Critical sequencing rules (do not violate)
 
 1. **Phase 0 must ship first.** No new features until existing security gaps are closed.
-2. **Phase 1 must precede Phase 2/3/5.** OpenAPI types and shared schemas are required by everything else.
-3. **Phase 9 (httpOnly cookies) does NOT block EAOS work.** It can run in parallel with Phase 5/6/7. Per D-023, there is no dual-support window — cookies are the only auth path.
-4. **EAOS-1 (Phase 3) blocks EAOS-2/3/4.** The workspace shell is the container for everything else.
-5. **EAOS-2 (widgets) blocks EAOS-3 only for the Operations/Resources/Insights panels.** AI Actions can ship without widget registry if the Intelligence panel uses bespoke cards.
-6. **EAOS-4 (Knowledge) blocks EAOS-5 (Solution Packs).** Packs ship knowledge; no Knowledge = no Pack knowledge extension.
-7. **EAOS-5 (Packs infra) blocks EAOS-6 (first pack).** Obviously.
-8. **Phase 10 (cleanup) MUST be its own phase.** Don't conflate cleanup with feature work; it never gets done otherwise.
+2. **Phase 1 must be COMPLETE before Phase 2/3/5.** Sub-phases A, B, C, D, E are all required — partial completion is not shippable. v1.2's partial Phase 1 was a mistake.
+3. **Phase 1B (annotation roll-out) is non-negotiable.** Without it, the OpenAPI artifact is empty and the frontend codegen pipeline (Phase 2) cannot work.
+4. **Phase 1D (EAOS-1 Prisma schema) is non-negotiable.** Without it, Phase 3 (entity workspace) cannot start.
+5. **Phase 1E (tenant-context migration) is non-negotiable.** Without it, `TenantContextService` is an unused abstraction (DIP violation).
+6. **Phase 9 (httpOnly cookies) does NOT block EAOS work.** It can run in parallel with Phase 5/6/7. Per D-023, there is no dual-support window — cookies are the only auth path.
+7. **EAOS-1 (Phase 3) blocks EAOS-2/3/4.** The workspace shell is the container for everything else.
+8. **EAOS-2 (widgets) blocks EAOS-3 only for the Operations/Resources/Insights panels.** AI Actions can ship without widget registry if the Intelligence panel uses bespoke cards.
+9. **EAOS-4 (Knowledge) blocks EAOS-5 (Solution Packs).** Packs ship knowledge; no Knowledge = no Pack knowledge extension.
+10. **EAOS-5 (Packs infra) blocks EAOS-6 (first pack).** Obviously.
+11. **Phase 10 (cleanup) MUST be its own phase.** Don't conflate cleanup with feature work; it never gets done otherwise.
+
+---
+
+## 3a. SOLID adherence (binding for every phase)
+
+Every phase task in this roadmap cites at least one SOLID principle. The five principles are applied per the [C++ Core Guidelines I.6](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Ri-explicit) and the original Robert C. Martin formulation:
+
+| Principle | Application in EAOS |
+|---|---|
+| **S**ingle Responsibility | Each module does one thing. `TenantContextService` owns ALS binding; `ResolveTenantContext` (function) owns the resolution logic. The `Toaster` component owns the toast queue and dismissal. Each `useEntity*` hook owns one resource. |
+| **O**pen/Closed | New capability panels (Lifecycle, AI Roster) are added by creating a new component — not by modifying the existing `WorkspaceShell`. New endpoints are added by adding `@ApiOperation`/`@ApiResponse` decorators — not by editing the OpenAPI spec manually. |
+| **L**iskov Substitution | All list endpoints return `PaginatedResponse<T>`; all action endpoints return `ActionResult<T>`. Frontend hooks (`useEntityList`, `useEntityAction`) treat them uniformly — no special-casing per resource. |
+| **I**nterface Segregation | `packages/ui` exports the primitives pages actually need (`<EmptyState>`, `<LoadingState>`, `<ErrorState>`, `<Can>`, `<Toaster>`) — not a kitchen sink. Unused primitives are NOT shipped (YAGNI). |
+| **D**ependency Inversion | The OpenAPI artifact (`backend/openapi/openapi.json`) is the single source of truth. The frontend depends on generated TypeScript types, not on backend implementation. The `TenantContextService` is depended upon by services, not the other way around. |
+
+**Anti-patterns to refuse:**
+- ❌ Building an abstraction before its first consumer (e.g. `TenantContextService` with 0 readers).
+- ❌ Annotating only one controller when the OpenAPI spec is meant to be comprehensive.
+- ❌ Extracting `packages/ui` components that no page uses yet.
+- ❌ Deferring Prisma schema for "user review" when it's additive and risk-free.
+- ❌ Marking tasks "DEFERRED" when they're blocking dependencies for the next phase.
 
 ---
 
@@ -118,107 +187,219 @@ Per D-022 (2026-06-27) and D-023 (2026-06-27), EAOS is built in a **new app `fro
 
 ---
 
-## 5. Phase 1 — Foundations + `frontend-eaos` Scaffold (Weeks 2–3)
+## 5. Phase 1 — Foundations + `frontend-eaos` Scaffold (Weeks 2–5)
 
-**Goal:** Make the contract docs enforceable. Bootstrap `frontend-eaos/` and `packages/ui/`. Every subsequent phase depends on this.
+**Goal:** Make every contract doc enforceable. Bootstrap `frontend-eaos/` and `packages/ui/`. Add the EAOS-1 Prisma schema. Migrate services to the `TenantContextService`. **Everything in this phase ships with consumers** (no DIP/SRP violations, no deferred-blocking-dependencies).
 
-### Backend
+**This phase is divided into 5 sub-phases. Each sub-phase ships independently and can be reviewed/PR'd separately:**
 
-| # | Task | Refs |
-|---|---|---|
-| 1.1 | Add `@nestjs/swagger` to `package.json`; configure `nest-cli.json` plugin | `EAOS-api-contract.md` §11.1–11.2 |
-| 1.2 | Create `common/dto/pagination.dto.ts` and `common/dto/id-param.dto.ts` | `EAOS-api-contract.md` §4.1–4.2 |
-| 1.3 | Extract `common/utils/resolve-tenant-context.ts`; replace 15+ duplicates | `EAOS-api-contract.md` §6.2 |
-| 1.4 | Create `common/context/tenant-context.service.ts` + `TenantContextMiddleware` (AsyncLocalStorage) | `EAOS-api-contract.md` §6.3 |
-| 1.5 | Annotate EVERY existing controller with `@ApiTags`, `@ApiOperation`, `@ApiResponse`, `@ApiBearerAuth`, `@ApiSecurity` | `EAOS-api-contract.md` §11.2 |
-| 1.6 | Annotate EVERY existing DTO with `@ApiProperty` / `@ApiPropertyOptional` | `EAOS-api-contract.md` §11.2 |
-| 1.7 | Generate first OpenAPI artifact at `backend/openapi/openapi.json` | `EAOS-api-contract.md` §11.3 |
-| 1.8 | Migrate ONE list endpoint to `PaginatedResponse<T>` (pick `agents`) as proof | `EAOS-api-contract.md` §3.2 |
-| 1.9 | Migrate ONE action endpoint to `ActionResult<T>` (pick `agents.controller.ts:pause`) as proof | `EAOS-api-contract.md` §3.3 |
-| 1.10 | Add `prisma/schema.prisma`: `EntityState`, `StateHistory`, `EntityOwnership`, `EntityLabel`, `UserFavorite`, `UserRecentAccess`, `EntityWatcher`, `EntityHealth`, `EntityRelationship`, `WorkspaceLayout`, `CapabilityConfig` | `EAOS-implementation-plan.md` §11.3 |
+- **1A** — Backend core (envelopes, tenant context, OpenAPI bootstrap)
+- **1B** — Backend annotation roll-out (CRITICAL — was deferred in v1.2, MUST happen in 1B)
+- **1C** — Frontend scaffold + design system primitives
+- **1D** — EAOS-1 Prisma schema (CRITICAL — was deferred in v1.2, must ship for Phase 3)
+- **1E** — Tenant-context migration roll-out (CRITICAL — was missing from v1.2 entirely)
 
-### `packages/ui/` (NEW shared package)
+---
 
-| # | Task | Refs |
-|---|---|---|
-| 1.11 | Create `packages/ui/` with `package.json`, `tsconfig.json`, `tsup.config.ts` | D-022 |
-| 1.12 | Extract design tokens (Inter + JetBrains Mono, neutral chrome, dark-mode-first, density scale) | `EAOS-NUWS-principles.md` §7.5 |
-| 1.13 | Build primitives: `<Button>`, `<Input>`, `<Select>`, `<Dialog>`, `<Popover>`, `<Toast>`, `<Avatar>`, `<Tag>`, `<KpiCard>`, `<EmptyState>`, `<LoadingState>`, `<ErrorState>`, `<SlideOver>` | `EAOS-NUWS-principles.md` §3.1a, §7.5 |
-| 1.14 | Build permission hooks: `useRole`, `useCan`, `<Can>` | `EAOS-rbac-model.md` §10 |
-| 1.15 | Build query keys factory + standard hooks (`useListQuery`, `useDetailQuery`, `useCreateMutation`, etc.) | `EAOS-frontend-data-layer.md` §3.3 |
-| 1.16 | Build `<Toaster />` (wires the dead `ToastStrategy` pattern from old frontend) | `EAOS-frontend-data-layer.md` §8.3 |
-| 1.17 | Build `API_ENDPOINTS` registry (centralized, type-safe) | `EAOS-frontend-data-layer.md` §2.3 |
+### 1A — Backend core (Week 1)
 
-### `frontend-eaos/` (NEW EAOS app)
+**Why:** foundational building blocks. The OpenAPI bootstrap, the envelope types, and the tenant context must exist before any consumer task.
 
-| # | Task | Refs |
-|---|---|---|
-| 1.18 | Bootstrap Next.js 15 + Tailwind 3.4 + React 19 + TypeScript 5.7 | D-022 |
-| 1.19 | Add deps: `@tanstack/react-query`, `@tanstack/react-query-devtools`, `react-hook-form`, `zod`, `@hookform/resolvers`, `openapi-typescript`, `socket.io-client`, `@tremor/react`, `lucide-react`, `next-themes`, `date-fns` | `EAOS-frontend-data-layer.md` §1 |
-| 1.20 | Create `app/layout.tsx` with `<Providers>` (QueryClient + Theme + AppInitializer + Toaster) | `EAOS-frontend-data-layer.md` §3.1 |
-| 1.21 | Create `app/providers.tsx` with `QueryClientProvider` | `EAOS-frontend-data-layer.md` §3.1 |
-| 1.22 | Set up `openapi-typescript` codegen pipeline; output to `app/api/generated/types.ts` | `EAOS-api-contract.md` §11.3 |
-| 1.23 | Apply design tokens (per `packages/ui/`) | `EAOS-NUWS-principles.md` §7.5 |
-| 1.24 | Create `config/feature-flags.ts` (consolidated) | `EAOS-frontend-data-layer.md` §13 |
-| 1.25 | Add to `pnpm-workspace.yaml` | D-022 |
-| 1.26 | Set up Vercel project for `frontend-eaos` at `eaos.neurecore.com` | D-022 |
-| 1.27 | Create a placeholder page (`/{tenantCompanyName}`) that shows "EAOS — coming Q1 2027" + tenant routing proof | D-022 |
+**SOLID:** SRP (each module does one thing), DIP (everything depends on the contract docs, not on each other).
 
-### Exit criteria
+| # | Task | SOLID | Refs |
+|---|---|---|---|
+| 1.1 | Add `@nestjs/swagger` to `package.json`; configure `nest-cli.json` plugin | OCP | `EAOS-api-contract.md` §11.1–11.2 |
+| 1.2 | Create `common/dto/pagination.dto.ts` and `common/dto/id-param.dto.ts` | SRP | `EAOS-api-contract.md` §4.1–4.2 |
+| 1.3 | Create canonical `common/responses/paginated.response.ts` (`PaginatedResponse<T>`) and `common/responses/action-result.response.ts` (`ActionResult<T>`) | LSP | `EAOS-api-contract.md` §3.2, §3.3 |
+| 1.4 | Create `common/utils/resolve-tenant-context.ts` (the function, not a class) | SRP | `EAOS-api-contract.md` §6.2 |
+| 1.5 | Create `common/utils/assert-same-tenant.ts` (defense-in-depth helper) | SRP | `EAOS-rbac-model.md` §5 |
+| 1.6 | Create `common/context/tenant-context.service.ts` + `common/context/tenant-context.middleware.ts` (AsyncLocalStorage) | SRP + DIP | `EAOS-api-contract.md` §6.3 |
+| 1.7 | Wire `TenantContextMiddleware` globally in `app.module.ts`; register `TenantContextService` as provider | DIP | `EAOS-api-contract.md` §6.3 |
+| 1.8 | Configure `main.ts` to: (a) build the `DocumentBuilder` with `BearerAuth` + `X-Tenant-ID` + `Idempotency-Key` security schemes; (b) write `backend/openapi/openapi.json` on every boot; (c) mount Swagger UI at `/api/docs` | DIP | `EAOS-api-contract.md` §11.1–11.4 |
 
-- [ ] `npm run build` (backend) produces `backend/openapi/openapi.json` with > 0 endpoints
-- [ ] `pnpm --filter @neurecore/ui build` succeeds
+**Exit criteria for 1A:**
+- [ ] `nest build` succeeds
+- [ ] `tsc --noEmit` passes
+- [ ] `pgrep -af nest` shows a healthy boot in dev (DB-connected)
+
+---
+
+### 1B — Backend annotation roll-out (Weeks 2–3) ⚠ CRITICAL
+
+**Why:** the OpenAPI artifact (`backend/openapi/openapi.json`) is the single source of truth for the frontend codegen pipeline. Annotating only `agents` (as v1.2 did) leaves every other endpoint undefined in the spec. **This is a blocking dependency for Phase 2 (frontend codegen) and Phase 3 (entity workspace).** It cannot be deferred.
+
+**SOLID:** OCP (new controllers inherit the annotation pattern via decorators), DIP (frontend depends on the OpenAPI spec, not on backend implementation).
+
+**Approach (1B):**
+1. Create a shared `ApiCommon` helper in `common/decorators/api-common.decorator.ts` that bundles `@ApiTags`, `@ApiBearerAuth`, `@ApiSecurity` so per-controller annotation is a one-liner.
+2. Annotate controllers in priority order (highest-traffic first):
+   - **Tier 1 (entity-critical):** `agents`, `departments`, `users`, `tenants`, `projects`, `goals`, `tasks`, `workflows`, `routines`, `tools` (the 10 EAOS resources)
+   - **Tier 2 (AI-critical):** `auth`, `ai-actions`, `ai-gateway`, `memory`
+   - **Tier 3 (financial/operational):** `finance`, `costs`, `integrations`, `connectors`, `notifications`, `inbox`, `commands`
+   - **Tier 4 (admin/observability):** `audit`, `observability`, `reliability`, `governance`, `onboarding`, `tiers`, `settings`, `models`, `chat`, `events`, `agent-templates`, `department-templates`, `marketplace`, `analytics`, `health`
+3. For each Tier, create a `XxxResponseDto` (paired with the entity) and add `@ApiProperty` to every field. Re-export the existing DTOs from a single `common/responses/` directory.
+4. Add `@ApiOperation({ summary, description })` to every endpoint method.
+5. Add `@ApiResponse({ status, description, type })` to every endpoint method.
+6. Add `@ApiQuery` / `@ApiParam` for query/path parameters.
+7. CI gate: a small script (`scripts/check-openapi-coverage.sh`) that runs `nest start`, greps the generated `openapi.json` for path counts, and fails the build if any Tier-1 controller is missing.
+
+| # | Task | SOLID | Refs |
+|---|---|---|---|
+| 1.9 | Create `common/decorators/api-common.decorator.ts` (bundle of `@ApiTags` + `@ApiBearerAuth` + `@ApiSecurity`) | OCP | `EAOS-api-contract.md` §11.2 |
+| 1.10 | Create `XxxResponseDto` for every Tier-1 entity (10 DTOs) | LSP | `EAOS-api-contract.md` §5.1 |
+| 1.11 | Annotate all Tier-1 controllers + DTOs (10 controllers) | OCP | `EAOS-api-contract.md` §11.2 |
+| 1.12 | Annotate all Tier-2 controllers + DTOs (4 controllers) | OCP | `EAOS-api-contract.md` §11.2 |
+| 1.13 | Annotate all Tier-3 controllers + DTOs (8 controllers) | OCP | `EAOS-api-contract.md` §11.2 |
+| 1.14 | Annotate all Tier-4 controllers + DTOs (13 controllers) | OCP | `EAOS-api-contract.md` §11.2 |
+| 1.15 | Run `nest build` + `nest start` in dev, confirm `openapi.json` has ≥ 200 paths | DIP | `EAOS-api-contract.md` §11.4 |
+| 1.16 | Commit `openapi.json` to version control + add `scripts/check-openapi-coverage.sh` to CI | OCP | `EAOS-api-contract.md` §11.3 |
+| 1.17 | Migrate ALL list endpoints to `PaginatedResponse<T>` (NOT just agents) | LSP | `EAOS-api-contract.md` §3.2 |
+| 1.18 | Migrate ALL action endpoints to `ActionResult<T>` (NOT just agents.pause) | LSP | `EAOS-api-contract.md` §3.3 |
+
+**Exit criteria for 1B:**
+- [ ] Every controller has `@ApiTags` + `@ApiBearerAuth`
+- [ ] Every DTO has `@ApiProperty` on every field
+- [ ] Every endpoint method has `@ApiOperation` + `@ApiResponse`
+- [ ] `openapi.json` has ≥ 200 paths and ≥ 100 schemas
+- [ ] No list endpoint returns a raw array (all use `PaginatedResponse<T>`)
+- [ ] No action endpoint returns `{ message, ... }` (all use `ActionResult<T>`)
+- [ ] CI gate: `check-openapi-coverage.sh` exits 0
+
+---
+
+### 1C — Frontend scaffold + design system (Week 3)
+
+**Why:** `packages/ui` primitives are NOT premature — they are required by **every** page per NUWS §3.1a. The Toaster was the first; the rest follow.
+
+**SOLID:** ISP (only primitives that have a real consumer are shipped), SRP (each primitive is one component), DIP (page-level state depends on `packages/ui`, not on raw HTML).
+
+| # | Task | SOLID | Refs |
+|---|---|---|---|
+| 1.19 | Create `packages/ui/` with `package.json` (`@neurecore/ui`), `tsconfig.json`, `tsup.config.ts` (builds ESM + CJS + types) | SRP | D-022 |
+| 1.20 | Extract design tokens (Inter + JetBrains Mono, neutral chrome, dark-mode-first, density scale) to `packages/ui/src/tokens/` | SRP | `EAOS-NUWS-principles.md` §7.5 |
+| 1.21 | Build `<EmptyState variant="firstRun" | "noData" | "noPermission" | "noResults" | "integrationDisconnected" | "aiGeneratedNothing" />` (the 6 canonical states per NUWS §3.1a) | SRP | `EAOS-NUWS-principles.md` §3.1a |
+| 1.22 | Build `<LoadingState label="Loading…" />` and `<ErrorState error onRetry />` | SRP | `EAOS-NUWS-principles.md` §3.1 |
+| 1.23 | Build `<Toaster />` with singleton `toast.success/error/info/warning` API (CustomEvent bus) — this fixes FIX-006 | SRP | `EAOS-frontend-data-layer.md` §8.3 |
+| 1.24 | Build `<Can permission="agent.spawn">` + `useCan(permission)` + `useRole()` (mirrors `EAOS-rbac-model.md` §3.3 `ROLE_PERMISSIONS` map) | ISP | `EAOS-rbac-model.md` §10 |
+| 1.25 | Build query keys factory: `queryKeys.entity.workspace(type, id)`, `queryKeys.entity.intelligence(type, id)`, etc. | SRP | `EAOS-frontend-data-layer.md` §3.3 |
+| 1.26 | Build `useListQuery<T>(queryKey, path, params)` + `useDetailQuery<T>` + `useCreateMutation` + `useUpdateMutation` + `useDeleteMutation` (thin TanStack Query wrappers) | SRP | `EAOS-frontend-data-layer.md` §3.4 |
+| 1.27 | Build `API_ENDPOINTS` registry (centralized, type-safe, generated from OpenAPI paths) | SRP | `EAOS-frontend-data-layer.md` §2.3 |
+| 1.28 | Build `cn()` utility (clsx + tailwind-merge) — already in `frontend-eaos/src/lib/utils.ts`; move to `packages/ui/src/lib/cn.ts` | SRP | `EAOS-NUWS-principles.md` §7.5 |
+| 1.29 | Bootstrap `frontend-eaos/` (Next.js 15, Tailwind 3.4, React 19, TS 5.7, deps per `EAOS-frontend-data-layer.md` §1) | OCP | D-022 |
+| 1.30 | Add `frontend-eaos/` to `pnpm-workspace.yaml` | — | D-022 |
+| 1.31 | Create `frontend-eaos/src/app/layout.tsx` with `<Providers>` (QueryClient + Theme + Toaster) | SRP | `EAOS-frontend-data-layer.md` §3.1 |
+| 1.32 | Create `frontend-eaos/src/app/providers.tsx` with `QueryClientProvider` + per-entity `staleTime` defaults | DIP | `EAOS-frontend-data-layer.md` §3.1 |
+| 1.33 | Wire `openapi-typescript` codegen pipeline: `pnpm --filter frontend-eaos codegen` → `src/app/api/generated/types.ts` (runs against the openapi.json from 1B) | DIP | `EAOS-api-contract.md` §11.3 |
+| 1.34 | Create `frontend-eaos/src/config/feature-flags.ts` (consolidated; reads from `localStorage` or URL) | SRP | `EAOS-frontend-data-layer.md` §13 |
+| 1.35 | Create a placeholder page that uses `<Can permission="agent.spawn">` to render a button — proves the permission hook is wired end-to-end | DIP | `EAOS-NUWS-principles.md` §3.1a |
+| 1.36 | Create the 6 canonical empty states wrapped in `<EmptyState>` — proves the design system primitives are wired | ISP | `EAOS-NUWS-principles.md` §3.1a |
+| 1.37 | Create a placeholder page that calls `useListQuery` against `/api/v1/agents` — proves the OpenAPI codegen + REST hook chain is wired end-to-end | DIP | `EAOS-frontend-data-layer.md` §3.4 |
+
+**Exit criteria for 1C:**
+- [ ] `pnpm --filter @neurecore/ui build` produces ESM + CJS + types
 - [ ] `pnpm --filter frontend-eaos dev` starts on port 3003
-- [ ] OpenAPI codegen produces `app/api/generated/types.ts` in `frontend-eaos/`
+- [ ] `pnpm --filter frontend-eaos codegen` produces `src/app/api/generated/types.ts` with ≥ 200 types
+- [ ] `pnpm --filter frontend-eaos build` succeeds (Next.js production build)
+- [ ] The 3 placeholder pages load at `/`, `/agents`, `/empty` with the right primitives
+- [ ] Zero design-token violations (no arbitrary spacing/color/font values; lint rule catches them)
 - [ ] Vercel deployment of `frontend-eaos` succeeds at `eaos.neurecore.com`
-- [ ] `<Can permission="agent.spawn">` hides/shows a button in a placeholder page
-- [ ] `agents.controller.ts:findAll` returns `PaginatedResponse<AgentResponseDto>`
-- [ ] `agents.controller.ts:pause` returns `ActionResult<AgentResponseDto>`
-- [ ] OpenAPI artifact is committed and version-controlled
 
-**Rollback plan:** OpenAPI annotations are zero-runtime-cost (decorators only). The `agents` proof migration is a single controller; if it breaks, revert that PR. `frontend-eaos/` is a new app; if it doesn't work, the old `frontend-tenant/` is unaffected. Prisma EAOS-1 schema additions are additive (new tables only); no risk to existing data.
+---
 
-**This phase blocks:** all subsequent phases.
+### 1D — EAOS-1 Prisma schema (Week 4) ⚠ CRITICAL
 
-## 6. Phase 2 — Frontend Data Layer Migration (Weeks 4–6)
+**Why:** Phase 3 (entity workspace) is the heart of the product. It cannot start without the entity state, health, ownership, and relationship models. The schema is purely additive (new tables) with zero risk to existing data. Deferring it is not a "user review" issue — it's a blocking dependency.
 
-**Goal:** Retire `services/api.ts`, `services/socket.ts`, `CacheManager`, `storeEventBridge`. Every page uses TanStack Query. **Behind `USE_REST_CLIENT` flag.**
+**SOLID:** OCP (additive changes don't modify existing models), SRP (each model has one purpose: state, health, ownership, label, etc.).
+
+| # | Task | SOLID | Refs |
+|---|---|---|---|
+| 1.38 | Add EAOS-1 Prisma models to `backend/prisma/schema.prisma`: `EntityState`, `StateHistory`, `EntityOwnership`, `EntityLabel`, `UserFavorite`, `UserRecentAccess`, `EntityWatcher`, `EntityHealth`, `EntityRelationship`, `WorkspaceLayout`, `CapabilityConfig` | OCP | `EAOS-implementation-plan.md` §11.3 |
+| 1.39 | Generate Prisma migration: `pnpm prisma migrate dev --name eaos-1-entity-model` | OCP | prisma docs |
+| 1.40 | Run migration on dev DB; verify all 11 new tables exist | OCP | — |
+
+**Exit criteria for 1D:**
+- [ ] `prisma migrate dev` succeeds on a fresh dev DB
+- [ ] `prisma generate` produces a typed client with all 11 new models
+- [ ] No existing model is modified (additive only)
+
+---
+
+### 1E — Tenant-context migration roll-out (Week 4) ⚠ CRITICAL
+
+**Why:** `TenantContextService` was added in 1A but currently has **zero consumers** (DIP violation). The 15+ duplicate per-controller `resolveTenantId` methods are still in place. Without this migration, `TenantContextService` is dead weight.
+
+**SOLID:** DIP (services now depend on the abstraction, not the controller-passed parameter), SRP (tenant resolution is one concern, not duplicated 15 times).
+
+| # | Task | SOLID | Refs |
+|---|---|---|---|
+| 1.41 | Migrate `agents.service.ts` to use `TenantContextService.tenantId` instead of `tenantId: string` parameter on every method | DIP | `EAOS-rbac-model.md` §10 |
+| 1.42 | Migrate `departments.service.ts`, `projects.service.ts`, `goals.service.ts`, `tasks.service.ts`, `workflows.service.ts`, `routines.service.ts`, `tools.service.ts` (Tier-1 services) | DIP | `EAOS-rbac-model.md` §10 |
+| 1.43 | Delete the 7 now-unused `private resolveTenantId(user, tenantId)` methods in the controllers (controllers no longer need to resolve — middleware does it) | SRP | `EAOS-rbac-model.md` §10 |
+| 1.44 | Migrate Tier-2 services (auth, ai-actions, ai-gateway, memory) | DIP | `EAOS-rbac-model.md` §10 |
+| 1.45 | Migrate Tier-3 services (finance, costs, integrations, connectors, notifications, inbox) | DIP | `EAOS-rbac-model.md` §10 |
+| 1.46 | Migrate Tier-4 services (audit, observability, reliability, governance, onboarding, tiers, settings, models, chat, events) | DIP | `EAOS-rbac-model.md` §10 |
+| 1.47 | Delete `common/utils/resolve-tenant-context.ts` (function form) — only the service is needed now | SRP | `EAOS-api-contract.md` §6.2 |
+| 1.48 | Add unit test: `TenantContextService.run()` propagates through async boundaries | DIP | `EAOS-rbac-model.md` §10 |
+
+**Exit criteria for 1E:**
+- [ ] No controller has a `resolveTenantId` method
+- [ ] No service has a `tenantId: string` parameter on a method that reads/writes a tenant-scoped entity
+- [ ] `tsc --noEmit` passes
+- [ ] Existing e2e tests (if any) still pass
+- [ ] `grep -rn "private resolveTenantId" backend/src/` returns 0 matches
+- [ ] `grep -rn "tenantId: string" backend/src/modules/*/services/` returns 0 matches for non-platform services
+
+---
+
+### Combined Phase 1 exit criteria
+
+- [ ] All 5 sub-phases (1A, 1B, 1C, 1D, 1E) shipped
+- [ ] `backend/openapi.json` has ≥ 200 paths and ≥ 100 schemas
+- [ ] `pnpm --filter @neurecore/ui build` produces ESM + CJS + types
+- [ ] `pnpm --filter frontend-eaos dev` starts on port 3003
+- [ ] `pnpm --filter frontend-eaos build` produces a Next.js production build
+- [ ] `pnpm --filter frontend-eaos codegen` produces typed API client
+- [ ] Vercel deployment of `frontend-eaos` succeeds at `eaos.neurecore.com`
+- [ ] Prisma migration runs cleanly on a fresh dev DB
+- [ ] No `resolveTenantId` duplicates remain
+- [ ] All 5 SOLID principles demonstrably applied (see §3a)
+
+**Rollback plan:** Each sub-phase ships in its own commit. If 1B's annotation roll-out has a regression, revert just that commit; the 1A foundation stays. If 1C's frontend has a UI bug, revert just 1C; the backend stays. The Prisma migration in 1D is additive-only — revert is `prisma migrate resolve` if needed. The 1E migration is internal refactoring; services get the same data, just through a different code path.
+
+**This phase blocks:** all subsequent phases. The OpenAPI artifact, the Prisma schema, the design system, and the tenant-context migration are all strict prerequisites for Phase 2, 3, 4, 5, 6, 7, 8.
+
+## 6. Phase 2 — Frontend Hooks & Realtime Wiring (Week 6)
+
+**Goal:** `frontend-eaos/` is built with TanStack Query from day 1 (no migration needed). This phase adds the missing pieces: standard hooks for every resource, the realtime socket bridge, and the SSE client. No "migration" step because there's no legacy to migrate from.
+
+**SOLID:** SRP (one hook per resource), LSP (all hooks return typed data), DIP (hooks depend on the OpenAPI types, not on raw HTTP).
 
 ### Tasks
 
-| # | Task | Refs |
-|---|---|---|
-| 2.1 | Delete `src/services/api.ts` and `src/services/socket.ts` after switching all imports to `RestClient` / `SocketManager` | `EAOS-frontend-data-layer.md` §2.1, §5.1 |
-| 2.2 | Delete `core/infrastructure/cache/CacheManager.ts` and the per-entity TTL config in `api.config.ts` | `EAOS-frontend-data-layer.md` §3.12 |
-| 2.3 | Delete `core/infrastructure/socket/storeEventBridge.ts`; replace with `infrastructure/socket/queryEventBridge.ts` that invalidates TanStack Query keys | `EAOS-frontend-data-layer.md` §3.6 |
-| 2.4 | Migrate polling hooks (`useDashboardKpis`, `useAgentMetrics`, `useChartData`, `useHealthMonitor`) to `useQuery({ refetchInterval })` | `EAOS-frontend-data-layer.md` §3.9 |
-| 2.5 | Delete `stores/agentStore.ts`, `stores/taskStore.ts`, `stores/workflowStore.ts`, `stores/departmentStore.ts`, `stores/chatStore.ts`, `stores/activityStore.ts` after migrating consumers to TanStack Query hooks | `EAOS-frontend-data-layer.md` §3.11 |
-| 2.6 | Delete `services/unwrap.ts` (4-shape normaliser) — no longer needed; TanStack Query returns typed data | `EAOS-frontend-data-layer.md` §3.12 |
-| 2.7 | Wire `useStreamingStore` to use new `SSEClient` instead of legacy `agent-streaming.service.ts` | `EAOS-frontend-data-layer.md` §5.2 |
-
-### Migration order (per page)
-
-1. Migrate one page at a time, behind `USE_REST_CLIENT` flag.
-2. Convert each `useState`/`useEffect` fetch block to `useQuery`.
-3. Convert each mutation handler to `useMutation`.
-4. Verify the page works identically to before.
-5. **Remove** the `USE_REST_CLIENT` flag for that page.
-6. After 100% of pages migrated, remove the flag system entirely.
+| # | Task | SOLID | Refs |
+|---|---|---|---|
+| 2.1 | Build `core/hooks/entity/useEntity*.ts` for all 10 EAOS entities (workspace, intelligence, operations, resources, collaboration, insights, automation, activity, lifecycle, context) | SRP | `EAOS-frontend-data-layer.md` §3.4 |
+| 2.2 | Build `core/hooks/mission-feed/useMissionFeed.ts` + `useDismissMissionFeedItem.ts` | SRP | `EAOS-frontend-data-layer.md` §3.4 |
+| 2.3 | Build `core/hooks/ai-roster/useAiRoster.ts` | SRP | `EAOS-frontend-data-layer.md` §3.4 |
+| 2.4 | Build `core/hooks/knowledge/useKnowledgeSearch.ts` + `useRagAsk.ts` (streaming via SSE) | SRP | `EAOS-frontend-data-layer.md` §3.4 |
+| 2.5 | Build `infrastructure/socket/SocketManager.ts` (Socket.IO client with reconnect) | SRP | `EAOS-frontend-data-layer.md` §5.1 |
+| 2.6 | Build `infrastructure/socket/queryEventBridge.ts` (translates socket events to TanStack Query invalidations) | DIP | `EAOS-frontend-data-layer.md` §3.6 |
+| 2.7 | Build `infrastructure/sse/SSEClient.ts` (EventSource wrapper with reconnect + abort signal) | SRP | `EAOS-frontend-data-layer.md` §5.2 |
+| 2.8 | Build `infrastructure/api/RestClient.ts` (the canonical HTTP client; wraps fetch/axios with auth header + 401 refresh) | SRP | `EAOS-frontend-data-layer.md` §2.1 |
+| 2.9 | Build `infrastructure/auth/CookieManager.ts` (httpOnly cookie auth — the sole auth path per D-023) | SRP | `EAOS-frontend-data-layer.md` §4.1 |
 
 ### Exit criteria
 
-- [ ] `grep -r "from '@/services/api'" frontend-tenant/src` returns 0
-- [ ] `grep -r "from '@/services/socket'" frontend-tenant/src` returns 0
-- [ ] `ls frontend-tenant/src/stores` shows only UI stores (`authStore`, `commandStore`, `inspectorStore`, plus `shared/stores/{notificationStore, uiPreferencesStore, voiceProfileStore}`)
-- [ ] `CacheManager.ts` is deleted
-- [ ] All polling hooks use `refetchInterval`
-- [ ] `unwrapList` is deleted
-- [ ] LCP for `/` (dashboard) ≤ 1.5s on staging
-- [ ] LCP for `/entity/department/abc` ≤ 2.0s on staging (proves the new shell pattern works)
+- [ ] `pnpm --filter frontend-eaos tsc --noEmit` passes
+- [ ] `pnpm --filter frontend-eaos build` succeeds
+- [ ] Every entity has a `useEntity*` hook
+- [ ] Socket auto-reconnects after server restart (verified by kill-and-restart)
+- [ ] 401 response triggers silent refresh via `CookieManager`
+- [ ] Zero raw `fetch()` calls in `src/` outside `infrastructure/`
 
-**Rollback plan:** the `USE_REST_CLIENT` flag lets us turn off the migration per tenant. If a page is broken, flip the flag for that tenant's pages.
-
-**This phase blocks:** Phase 3 (entity workspace depends on TanStack Query hooks).
+**This phase blocks:** Phase 3 (entity workspace uses all these hooks).
 
 ---
 

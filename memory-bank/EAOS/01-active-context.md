@@ -1,9 +1,9 @@
 # NeureCore — EAOS Active Context
 
-**Last updated:** 2026-06-27 17:50
-**Phase:** 1 (Foundations) — **Tier A + Tier B complete** (backend foundation + frontend-eaos bootstrap)
+**Last updated:** 2026-06-27 18:00
+**Phase:** 1 (Foundations) — **v1.3 plan published**; previous Tier A+B complete but PLAN was insufficient
 **Branch:** `eaos-base` (pushed to `origin`)
-**Status:** Phase 1 in progress. Tier A (backend) + Tier B (frontend scaffold) done. Deferring Tier C (annotations + Prisma) and Tier D (packages/ui internals).
+**Status:** User caught an important plan-quality issue. I deferred too much in Phase 1 (annotations, Prisma EAOS-1 schema, packages/ui internals, tenant-context migration). v1.3 of the roadmap now expands Phase 1 to 5 sub-phases (A, B, C, D, E) with all critical tasks included. Awaiting user decision on what to ship next.
 
 ---
 
@@ -19,7 +19,24 @@
 | `80a2ed31` | 1.8 + 1.9 (agents.findAll → PaginatedResponse, agents.pause → ActionResult) | `backend/src/modules/agents/` |
 | `94d6242c` | 1.18-1.27 (frontend-eaos bootstrap: Next.js 15, providers, Toaster, placeholder) | `pnpm-workspace.yaml`, `frontend-eaos/**` |
 
-**Next:** Tier A is complete; Tier B is complete; Tier C (1.5/1.6 annotate everything) and Tier D (1.11-1.17 packages/ui internals) deferred to user-directed follow-up.
+**Next:** Tier A is complete; Tier B is complete. The user (correctly) called out that I deferred too much in the v1.2 plan. v1.3 of the roadmap expands Phase 1 to 5 sub-phases (A, B, C, D, E) with all critical tasks included.
+
+**The user's correction (verbatim from session):** *"WHY DID YOU IN THE FIRST PLACE KEEP THESE TASKS IN PHASE 1, you should have anticipated things clearly."*
+
+**My honest assessment:** the v1.2 plan shipped abstractions (`TenantContextService`, `@nestjs/swagger` setup, `frontend-eaos/` shell) without their consumers. That's a textbook DIP/SRP violation:
+- `TenantContextService` was added in 1A but no service reads it. The 15+ duplicate `resolveTenantId` methods were never migrated to use it. **Dead weight.**
+- `@nestjs/swagger` was set up in 1A but only `agents` was annotated. The generated `openapi.json` is essentially empty for every other endpoint. **Defeats the purpose.**
+- The Prisma EAOS-1 schema was deferred, but Phase 3 (entity workspace) cannot start without it. **Blocking dependency disguised as a deferral.**
+- `packages/ui` was deferred as "premature extraction" but `<Can>`, `<EmptyState>`, `<LoadingState>`, `<ErrorState>` are required by every page per NUWS §3.1a. **The Toaster was needed; so are the rest.**
+
+**v1.3 fix (new):** Phase 1 is now divided into 5 sub-phases with explicit "CRITICAL" markers on the deferred-from-v1.2 tasks:
+- **1A** Backend core (envelopes, tenant context, OpenAPI bootstrap) — v1.2 ✓
+- **1B** Backend annotation roll-out (CRITICAL — was deferred) — 9 tasks, ~2 weeks
+- **1C** Frontend scaffold + design system (CRITICAL — was deferred) — 19 tasks, ~1 week
+- **1D** EAOS-1 Prisma schema (CRITICAL — was deferred) — 3 tasks, ~3 days
+- **1E** Tenant-context migration roll-out (CRITICAL — was missing entirely) — 8 tasks, ~1 week
+
+Total Phase 1 tasks: 48 (was 27 in v1.2). Every task now has explicit SOLID adherence and a real consumer.
 
 ### Phase 1 status
 
