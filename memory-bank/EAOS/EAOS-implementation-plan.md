@@ -1,11 +1,11 @@
 # NeureCore — Enterprise AI Operating System Specification
 
-**Document Version:** 2.6  
-**Date:** 2026-06-27  
-**Status:** EAOS Core Specification  
-**Audience:** Engineering, product, architecture  
-**Supersedes:** v2.5 (resolves all 8 open UI questions in §14.2; locks decisions: Mission Feed = tenant-default + per-user opt-in, Mini-Graph = scrollable list v1, Compare = read-only v1, Density = global + Operations override, font = Inter only, AI Roster = dedicated `/ai-roster` route, chart library = Tremor, citation chips = slide-over with full-page link)  
-**Related:** `daily-tools-integration-plan.md`, `agent-implementation.md`, `new_neurecore.md`, `EAOS-NUWS-principles.md` (v1.1, THE CONSTITUTION for UI)
+**Document Version:** 2.7
+**Date:** 2026-06-27
+**Status:** EAOS Core Specification
+**Audience:** Engineering, product, architecture
+**Supersedes:** v2.6 (D-022: build EAOS in new `frontend-eaos/`; freeze `frontend-tenant/`; extract `packages/ui/`; cookie auth from day 1; Phase 9 work pulled forward; all file structure references in §11 redirect to `frontend-eaos/`)
+**Related:** `daily-tools-integration-plan.md`, `agent-implementation.md`, `new_neurecore.md`, `EAOS-NUWS-principles.md` (v1.2), `EAOS-frontend-data-layer.md` (v1.1, redirect), `EAOS-implementation-roadmap.md` (v1.1)
 
 ---
 
@@ -31,6 +31,7 @@
 | §14 Open Questions | Resolve Q1, Q3, Q10; defer Q4 (custom widget code), Q6 (embedding migration). | Status updates. |
 | §14.2 New UI Questions | **All 8 RESOLVED** in v2.6. Decisions: Mission Feed = tenant-default + per-user opt-in; Mini-Graph = scrollable list v1 (graph layout P2); Compare = read-only v1; Density = global + Operations override; font = Inter only; AI Roster = dedicated `/ai-roster` route; chart library = **Tremor**; citation chips = slide-over with full-page link. | Locks implementation choices before EAOS-1/2 frontend work. |
 | §11.2 File Structure | Add `/ai-roster` route + `RosterView.tsx`. Add Tremor to `package.json` notes. Add `DensityOverride` for Operations workspaces. | Reflects the 8 resolved decisions. |
+| §11.2 File Structure | **MAJOR (v2.7):** Redirect ALL frontend file paths from `frontend-tenant/` to `frontend-eaos/`. Add `packages/ui/` shared package section. Add `pnpm-workspace.yaml` references. | D-022: build EAOS in new frontend app. |
 
 ---
 
@@ -2328,7 +2329,65 @@ EXISTING — NO CHANGE NEEDED:
   └── onboarding/                   # REUSE: onboarding state machine
 ```
 
-### 11.2 Frontend File Structure
+### 11.2 Frontend File Structure (v2.7 — D-022)
+
+**Architecture (per D-022):** EAOS is built in a new app `frontend-eaos/`. The old `frontend-tenant/` is **frozen** (no new features, critical security fixes only). Both consume a shared `packages/ui/` package. Backend switches to httpOnly + Secure + SameSite=Strict cookie auth FIRST; both frontends use cookies from day 1.
+
+**Monorepo layout (after v2.7):**
+
+```
+neurecore-base/neurecore/
+├── backend/                    # shared; refactored in place (Phases 0-7)
+├── frontend-admin/             # platform console; RBAC updates only
+├── frontend-tenant/            # OLD — FROZEN. No new features. Critical security fixes only.
+│                                # Decommissioned only after frontend-eaos reaches feature parity + 90-day 301 redirect.
+├── frontend-eaos/              # NEW — full EAOS implementation. Served at eaos.neurecore.com/{tenantCompanyName}.
+└── packages/
+    └── ui/                     # shared design system + permission hooks + query keys factory
+```
+
+**`packages/ui/` (shared library):**
+
+```
+packages/ui/
+├── package.json
+├── tsconfig.json
+├── tsup.config.ts
+├── src/
+│   ├── tokens/
+│   │   ├── colors.ts            # neutral chrome, state colors (NUWS §7.5.2)
+│   │   ├── typography.ts        # Inter + JetBrains Mono scale (NUWS §7.5.1)
+│   │   ├── spacing.ts           # 4/8/12/16/24/32/48/64/96
+│   │   ├── density.ts           # Compact/Default/Comfortable
+│   │   └── index.ts
+│   ├── components/
+│   │   ├── primitives/         # Button, Input, Select, Dialog, Popover, Tooltip, Avatar, Tag, Badge
+│   │   ├── feedback/            # Toast, Toaster, EmptyState (6), LoadingState, ErrorState
+│   │   ├── data/               # KpiCard, DataTable, SlideOver
+│   │   └── index.ts
+│   ├── auth/
+│   │   ├── permissions.ts      # ROLE_PERMISSIONS map (mirrors EAOS-rbac-model §3.3)
+│   │   ├── useRole.ts
+│   │   ├── useCan.ts
+│   │   ├── Can.tsx
+│   │   └── index.ts
+│   ├── query/
+│   │   ├── query-keys.ts        # factory pattern (per EAOS-frontend-data-layer §3.3)
+│   │   ├── useListQuery.ts
+│   │   ├── useDetailQuery.ts
+│   │   ├── useCreateMutation.ts
+│   │   ├── useUpdateMutation.ts
+│   │   ├── useDeleteMutation.ts
+│   │   └── index.ts
+│   ├── endpoints/
+│   │   ├── api-endpoints.ts     # API_ENDPOINTS registry (per EAOS-frontend-data-layer §2.3)
+│   │   └── index.ts
+│   └── index.ts
+```
+
+### 11.2 Frontend File Structure (LEGACY v2.6 — for reference only)
+
+> **NOTE:** The structure below is the v2.6 layout. As of v2.7 (D-022), all new EAOS work goes into `frontend-eaos/`. The v2.6 structure is preserved here for reference to existing code in `frontend-tenant/`. It will not receive new features.
 
 ```
 frontend-tenant/src/
@@ -2472,7 +2531,83 @@ frontend-tenant/src/
     └── [EXTEND] marketplace.service.ts # EAOS-5: extend for packs
 ```
 
-### 11.2a Key Dependencies (locked in v2.6)
+### 11.2b `frontend-eaos/` File Structure (NEW in v2.7 — D-022)
+
+This is the canonical structure for the new EAOS app. Mirrors the legacy layout above but with the new stack (TanStack Query, httpOnly cookies, Tremor, Lucide, `packages/ui/`) built in from day 1.
+
+```
+frontend-eaos/src/
+├── app/
+│   ├── layout.tsx                       # Wraps with <Providers> + <Toaster> + <ThemeProvider>
+│   ├── providers.tsx                    # QueryClientProvider, ThemeProvider, AppInitializer
+│   ├── page.tsx                         # /{tenantCompanyName} landing → routes to dashboard
+│   ├── [tenantSlug]/
+│   │   ├── (workspace)/
+│   │   │   ├── entity/[type]/[id]/
+│   │   │   │   ├── page.tsx             # WorkspaceShell — renders 10 capability panels + modal
+│   │   │   │   ├── graph/page.tsx       # P2; v1 = mini-graph slide-over
+│   │   │   │   └── compare/page.tsx     # /compare?ids=... (read-only v1)
+│   │   │   ├── mission-feed/page.tsx    # /mission-feed
+│   │   │   ├── ai-roster/page.tsx      # /ai-roster (per §14.2 Q6 + Pricing §0a)
+│   │   │   └── dashboard/page.tsx       # /dashboard (Mission Feed + 8-pillar)
+│   │   ├── login/page.tsx
+│   │   └── onboarding/page.tsx
+│   ├── api/                             # Generated API client (codegen output)
+│   │   └── generated/
+│   │       ├── types.ts                 # From openapi-typescript
+│   │       └── client.ts                # Typed restClient wrappers per endpoint
+│   ├── knowledge/                       # /knowledge (EAOS-4)
+│   └── marketplace/                     # /marketplace (EAOS-5)
+│
+├── auth/                                # Permission system (consumed by useCan / <Can>)
+│   └── (re-exports from @neurecore/ui)
+│
+├── components/
+│   ├── workspace/                       # NEW — replaces frontend-tenant/app/departments/[id]/workspace
+│   │   ├── WorkspaceShell.tsx           # 2-tier tab system, left icon rail, top-bar Ask AI (NUWS §5.1)
+│   │   ├── WorkspaceProvider.tsx        # React context: current entity + capabilities
+│   │   ├── IdentityPanel.tsx            # incl. Health Signals sub-section
+│   │   ├── ContextPanel.tsx
+│   │   ├── IntelligencePanel.tsx        # Streaming + citation chips + sticky Do-First CTA
+│   │   ├── OperationsPanel.tsx          # Kanban default + per-task AI delegation
+│   │   ├── ResourcesPanel.tsx           # Human + AI team with identical avatar card
+│   │   ├── CollaborationPanel.tsx       # Persistent AI chat input
+│   │   ├── InsightsPanel.tsx            # Max 4 KPIs, inline-expand, per-KPI Explain
+│   │   ├── AutomationPanel.tsx          # Workflow thumbnails, AI quick-fire row
+│   │   ├── ActivityPanel.tsx            # Filter chips, AI 🤖 badges
+│   │   ├── LifecyclePanel.tsx            # NEW (v2.5): state machine, transition buttons, timeline, whyNotActive
+│   │   └── AdministrationModal.tsx      # Gear-icon modal (NOT a panel)
+│   │
+│   ├── widgets/
+│   │   ├── WidgetRegistry.ts            # 12 visualization types
+│   │   ├── WidgetRenderer.tsx           # Selects visualization per user preference
+│   │   ├── WidgetGrid.tsx              # Drag-drop (react-grid-layout)
+│   │   ├── WidgetPicker.tsx
+│   │   ├── WidgetConfig.tsx
+│   │   └── visualizations/               # Card, LineChart, BarChart, Gauge, Table, Heatmap, Kanban, Gantt, Sparkline, StatusBadge
+│   │
+│   ├── citation/                        # CitationChip + CitationSlideOver
+│   ├── density/                         # DensityProvider + useDensity + DensityToggle
+│   └── (re-exports from @neurecore/ui for primitives)
+│
+├── infrastructure/
+│   ├── api/RestClient.ts                # Wraps axios (per EAOS-frontend-data-layer §2.1)
+│   ├── socket/SocketManager.ts          # Socket.IO (per §5.1)
+│   ├── sse/SSEClient.ts                 # EventSource wrapper (per §5.2)
+│   ├── socket/queryEventBridge.ts       # Replaces storeEventBridge (per §3.6)
+│   └── auth/CookieManager.ts            # httpOnly cookies (Phase 9 pulled forward)
+│
+├── config/
+│   ├── api.config.ts                    # baseURL, timeouts
+│   ├── query-stale-times.ts             # Per-entity staleTime
+│   ├── feature-flags.ts                 # Consolidated single system
+│   └── tenant-routing.ts                # {tenantCompanyName} → tenantId
+│
+└── services/                            # Thin — TanStack Query owns the rest
+    └── tenant-context.ts                # Resolves {tenantCompanyName} from URL
+```
+
+### 11.2a Key Dependencies (locked in v2.6, applied to v2.7)
 
 | Package | Version target | Purpose | Locked in |
 |---|---|---|---|
@@ -2483,6 +2618,9 @@ frontend-tenant/src/
 | `react-flow` | ^11 | Workflow builder in Automation panel | Existing |
 | `zod` | ^3 | Schema validation (entity, AI action, knowledge) | Existing |
 | `next-themes` | latest stable | Dark-mode-default theme switcher | NUWS §7.5.3 |
+| `@tanstack/react-query` | ^5.59 | Data fetching (sole library) | D-019, frontend-data-layer §1 |
+| `react-hook-form` | ^7.53 | Forms | frontend-data-layer §1 |
+| `openapi-typescript` | ^7 | API client codegen | D-021, api-contract §11.3 |
 
 ### 11.3 Prisma Schema Changes
 

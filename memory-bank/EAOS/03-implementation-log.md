@@ -36,6 +36,49 @@
 
 ---
 
+## 2026-06-27 15:45 · Phase 0 — Branch setup + initial commit
+
+### Created `eaos-base` branch
+
+- `git checkout -b eaos-base` from `main` (commit `ccb946c6`)
+- Pushed to `origin` (Shahikhail01/Neurecorebase)
+- Branch URL: https://github.com/Shahikhail01/Neurecorebase/pull/new/eaos-base
+
+### Initial commit `c00dff57`
+
+- **Phase 0 task 0.1 (dead code removal):** deleted `backend/src/modules/security/guards/roles.guard.ts` and `permissions.guard.ts`; rewrote `backend/src/shared/types/security.types.ts` to drop divergent `UserRole` + `Permission` + `ROLE_PERMISSIONS`; updated `tiers/agent-pool` controllers to use canonical `auth/RolesGuard`
+- **Phase 0 task 0.2 (tools auth):** rewrote `backend/src/modules/tools/tools.controller.ts` with `@UseGuards(JwtAuthGuard, RolesGuard)` + per-method `@Roles`; added `ToolsService.assertIntegrationAccess` for tenant-ownership chokepoint
+- **13 EAOS doc files:** all of `memory-bank/EAOS/` (7 architectural + 6 operational)
+- tsc: passes (no type errors)
+- Doc updates: `EAOS-implementation-plan.md` v2.4 → v2.6, `EAOS-NUWS-principles.md` v1.0 → v1.2, `EAOS-pricing-plans.md` v1.0 → v1.2
+
+### Pending in working tree (uncommitted)
+
+None — all Phase 0/0.1-0.2 work + EAOS docs are committed to `eaos-base`.
+
+---
+
+## 2026-06-27 15:57 · Decision recorded: D-022
+
+### Build EAOS as a new frontend (`frontend-eaos`)
+
+- `frontend-tenant/` is FROZEN (no new features; critical security fixes only)
+- New `frontend-eaos/` will be a clean-slate Next.js 15 + Tailwind app
+- Shared `packages/ui/` package for design tokens, components, permission hooks
+- Backend switches to httpOnly + Secure + SameSite=Strict cookie auth FIRST (Phase 9 work pulled forward)
+- URL: `eaos.neurecore.com/{tenantCompanyName}`
+- Decommissioning `frontend-tenant/` only after feature parity + 90-day 301 redirect
+
+### Doc updates (v2.6 → v2.7 in progress)
+
+- `EAOS-implementation-plan.md` — redirect file structure to `frontend-eaos/`
+- `EAOS-NUWS-principles.md` Appendix D — same
+- `EAOS-frontend-data-layer.md` §14 — same + note reduced migration scope
+- `EAOS-implementation-roadmap.md` — add scaffolding to Phase 1; note Phase 9 pulled forward; Phase 10 includes frontend-tenant decommission
+- `00-index.md`, `01-active-context.md`, `02-decisions-log.md`, `04-fixes-tracker.md`, `05-phase-tracker.md` — operational updates
+
+---
+
 ## Pre-2026-06-27 (historical, for context)
 
 Before the EAOS docs were created, the codebase had accumulated the following from earlier phases (referenced in `memory-bank/phase{1-12}-implementation-summary.md`):

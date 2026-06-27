@@ -1,10 +1,10 @@
 # NeureCore Universal Workspace Specification (NUWS)
 
-**Document Version:** 1.2  
-**Date:** 2026-06-27  
-**Status:** NUWS Core Specification — THE CONSTITUTION  
-**Audience:** Engineering, Design, Product  
-**Supersedes:** v1.1 (v1.2 locks the chart library = Tremor, icon library = Lucide, theme switcher = next-themes, density system = global + Operations override — all per resolved §14.2 decisions in `EAOS-implementation-plan.md` v2.6)
+**Document Version:** 1.3
+**Date:** 2026-06-27
+**Status:** NUWS Core Specification — THE CONSTITUTION
+**Audience:** Engineering, Design, Product
+**Supersedes:** v1.2 (D-022: build EAOS in new `frontend-eaos/`; freeze `frontend-tenant/`; extract `packages/ui/`; cookie auth from day 1; Phase 9 work pulled forward; references in Appendix D redirect to `frontend-eaos/`)
 
 ---
 
@@ -35,6 +35,21 @@
 | §8.1 | Compliance checklist expanded with new items (citation chips, AI delegation, empty state library, ⌘K, dark mode, design tokens). | — |
 | Appendix B | Glossary: add **Ask AI**, **Mission Feed**, **Mini-Graph**, **Compare View**, **Health Signals**, **Empty State**, **Design Token**, **Panel** vs **Modal**. | — |
 | Appendix C | Document relationships updated (impl plan and NUWS now aligned). | — |
+
+### 0b. Changelog (v1.1 → v1.2)
+
+| Section | Change | Rationale |
+|---|---|---|
+| §7.5 | **Locked implementation choices:** Tremor (charts), Lucide (icons), next-themes (theme), density = global + Operations override. | Locks the implementation stack so all future work references the same libraries. |
+| Appendix D | Added visual reference values (shell dimensions, z-index scale, spacing scale, border radius). | Binding values for all component implementations. |
+
+### 0c. Changelog (v1.2 → v1.3 — D-022)
+
+| Section | Change | Rationale |
+|---|---|---|
+| Header | Bumped to v1.3; added supersession note about D-022. | The behavioral contract is unchanged; only the target app is now `frontend-eaos/` instead of `frontend-tenant/`. |
+| Appendix D | File structure references redirect to `frontend-eaos/`; the `packages/ui/` shared package is the new canonical source for design tokens, components, and permission hooks. | Per D-022. |
+| Glossary (Appendix B) | Add **frontend-eaos**, **frontend-tenant** (frozen), **packages/ui**. | Document the new architecture. |
 
 ---
 
@@ -1601,6 +1616,9 @@ Every visual element in NeureCore conforms to this contract:
 | **Empty State** | One of the six canonical illustrations (First Run, No Data, No Permission, No Results, Integration Disconnected, AI Generated Nothing) defined in §3.1a |
 | **Design Token** | A binding visual primitive (color, type scale, spacing, density) defined in §7.5 |
 | **Density** | One of Compact / Default / Comfortable row-height modes (§7.5.4) |
+| **`frontend-eaos`** (v1.3) | The new EAOS application. Served at `eaos.neurecore.com/{tenantCompanyName}`. The target of all new EAOS work per D-022. | UI layer |
+| **`frontend-tenant`** (v1.3) | The existing tenant application. **Frozen** per D-022 — no new features; critical security fixes only. Decommissioned after `frontend-eaos` reaches feature parity + 90-day 301 redirect. | UI layer |
+| **`packages/ui`** (v1.3) | Shared design system + permission hooks + query keys factory. Consumed by both `frontend-eaos` and `frontend-tenant` during the transition. | UI layer |
 | **Universal Entity Property** | A property (State, Ownership, Labels, Health) that applies to all entities |
 | **Entity Health** | A computed status with signals, trend, and alerts |
 | **Progressive Disclosure** | Simple first, advanced on request, never overwhelming |
@@ -1639,9 +1657,11 @@ daily-tools-integration-plan.md
 
 ---
 
-## Appendix D — v1.1 Visual Reference (NEW)
+## Appendix D — Visual Reference (v1.1; locked in v1.2; redirected to `frontend-eaos/` in v1.3)
 
 The following reference values must be applied consistently across all NeureCore UIs. These are not page mockups — they are binding values for components.
+
+**Target app (per D-022, v1.3):** all new components land in `frontend-eaos/`. The shared `packages/ui/` package is the canonical source for these values. The old `frontend-tenant/` is frozen; do not introduce new components there.
 
 ### Shell dimensions (desktop, 1280px+)
 

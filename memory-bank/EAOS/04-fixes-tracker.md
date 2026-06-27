@@ -17,19 +17,21 @@
 
 These are the 7 tasks from [`EAOS-implementation-roadmap.md` §4](./EAOS-implementation-roadmap.md). All must complete in Week 1 before any new feature work.
 
+**Per D-022 (2026-06-27):** tasks 0.6 and 0.7 are **N/A** in the new `frontend-eaos/` (built correctly from day 1). They are skipped for the old `frontend-tenant/` (which is now frozen). The other 5 tasks (0.1–0.5) proceed on the backend regardless.
+
 ### FIX-001 · `tools.controller.ts:execute` and related endpoints are unauthenticated
 
 - **Severity:** 🔴 Critical
-- **Status:** Open (Phase 0, task 0.2)
-- **File:** `backend/src/modules/tools/tools.controller.ts:38-86`
-- **Description:** `POST /tools/execute`, `POST /tools/:id/execute`, `GET /tools/:id/status` have no `@Roles` decorator and no `JwtAuthGuard` on the controller. Anyone can invoke any tool by name or id. `tools.service.ts:executeById` only optionally reads `user?.tenantId` without verifying ownership.
-- **Fix:** Add `@UseGuards(JwtAuthGuard, RolesGuard)` at the controller level; add `@Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.USER)` to execute methods; add per-tool ownership check inside the service.
+- **Status:** ✅ **Fixed** (commit `c00dff57` on `eaos-base`)
+- **File:** `backend/src/modules/tools/tools.controller.ts:38-86` (rewritten)
+- **Description:** `POST /tools/execute`, `POST /tools/:id/execute`, `GET /tools/:id/status` had no `@Roles` decorator and no `JwtAuthGuard` on the controller. Anyone could invoke any tool by name or id. `tools.service.ts:executeById` only optionally read `user?.tenantId` without verifying ownership.
+- **Fix applied:** Added `@UseGuards(JwtAuthGuard, RolesGuard)` at class level; added `@Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.USER)` to execute methods; added `ToolsService.assertIntegrationAccess` as the single chokepoint for cross-tenant denial.
 - **Doc ref:** [`EAOS-rbac-model.md` §4.5](./EAOS-rbac-model.md)
 
 ### FIX-002 · SSE accepts any sessionId without ownership check
 
 - **Severity:** 🔴 Critical
-- **Status:** Open (Phase 0, task 0.3)
+- **Status:** ⬜ Open (Phase 0, task 0.3)
 - **File:** `backend/src/modules/agents/streaming/agent-streaming.controller.ts:71-132`
 - **Description:** `GET /agents/streaming/sessions/:sessionId/events` accepts the session ID and assumes the requester owns the session. Any user with a valid JWT can subscribe to any session's events.
 - **Fix:** Look up the session; reject with 403 if `session.userId !== req.user.id` (unless platform role).
@@ -38,7 +40,7 @@ These are the 7 tasks from [`EAOS-implementation-roadmap.md` §4](./EAOS-impleme
 ### FIX-003 · AuditInterceptor only `console.log`s; `AuditLog` DB is mostly empty
 
 - **Severity:** 🟠 High (compliance)
-- **Status:** Open (Phase 0, task 0.4)
+- **Status:** ⬜ Open (Phase 0, task 0.4)
 - **File:** `backend/src/common/interceptors/audit.interceptor.ts` (full file)
 - **Description:** The interceptor is registered as `APP_INTERCEPTOR` (`app.module.ts:144`) but only `console.log`s via `logRequest`/`logResponse`/`logError`. `AuditService.log()` (which writes to DB) is called from almost no controller. Result: the `AuditLog` table is mostly empty. Compliance gap.
 - **Fix:** Modify the interceptor to call `AuditService.log()` on every `POST/PATCH/DELETE`. Skip `GET` (volume concern). Fire-and-forget (no request blocking). Add per-tenant log throttle.
@@ -47,48 +49,50 @@ These are the 7 tasks from [`EAOS-implementation-roadmap.md` §4](./EAOS-impleme
 ### FIX-004 · Two `RolesGuard` implementations with divergent `UserRole` enums
 
 - **Severity:** 🟠 High
-- **Status:** Open (Phase 0, task 0.1)
+- **Status:** ✅ **Fixed** (commit `c00dff57` on `eaos-base`)
 - **Files:**
-  - `backend/src/modules/security/guards/roles.guard.ts` (duplicate, never wired globally)
-  - `backend/src/shared/types/security.types.ts:80-87` (divergent `UserRole` enum with `MANAGER`/`GUEST` that the DB never produces)
-  - `backend/src/modules/security/guards/permissions.guard.ts` (1,115 lines of dead code)
-- **Description:** Two `UserRole` enums exist. The divergent one in `security.types.ts` has 6 values; the Prisma enum has 8. The duplicate `RolesGuard` reads from the divergent enum and is used by `tiers.controller.ts` (bypassing the global guard). The `PermissionsGuard` and `RequirePermissions` decorator are fully typed but never invoked anywhere.
-- **Fix:** Delete the duplicate `RolesGuard`, the divergent `UserRole`, the `Permission` enum, and the `ROLE_PERMISSIONS` map. Update `tiers.controller.ts` to use the global guard.
+  - `backend/src/modules/security/guards/roles.guard.ts` (duplicate, never wired globally) — **DELETED**
+  - `backend/src/modules/security/guards/permissions.guard.ts` (1,115 lines of dead code) — **DELETED**
+  - `backend/src/shared/types/security.types.ts` — **REWRITTEN** (removed divergent `UserRole`, `Permission`, `ROLE_PERMISSIONS`; uses Prisma `UserRole` as single source of truth)
+  - `backend/src/modules/tiers/tiers.controller.ts:29` — **FIXED** (import from canonical `auth/guards/roles.guard`)
+  - `backend/src/modules/tiers/agent-pool.controller.ts:28` — **FIXED** (same)
+- **Description:** Two `UserRole` enums existed. The divergent one in `security.types.ts` had 6 values; the Prisma enum has 8. The duplicate `RolesGuard` read from the divergent enum and was used by `tiers.controller.ts` (bypassing the global guard). The `PermissionsGuard` and `RequirePermissions` decorator were fully typed but never invoked anywhere.
+- **Fix applied:** All divergent code deleted; tiers now uses the canonical `auth/RolesGuard` which uses Prisma's `UserRole`.
 - **Doc ref:** [`EAOS-rbac-model.md` §1.2, §3.1, §11](./EAOS-rbac-model.md)
 
 ### FIX-005 · Wrong-token-key bug: 11+ frontend files silently send unauthenticated requests
 
 - **Severity:** 🟠 High (silent data corruption)
-- **Status:** Open (Phase 0, task 0.6)
-- **Files (at minimum):**
+- **Status:** ⛔ **N/A in new `frontend-eaos/`** (per D-022)
+- **Files (in frozen `frontend-tenant/`):**
   - `frontend-tenant/src/app/service-desk/page.tsx:107-120`
   - `frontend-tenant/src/app/finance/page.tsx:178`
   - `frontend-tenant/src/app/intelligence/page.tsx:301, 409, 534, 647`
   - `frontend-tenant/src/app/intelligence/page.tsx` (multiple other places)
 - **Description:** Raw `fetch()` calls read `localStorage.getItem('accessToken')` (wrong key). The canonical `TokenManager` uses `hq_access_token` (being renamed to `nc_access_token`). The wrong-key reads return `null`; the request runs unauthenticated; backend returns 200 with empty data; page silently renders zeros.
-- **Fix:** Replace all `localStorage.getItem('accessToken')` with `tokenManager.getAccessToken()`. Rename canonical key to `nc_access_token` (the `TokenManager` already supports reading both old and new keys).
+- **Resolution per D-022:** Old `frontend-tenant/` is FROZEN. Bug is not fixed there. New `frontend-eaos/` uses httpOnly cookies from day 1, so this bug class is impossible. Bug will be eliminated when `frontend-tenant/` is decommissioned.
 - **Doc ref:** [`EAOS-frontend-data-layer.md` §4.2](./EAOS-frontend-data-layer.md)
 
 ### FIX-006 · Toaster silently drops all toasts
 
 - **Severity:** 🟡 Medium
-- **Status:** Open (Phase 0, task 0.7)
-- **Files:**
+- **Status:** ⛔ **N/A in new `frontend-eaos/`** (per D-022)
+- **Files (in frozen `frontend-tenant/`):**
   - `frontend-tenant/src/core/services/notification/NotificationService.ts`
   - `frontend-tenant/src/core/services/notification/ToastStrategy.ts`
   - `frontend-tenant/src/app/layout.tsx`
 - **Description:** `NotificationService` with `ToastStrategy` is fully implemented; `ToastStrategy` fires `window` CustomEvent `hq:toast`; no listener exists. Toasts are silently dropped. In-app notifications DO work (via `notificationStore`).
-- **Fix:** Add `<Toaster />` component to `app/layout.tsx`; component listens for `hq:toast` events and renders toasts.
+- **Resolution per D-022:** Old `frontend-tenant/` is FROZEN. Bug is not fixed there. New `frontend-eaos/` includes the Toaster wiring in the initial scaffold.
 - **Doc ref:** [`EAOS-frontend-data-layer.md` §8.3](./EAOS-frontend-data-layer.md)
 
 ### FIX-007 · Inconsistent tenant-isolation enforcement; only one `findOne` explicitly checks cross-tenant
 
 - **Severity:** 🟡 Medium (latent — works by convention)
-- **Status:** Open (Phase 0, task 0.5)
+- **Status:** ⬜ Open (Phase 0, task 0.5)
 - **Files:** all `findOne` methods that don't check `resource.tenantId === user.tenantId` explicitly
 - **Description:** Only `tenants.controller.ts:55-63` has an explicit cross-tenant check ("OWNER may not read a different tenant"). Everywhere else relies on service methods receiving `tenantId` as a parameter and using it in Prisma `where` clauses. If a future service method forgets the `tenantId` arg, it's a security incident.
 - **Fix:** Add a `TenantContextMiddleware` + `EntityOwnerGuard` (introduced in Phase 3, but the middleware can land in Phase 0 as a stop-gap) that throws `CROSS_TENANT_ACCESS` if the resource is not in the user's tenant. Apply to all `findOne` methods.
-- **Doc ref:** [`EAOS-rbac-model.md` §5, §10](./EAOS-rbac-model.md), [`EAOS-api-contract.md` §6.3](./EAOS-api-contract.md)
+- **Doc ref:** [`EAOS-rbac-model.md` §5, §10`](./EAOS-rbac-model.md), [`EAOS-api-contract.md` §6.3`](./EAOS-api-contract.md)
 
 ---
 

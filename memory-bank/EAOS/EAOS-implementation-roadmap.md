@@ -1,11 +1,11 @@
 # NeureCore — EAOS Implementation Roadmap
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Date:** 2026-06-27
 **Status:** EAOS Operational Plan — phasing, sequencing, risk gates
 **Audience:** Engineering leads, product, release manager
-**Supersedes:** — (replaces the EAOS-1/2/3/4/5/6 phase definitions in `EAOS-implementation-plan.md` §9 with a risk-driven, safety-first ordering)
-**Related (read on demand):** `EAOS-implementation-plan.md` v2.6, `EAOS-NUWS-principles.md` v1.2, `EAOS-pricing-plans.md` v1.2, `EAOS-api-contract.md` v1.0, `EAOS-rbac-model.md` v1.0, `EAOS-frontend-data-layer.md` v1.0
+**Supersedes:** v1.0 (D-022: build EAOS in new `frontend-eaos/`; freeze `frontend-tenant/`; extract `packages/ui/`; Phase 9 httpOnly cookie auth is pulled forward and lands BEFORE `frontend-eaos` ships; Phase 10 adds `frontend-tenant/` decommission after parity)
+**Related (read on demand):** `EAOS-implementation-plan.md` v2.7, `EAOS-NUWS-principles.md` v1.3, `EAOS-pricing-plans.md` v1.2, `EAOS-api-contract.md` v1.0, `EAOS-rbac-model.md` v1.0, `EAOS-frontend-data-layer.md` v1.1
 
 ---
 
@@ -20,6 +20,16 @@ It is intentionally short. Every phase links to the relevant section of the cano
 2. **Comprehensiveness** — every EAOS capability and every audit finding is addressed.
 3. **Best practice** — feature flags, observability, rollback, and security review gates are non-negotiable.
 4. **Speed** — last, not first. A 2-week delay is better than a 2-day outage.
+
+## 0a. Architecture note (D-022)
+
+Per D-022 (2026-06-27), EAOS is built in a **new app `frontend-eaos/`** at `eaos.neurecore.com/{tenantCompanyName}`. The old `frontend-tenant/` is **frozen** — no new features; critical security fixes only. Both consume a shared `packages/ui/` package for design tokens, components, permission hooks, and query keys. The backend switches to **httpOnly + Secure + SameSite=Strict cookie auth FIRST** (Phase 9 work pulled forward) so the new app is cookie-auth from day 1.
+
+**Implications for the roadmap:**
+- **Phase 0 frontend tasks 0.6 and 0.7 are N/A** in `frontend-eaos/`; they are intentionally skipped in the frozen `frontend-tenant/`.
+- **Phase 1 gains a frontend scaffolding step** for `frontend-eaos/` and `packages/ui/`. The original Phase 2 (TanStack Query migration) is essentially free for the new app.
+- **Phase 9 is pulled forward** to land BEFORE `frontend-eaos` ships. Dual-support window = 90 days for any existing tenant on `frontend-tenant/`.
+- **Phase 10 (cleanup) includes** decommissioning `frontend-tenant/` after feature parity + 90-day 301 redirect.
 
 ---
 
@@ -106,9 +116,9 @@ It is intentionally short. Every phase links to the relevant section of the cano
 
 ---
 
-## 5. Phase 1 — Foundations (Weeks 2–3)
+## 5. Phase 1 — Foundations + `frontend-eaos` Scaffold (Weeks 2–3)
 
-**Goal:** Make the contract docs enforceable. Every subsequent phase depends on this.
+**Goal:** Make the contract docs enforceable. Bootstrap `frontend-eaos/` and `packages/ui/`. Every subsequent phase depends on this.
 
 ### Backend
 
@@ -123,38 +133,50 @@ It is intentionally short. Every phase links to the relevant section of the cano
 | 1.7 | Generate first OpenAPI artifact at `backend/openapi/openapi.json` | `EAOS-api-contract.md` §11.3 |
 | 1.8 | Migrate ONE list endpoint to `PaginatedResponse<T>` (pick `agents`) as proof | `EAOS-api-contract.md` §3.2 |
 | 1.9 | Migrate ONE action endpoint to `ActionResult<T>` (pick `agents.controller.ts:pause`) as proof | `EAOS-api-contract.md` §3.3 |
-| 1.10 | Add `prisma/schema.prisma`: `EntityState`, `StateHistory`, `EntityOwnership`, `EntityLabel`, `UserFavorite`, `UserRecentAccess`, `EntityWatcher`, `EntityHealth`, `EntityRelationship`, `WorkspaceLayout`, `CapabilityConfig` (EAOS-1 schema, but add the Prisma migration now to avoid later deploy drama) | `EAOS-implementation-plan.md` §11.3 |
+| 1.10 | Add `prisma/schema.prisma`: `EntityState`, `StateHistory`, `EntityOwnership`, `EntityLabel`, `UserFavorite`, `UserRecentAccess`, `EntityWatcher`, `EntityHealth`, `EntityRelationship`, `WorkspaceLayout`, `CapabilityConfig` | `EAOS-implementation-plan.md` §11.3 |
 
-### Frontend
+### `packages/ui/` (NEW shared package)
 
 | # | Task | Refs |
 |---|---|---|
-| 1.11 | Add `@tanstack/react-query`, `@tanstack/react-query-devtools`, `react-hook-form`, `zod`, `@hookform/resolvers`, `openapi-typescript`, `@tanstack/react-query-persist-client` to `package.json` | `EAOS-frontend-data-layer.md` §1 |
-| 1.12 | Create `app/providers.tsx` with `QueryClientProvider` + `<Toaster />` | `EAOS-frontend-data-layer.md` §3.1, §8.3 |
-| 1.13 | Create `config/query-stale-times.ts` | `EAOS-frontend-data-layer.md` §3.2 |
-| 1.14 | Create `shared/query-keys.ts` (factory pattern, empty stubs OK) | `EAOS-frontend-data-layer.md` §3.3 |
-| 1.15 | Create `auth/permissions.ts` mirroring `EAOS-rbac-model.md` §3.3 | `EAOS-frontend-data-layer.md` §10.4 |
-| 1.16 | Create `auth/useRole.ts`, `auth/useCan.ts`, `auth/Can.tsx` | `EAOS-frontend-data-layer.md` §10.1–10.3 |
-| 1.17 | Create `config/feature-flags.ts` (single consolidated system) | `EAOS-frontend-data-layer.md` §13 |
-| 1.18 | Set up `openapi-typescript` codegen; output to `app/api/generated/types.ts` | `EAOS-frontend-data-layer.md` §1, `EAOS-api-contract.md` §11.3 |
-| 1.19 | Create `shared/components/states/LoadingState.tsx`, `ErrorState.tsx`, `EmptyState.tsx` (6 canonical) | `EAOS-frontend-data-layer.md` §8.4, `EAOS-NUWS-principles.md` §3.1a |
-| 1.20 | Apply design tokens (NUWS §7.5) — Inter + JetBrains Mono, neutral palette, dark-mode-default, spacing scale, density toggle | `EAOS-NUWS-principles.md` §7.5 |
+| 1.11 | Create `packages/ui/` with `package.json`, `tsconfig.json`, `tsup.config.ts` | D-022 |
+| 1.12 | Extract design tokens (Inter + JetBrains Mono, neutral chrome, dark-mode-first, density scale) | `EAOS-NUWS-principles.md` §7.5 |
+| 1.13 | Build primitives: `<Button>`, `<Input>`, `<Select>`, `<Dialog>`, `<Popover>`, `<Toast>`, `<Avatar>`, `<Tag>`, `<KpiCard>`, `<EmptyState>`, `<LoadingState>`, `<ErrorState>`, `<SlideOver>` | `EAOS-NUWS-principles.md` §3.1a, §7.5 |
+| 1.14 | Build permission hooks: `useRole`, `useCan`, `<Can>` | `EAOS-rbac-model.md` §10 |
+| 1.15 | Build query keys factory + standard hooks (`useListQuery`, `useDetailQuery`, `useCreateMutation`, etc.) | `EAOS-frontend-data-layer.md` §3.3 |
+| 1.16 | Build `<Toaster />` (wires the dead `ToastStrategy` pattern from old frontend) | `EAOS-frontend-data-layer.md` §8.3 |
+| 1.17 | Build `API_ENDPOINTS` registry (centralized, type-safe) | `EAOS-frontend-data-layer.md` §2.3 |
+
+### `frontend-eaos/` (NEW EAOS app)
+
+| # | Task | Refs |
+|---|---|---|
+| 1.18 | Bootstrap Next.js 15 + Tailwind 3.4 + React 19 + TypeScript 5.7 | D-022 |
+| 1.19 | Add deps: `@tanstack/react-query`, `@tanstack/react-query-devtools`, `react-hook-form`, `zod`, `@hookform/resolvers`, `openapi-typescript`, `socket.io-client`, `@tremor/react`, `lucide-react`, `next-themes`, `date-fns` | `EAOS-frontend-data-layer.md` §1 |
+| 1.20 | Create `app/layout.tsx` with `<Providers>` (QueryClient + Theme + AppInitializer + Toaster) | `EAOS-frontend-data-layer.md` §3.1 |
+| 1.21 | Create `app/providers.tsx` with `QueryClientProvider` | `EAOS-frontend-data-layer.md` §3.1 |
+| 1.22 | Set up `openapi-typescript` codegen pipeline; output to `app/api/generated/types.ts` | `EAOS-api-contract.md` §11.3 |
+| 1.23 | Apply design tokens (per `packages/ui/`) | `EAOS-NUWS-principles.md` §7.5 |
+| 1.24 | Create `config/feature-flags.ts` (consolidated) | `EAOS-frontend-data-layer.md` §13 |
+| 1.25 | Add to `pnpm-workspace.yaml` | D-022 |
+| 1.26 | Set up Vercel project for `frontend-eaos` at `eaos.neurecore.com` | D-022 |
+| 1.27 | Create a placeholder page (`/{tenantCompanyName}`) that shows "EAOS — coming Q1 2027" + tenant routing proof | D-022 |
 
 ### Exit criteria
 
 - [ ] `npm run build` (backend) produces `backend/openapi/openapi.json` with > 0 endpoints
-- [ ] `npm run codegen` (frontend) produces typed `app/api/generated/types.ts` matching the OpenAPI artifact
+- [ ] `pnpm --filter @neurecore/ui build` succeeds
+- [ ] `pnpm --filter frontend-eaos dev` starts on port 3003
+- [ ] OpenAPI codegen produces `app/api/generated/types.ts` in `frontend-eaos/`
+- [ ] Vercel deployment of `frontend-eaos` succeeds at `eaos.neurecore.com`
+- [ ] `<Can permission="agent.spawn">` hides/shows a button in a placeholder page
+- [ ] `agents.controller.ts:findAll` returns `PaginatedResponse<AgentResponseDto>`
+- [ ] `agents.controller.ts:pause` returns `ActionResult<AgentResponseDto>`
 - [ ] OpenAPI artifact is committed and version-controlled
-- [ ] `agents.controller.ts:findAll` returns `PaginatedResponse<AgentResponseDto>`; frontend `unwrapList` still works (backward-compat for that one shape)
-- [ ] `agents.controller.ts:pause` returns `ActionResult<AgentResponseDto>`; frontend handler updated to read `{ success, message, data }`
-- [ ] One page (e.g. `agents/page.tsx`) successfully uses `useQuery` for the new `agents` endpoint as proof
-- [ ] `<Can permission="agent.spawn">` hides/shows a button based on role in dev
 
-**Rollback plan:** OpenAPI annotations are zero-runtime-cost (decorators only). The `agents` proof migration is a single controller; if it breaks, revert that PR. Prisma EAOS-1 schema additions are additive (new tables only); no risk to existing data.
+**Rollback plan:** OpenAPI annotations are zero-runtime-cost (decorators only). The `agents` proof migration is a single controller; if it breaks, revert that PR. `frontend-eaos/` is a new app; if it doesn't work, the old `frontend-tenant/` is unaffected. Prisma EAOS-1 schema additions are additive (new tables only); no risk to existing data.
 
 **This phase blocks:** all subsequent phases.
-
----
 
 ## 6. Phase 2 — Frontend Data Layer Migration (Weeks 4–6)
 
@@ -415,11 +437,11 @@ This is the phase where every prior foundation gets exercised for the first time
 
 ---
 
-## 13. Phase 9 — Auth Hardening (Weeks 5–6, parallel with Phase 3+)
+## 13. Phase 9 — Auth Hardening (PULLED FORWARD per D-022)
 
 **Goal:** Switch from `localStorage` JWT to httpOnly + Secure + SameSite=Strict cookies. CSRF protection.
 
-**Why this is Phase 9 and not earlier:** it's a high-risk change that can run in parallel with feature work because the dual-support period is 90 days.
+**Why this is pulled forward (D-022):** `frontend-eaos/` is being built from day 1 with cookie auth. We don't want the new app to inherit the `localStorage` XSS problem. So the backend switches to cookies **before** `frontend-eaos` ships, in parallel with Phase 1 (foundations). The dual-support window is 90 days; any existing tenant still on `frontend-tenant/` continues to work via the legacy `Authorization: Bearer` header during that window.
 
 ### Pre-reqs
 
@@ -451,26 +473,29 @@ This is the phase where every prior foundation gets exercised for the first time
 
 ---
 
-## 14. Phase 10 — Cleanup (Weeks 41–42)
+## 14. Phase 10 — Cleanup + `frontend-tenant` Decommission (Weeks 41–42)
 
-**Goal:** Remove all legacy code paths. Tighten the codebase.
+**Goal:** Remove all legacy code paths. Decommission `frontend-tenant/`. Tighten the codebase.
 
 ### Tasks
 
 | # | Task | Refs |
 |---|---|---|
-| 10.1 | Delete all `services/api.ts`, `services/socket.ts` consumers should be 0; delete the files | frontend-data-layer §2.1 |
+| 10.1 | Delete all `services/api.ts`, `services/socket.ts` consumers should be 0; delete the files (from `frontend-tenant/`) | frontend-data-layer §2.1 |
 | 10.2 | Delete `security/` module entirely (guards + types — already removed in Phase 0) | rbac §1.2 |
 | 10.3 | Delete all per-entity TTL config in `api.config.ts` (replaced by `query-stale-times.ts`) | frontend-data-layer §3.12 |
 | 10.4 | Delete all `unwrap.ts` (replaced by typed `queryFn`) | frontend-data-layer §3.12 |
 | 10.5 | Delete `core/infrastructure/cache/CacheManager.ts` | frontend-data-layer §3.12 |
-| 10.6 | Delete all data Zustand stores (agent, task, workflow, department, chat, activity) | frontend-data-layer §3.11 |
-| 10.7 | Delete the old `/departments/[id]/workspace` route + its 30-day redirect | impl-plan §14.1 Q10 |
-| 10.8 | Delete all `feature-flags` that are 100% rolled out | frontend-data-layer §13 |
+| 10.6 | Delete all data Zustand stores in `frontend-tenant/` (agent, task, workflow, department, chat, activity) | frontend-data-layer §3.11 |
+| 10.7 | Delete the old `/departments/[id]/workspace` route + its 30-day redirect (in `frontend-tenant/`) | impl-plan §14.1 Q10 |
+| 10.8 | Delete all `feature-flags` that are 100% rolled out (in `frontend-tenant/`) | frontend-data-layer §13 |
 | 10.9 | Delete all `// TODO: migrate` comments in the codebase | grep |
 | 10.10 | Delete all `@deprecated` JSDoc tags | grep |
 | 10.11 | Tighten all `as any` casts to typed alternatives | frontend-data-layer §8 |
 | 10.12 | Lock all file:line references in this document that say "exists" — if the file is gone, the reference is gone | this doc |
+| 10.13 | **Verify `frontend-eaos` reaches feature parity** with `frontend-tenant` (entity workspace, AI roster, knowledge, marketplace, etc.) | D-022 |
+| 10.14 | **Add 301 redirect from `frontend-tenant` routes to `frontend-eaos` routes** for 90 days | D-022 |
+| 10.15 | **Delete `frontend-tenant/`** after the 90-day redirect window expires | D-022 |
 
 ### Exit criteria
 

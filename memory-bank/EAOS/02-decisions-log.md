@@ -1,9 +1,47 @@
 # NeureCore — EAOS Decisions Log
 
-**Last updated:** 2026-06-27
+**Last updated:** 2026-06-27 15:57
 **Purpose:** Chronological log of all architectural, product, and process decisions made during EAOS planning and implementation. Each entry: decision, rationale, trade-offs, doc reference.
 
 **Format:** Newest first. Use ISO date prefix.
+
+---
+
+## 2026-06-27 (continued)
+
+### D-022 · Build EAOS as a new frontend (`frontend-eaos`); freeze `frontend-tenant`
+
+**Decision:**
+- Create a new app `frontend-eaos/` as a clean-slate Next.js 15 + Tailwind 3.4 implementation of the EAOS surface.
+- Deploy at `eaos.neurecore.com/{tenantCompanyName}` (subdomain + path; each tenant gets their own URL segment).
+- Extract a shared `packages/ui/` package (design tokens, design-system components, permission hooks, `useCan` / `<Can>`, query keys factory) consumed by both `frontend-eaos` and `frontend-tenant`.
+- Backend switches to **httpOnly + Secure + SameSite=Strict cookie auth FIRST** (the Phase 9 work is pulled forward). Both frontends use cookie auth from day 1; no localStorage dance in the new app.
+- `frontend-tenant/` is **FROZEN** for the duration of the build (6–12 months). No new features. Critical security fixes only (CVEs, auth bypasses). All EAOS work happens in `frontend-eaos/`.
+- `frontend-tenant/` is **decommissioned** only after `frontend-eaos` reaches feature parity + a 90-day 301 redirect from old routes to new.
+
+**Rationale:**
+- The existing `frontend-tenant/` has 6+ weeks of accumulated cleanup debt (dual HTTP clients, dual socket implementations, half-finished SOLID migration sitting unused in `core/services/`, 12 Zustand stores, 1,251-line workspace page, wrong-token-key bug in 11+ files, silently-dropped toasts).
+- TanStack Query migration alone is a 3-week risky refactor (Phase 2 of original roadmap); the new EAOS workspace would be entirely rewritten anyway (Phase 3 replaces the 1,251-line page).
+- Zero regression risk to existing users during a 6–12 month build.
+- The spec docs (`EAOS-frontend-data-layer.md` §3.11–3.12) were already designed assuming a "retire the dual layers" end state; doing this in a new app makes that end state the starting state.
+- The shared `packages/ui/` package ensures both frontends render identically; no design drift during the 6–12 month transition.
+- Cookie auth from day 1 means the new frontend never has the `localStorage` XSS problem.
+
+**Trade-offs accepted:**
+- Two frontends to maintain during transition (~6–12 months).
+- Two Vercel projects, two deployment pipelines.
+- Stakeholders must understand the "two frontends" model.
+- `packages/ui` extraction is upfront cost (~1 day) but pays back over the build.
+- The cookie-auth cutover is a backend breaking change that requires coordination with any existing tenant that has a long-lived session (mitigated by 90-day dual-support per `EAOS-frontend-data-layer.md` §4.1).
+
+**Doc references:**
+- [`00-index.md`](./00-index.md) — folder structure now lists `frontend-eaos/` and `packages/ui/`
+- [`EAOS-implementation-plan.md` §11](./EAOS-implementation-plan.md) — file structure updated to `frontend-eaos/`
+- [`EAOS-NUWS-principles.md` Appendix D](./EAOS-NUWS-principles.md) — file structure updated
+- [`EAOS-frontend-data-layer.md` §14](./EAOS-frontend-data-layer.md) — file structure updated; migration scope reduced
+- [`EAOS-implementation-roadmap.md` Phase 1, 9, 10](./EAOS-implementation-roadmap.md) — scaffolding added; Phase 9 pulled forward; Phase 10 includes frontend-tenant decommission
+
+**Status:** Approved 2026-06-27 15:57.
 
 ---
 

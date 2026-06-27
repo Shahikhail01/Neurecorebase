@@ -1,6 +1,6 @@
 # NeureCore — EAOS Phase Tracker
 
-**Last updated:** 2026-06-27
+**Last updated:** 2026-06-27 15:57
 **Purpose:** Per-phase status (planned/in-progress/blocked/done) with checklists mirroring [`EAOS-implementation-roadmap.md`](./EAOS-implementation-roadmap.md). Updated as tasks complete.
 
 **Status legend:**
@@ -10,23 +10,25 @@
 - 🔴 Blocked (waiting on decision/external)
 - ⛔ Skipped (with reason)
 
+**Architecture note (D-022):** EAOS is built in a **new `frontend-eaos/`** app; old `frontend-tenant/` is **FROZEN**. Phase 0 frontend tasks 0.6 and 0.7 are **N/A**. The "frontend data layer" Phase 2 shrinks because the new app uses TanStack Query from day 1 (no migration). Phase 9 (cookie auth) is pulled forward.
+
 ---
 
 ## Overview
 
 | # | Phase | Goal | Weeks | Status | Started | Completed |
 |---|---|---|---|---|---|---|
-| 0 | Safety Lockdown | Fix security gaps | 1 | ⬜ Not started | — | — |
-| 1 | Foundations | OpenAPI, tokens, schemas, contract tests | 2 | ⬜ Not started | — | — |
-| 2 | Frontend data layer | TanStack Query migration | 3 | ⬜ Not started | — | — |
+| 0 | Safety Lockdown | Fix backend security gaps | 1 | 🟡 In progress (2/5 done) | 2026-06-27 | — |
+| 1 | Foundations + `frontend-eaos` scaffold | OpenAPI, tokens, schemas, contract tests, **new app bootstrap**, `packages/ui` extraction | 2 | ⬜ Not started | — | — |
+| 2 | Frontend data layer | TanStack Query + design tokens + permission hooks (in `frontend-eaos`; smaller scope) | 1–2 | ⬜ Not started | — | — |
 | 3 | EAOS-1 entity model | Universal entity workspace (10 panels + modal) | 6 | ⬜ Not started | — | — |
 | 4 | EAOS-2 widgets | Widget registry + per-panel visualizations | 4 | ⬜ Not started | — | — |
 | 5 | EAOS-3 AI Actions | Ask AI surfaces + ActionAuthorizationGuard | 4 | ⬜ Not started | — | — |
 | 6 | EAOS-4 Knowledge Hub | RAG pipeline + KnowledgeEntry model | 4 | ⬜ Not started | — | — |
 | 7 | EAOS-5 Solution Packs | Marketplace + install lifecycle | 6 | ⬜ Not started | — | — |
 | 8 | EAOS-6 Vertical Pack #1 | First industry pack (Retail recommended) | 8–10 | ⬜ Not started | — | — |
-| 9 | Auth hardening | httpOnly cookies + CSRF (parallel with Phase 3+) | 2 | ⬜ Not started | — | — |
-| 10 | Cleanup | Delete legacy code, consolidate | 2 | ⬜ Not started | — | — |
+| 9 | Auth hardening (pulled forward) | httpOnly cookies + CSRF — **lands BEFORE `frontend-eaos` ships** | 2 | ⬜ Not started | — | — |
+| 10 | Cleanup | Delete `frontend-tenant`, consolidate | 2 | ⬜ Not started | — | — |
 
 ---
 
@@ -34,35 +36,36 @@
 
 **Goal:** Close every active security gap. **No new features, no refactors.**
 
-**Status:** ⬜ Not started
-**Started:** —
+**Status:** 🟡 In progress (2/5 backend tasks done)
+**Started:** 2026-06-27
 **Target completion:** —
-**Per-tenant flag:** None — forced rollout
+**Branch:** `eaos-base`
 **Risk:** 🔴 High
 
 ### Tasks
 
 #### Backend
 
-- ⬜ 0.1: Delete `backend/src/modules/security/guards/roles.guard.ts` and `security.types.ts:UserRole`/`Permission`/`ROLE_PERMISSIONS`
-- ⬜ 0.2: Add `JwtAuthGuard` + `@Roles()` to `tools.controller.ts:execute`, `:execute/:id`, `:id/status`
+- ✅ 0.1: Delete `backend/src/modules/security/guards/roles.guard.ts` and `security.types.ts:UserRole`/`Permission`/`ROLE_PERMISSIONS` (commit `c00dff57`)
+- ✅ 0.2: Add `JwtAuthGuard` + `@Roles()` to `tools.controller.ts:execute`, `:execute/:id`, `:id/status` (commit `c00dff57`)
 - ⬜ 0.3: Add session-ownership check to `agent-streaming.controller.ts:71-132` SSE
 - ⬜ 0.4: Wire `AuditInterceptor` to `AuditService.log()` for all `POST/PATCH/DELETE`
 - ⬜ 0.5: Add explicit `entity.tenantId === user.tenantId` check to all `findOne` methods
 
-#### Frontend
+#### Frontend (N/A in new `frontend-eaos/` per D-022)
 
-- ⬜ 0.6: Fix wrong-token-key bug in 11+ files (use `tokenManager.getAccessToken()`)
-- ⬜ 0.7: Wire `<Toaster />` to existing `ToastStrategy`
+- ⛔ 0.6: Fix wrong-token-key bug in 11+ files (N/A in new — httpOnly cookies from day 1)
+- ⛔ 0.7: Wire `<Toaster />` to existing `ToastStrategy` (N/A in new — included in scaffold)
 
 ### Exit criteria
 
-- ⬜ `grep -r "execute" backend/src/modules/tools/tools.controller.ts` shows every method has a guard
+- ✅ `grep -r "execute" backend/src/modules/tools/tools.controller.ts` shows every method has a guard
+- ✅ `security/guards/roles.guard.ts` does not exist
 - ⬜ SSE rejects mismatched `userId` with 403
 - ⬜ `AuditLog` DB table has > 0 rows from a test mutating request
-- ⬜ `security/guards/roles.guard.ts` does not exist
-- ⬜ All raw `fetch` calls in `service-desk/`, `intelligence/`, `finance/` use `tokenManager.getAccessToken()`
-- ⬜ Manual test: trigger a 401 → toast appears in UI
+- ⬜ Tenant isolation helper deployed + applied to ≥ 1 critical `findOne` endpoint
+- ⬜ tsc passes
+- ⬜ Manual test: 403 returned for cross-tenant SSE attempt
 
 ### Rollback plan
 
@@ -71,12 +74,13 @@ All changes are small and additive (guards, listeners). If something breaks, rem
 ### Notes
 
 - See [`04-fixes-tracker.md` FIX-001 through FIX-007](./04-fixes-tracker.md) for details on each task.
+- Tasks 0.6 and 0.7 are intentionally skipped in `frontend-tenant/` (frozen) and are N/A in `frontend-eaos/` (built correctly from day 1).
 
 ---
 
-## Phase 1 — Foundations (Weeks 2–3)
+## Phase 1 — Foundations + `frontend-eaos` Scaffold (Weeks 2–3)
 
-**Goal:** Make the contract docs enforceable. Every subsequent phase depends on this.
+**Goal:** Make the contract docs enforceable. Every subsequent phase depends on this. **Also bootstrap the new `frontend-eaos/` app and `packages/ui/` shared library.**
 
 **Status:** ⬜ Not started
 **Started:** —
@@ -99,28 +103,37 @@ All changes are small and additive (guards, listeners). If something breaks, rem
 - ⬜ 1.9: Migrate ONE action endpoint to `ActionResult<T>` (pick `agents.controller.ts:pause`) as proof
 - ⬜ 1.10: Add EAOS-1 Prisma models (`EntityState`, `StateHistory`, `EntityOwnership`, `EntityLabel`, `UserFavorite`, `UserRecentAccess`, `EntityWatcher`, `EntityHealth`, `EntityRelationship`, `WorkspaceLayout`, `CapabilityConfig`)
 
-#### Frontend
+#### `packages/ui/` (shared, NEW)
 
-- ⬜ 1.11: Add TanStack Query, react-hook-form, zod, openapi-typescript to `package.json`
-- ⬜ 1.12: Create `app/providers.tsx` with `QueryClientProvider` + `<Toaster />`
-- ⬜ 1.13: Create `config/query-stale-times.ts`
-- ⬜ 1.14: Create `shared/query-keys.ts`
-- ⬜ 1.15: Create `auth/permissions.ts` mirroring `EAOS-rbac-model.md` §3.3
-- ⬜ 1.16: Create `auth/useRole.ts`, `auth/useCan.ts`, `auth/Can.tsx`
-- ⬜ 1.17: Create `config/feature-flags.ts` (consolidated)
-- ⬜ 1.18: Set up `openapi-typescript` codegen
-- ⬜ 1.19: Create `shared/components/states/` (LoadingState, ErrorState, EmptyState × 6)
-- ⬜ 1.20: Apply design tokens (Inter + JetBrains Mono, dark-mode-default, spacing scale, density)
+- ⬜ 1.11: Create `packages/ui/` with tsconfig, package.json, tsup build
+- ⬜ 1.12: Extract design tokens (Inter + JetBrains Mono, neutral chrome, dark-mode-first, density scale per NUWS §7.5)
+- ⬜ 1.13: Build design-system primitives: `<Button>`, `<Input>`, `<Select>`, `<Dialog>`, `<Popover>`, `<Toast>`, `<Avatar>`, `<Tag>`, `<KpiCard>`, `<EmptyState>`, `<LoadingState>`, `<ErrorState>`, `<SlideOver>`
+- ⬜ 1.14: Build permission hooks: `useRole`, `useCan`, `<Can>` per EAOS-rbac-model §10
+- ⬜ 1.15: Build query keys factory + standard hooks (useListQuery, useDetailQuery, useCreateMutation, useUpdateMutation, useDeleteMutation)
+- ⬜ 1.16: Build `<Toaster />` (wires the CustomEvent listener — was dead code in old frontend)
+- ⬜ 1.17: Build `API_ENDPOINTS` registry (centralized, type-safe)
+
+#### `frontend-eaos/` (NEW, the EAOS app)
+
+- ⬜ 1.18: Bootstrap Next.js 15 + Tailwind 3.4 + React 19 + TypeScript 5.7
+- ⬜ 1.19: Add deps: `@tanstack/react-query`, `@tanstack/react-query-devtools`, `react-hook-form`, `zod`, `@hookform/resolvers`, `openapi-typescript`, `socket.io-client`, `@tremor/react`, `lucide-react`, `next-themes`, `date-fns`
+- ⬜ 1.20: Create `app/layout.tsx` with `<Providers>` (QueryClient + Theme + AppInitializer + Toaster)
+- ⬜ 1.21: Create `app/providers.tsx` with `QueryClientProvider`
+- ⬜ 1.22: Set up `openapi-typescript` codegen pipeline; output to `app/api/generated/types.ts`
+- ⬜ 1.23: Apply design tokens (per `packages/ui/`)
+- ⬜ 1.24: Create `config/feature-flags.ts` (consolidated)
+- ⬜ 1.25: Add to `pnpm-workspace.yaml`
+- ⬜ 1.26: Set up Vercel project for `frontend-eaos` at `eaos.neurecore.com`
+- ⬜ 1.27: Create a placeholder page (`/`) that shows "EAOS — coming Q1 2027" + tenant routing proof
 
 ### Exit criteria
 
 - ⬜ `npm run build` (backend) produces `backend/openapi/openapi.json` with > 0 endpoints
-- ⬜ `npm run codegen` (frontend) produces typed `app/api/generated/types.ts`
-- ⬜ OpenAPI artifact committed and version-controlled
-- ⬜ `agents.controller.ts:findAll` returns `PaginatedResponse<AgentResponseDto>`
-- ⬜ `agents.controller.ts:pause` returns `ActionResult<AgentResponseDto>`
-- ⬜ One page uses `useQuery` for the new `agents` endpoint as proof
-- ⬜ `<Can permission="agent.spawn">` hides/shows a button based on role in dev
+- ⬜ `packages/ui` builds standalone (`pnpm --filter @neurecore/ui build`)
+- ⬜ `pnpm --filter frontend-eaos dev` starts on port 3003
+- ⬜ OpenAPI codegen produces `app/api/generated/types.ts` in `frontend-eaos/`
+- ⬜ Vercel deployment of `frontend-eaos` succeeds at `eaos.neurecore.com`
+- ⬜ `<Can permission="agent.spawn">` hides/shows a button in a placeholder page
 
 **Blocks:** Phases 2, 3, 4, 5, 6, 7, 8 (all subsequent).
 

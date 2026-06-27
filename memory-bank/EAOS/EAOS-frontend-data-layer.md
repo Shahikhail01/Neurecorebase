@@ -1,11 +1,11 @@
 # NeureCore — EAOS Frontend Data Layer Specification
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Date:** 2026-06-27
-**Status:** EAOS Frontend Data Layer Spec — binding for EAOS-1/2/3
+**Status:** EAOS Frontend Data Layer Spec — binding for `frontend-eaos/`
 **Audience:** Frontend, Backend (for contract alignment), QA
-**Supersedes:** — (first formal data layer spec; replaces the implicit patterns documented in the codebase audit)
-**Related:** `EAOS-api-contract.md` v1.0, `EAOS-rbac-model.md` v1.0, `EAOS-NUWS-principles.md` v1.2, `EAOS-implementation-plan.md` v2.6
+**Supersedes:** v1.0 (D-022: target app is now `frontend-eaos/`; old `frontend-tenant/` is frozen; shared `packages/ui/` package is the new canonical source for permission hooks, query keys, design tokens, and components; Phase 9 httpOnly cookie auth is pulled forward so the new app ships with cookies from day 1)
+**Related:** `EAOS-api-contract.md` v1.0, `EAOS-rbac-model.md` v1.0, `EAOS-NUWS-principles.md` v1.3, `EAOS-implementation-plan.md` v2.7
 
 ---
 
@@ -20,7 +20,7 @@ This document specifies the **frontend data layer** for NeureCore: the libraries
 - A working `CacheManager` and `EventBus` that are partially redundant with what TanStack Query provides out of the box.
 - 12 Zustand stores, all hand-rolled, all with their own `loading`/`error` state.
 
-This spec **completes the migration** the codebase has already started. It standardizes on **TanStack Query v5** as the single data-fetching library, keeps **Zustand** for UI-only state, retires the dual layers, and codifies the realtime + auth + caching patterns.
+This spec **completes the migration** the codebase has already started — but **in a new app (`frontend-eaos/`) per D-022**, not in-place. The old `frontend-tenant/` is frozen; all new code lands in `frontend-eaos/`. The new app standardizes on **TanStack Query v5** as the single data-fetching library, keeps **Zustand** for UI-only state, ships **httpOnly cookies** from day 1 (no localStorage), and consumes a shared **`packages/ui/`** package for design tokens, components, permission hooks, and query keys.
 
 ---
 
@@ -1144,101 +1144,101 @@ export function isFeatureEnabled(
 
 ---
 
-## 14. File Structure (per `EAOS-implementation-plan.md` §11.2 + this spec)
+## 14. File Structure (per `EAOS-implementation-plan.md` §11.2 + this spec; v1.1 redirect to `frontend-eaos/`)
+
+**Per D-022:** the target app is `frontend-eaos/`. The old `frontend-tenant/` is frozen and will not receive new data-layer work. The shared `packages/ui/` package is the new canonical source for permission hooks, query keys factory, design tokens, and primitives. The file tree below shows the **new** `frontend-eaos/` layout. (The legacy `frontend-tenant/` layout is preserved in `EAOS-implementation-plan.md` §11.2 (LEGACY) for reference only.)
 
 ```
-frontend-tenant/src/
+neurecore-base/neurecore/
+├── backend/                    # shared; refactored in place
+├── frontend-admin/             # platform console; RBAC updates only
+├── frontend-tenant/            # FROZEN; no new data-layer work here
+├── frontend-eaos/              # NEW — full EAOS implementation
+└── packages/
+    └── ui/                     # shared design system + permission hooks + query keys
+
+frontend-eaos/src/
 ├── app/
-│   ├── layout.tsx                  # Wraps with <Providers> + <Toaster>
-│   ├── providers.tsx               # QueryClientProvider, ThemeProvider, AppInitializer (NEW)
-│   ├── api/                        # Generated API client (codegen output)
+│   ├── layout.tsx                       # Wraps with <Providers> + <Toaster> + <ThemeProvider>
+│   ├── providers.tsx                    # QueryClientProvider, ThemeProvider, AppInitializer
+│   ├── [tenantSlug]/
+│   │   ├── (workspace)/
+│   │   │   ├── entity/[type]/[id]/
+│   │   │   │   ├── page.tsx             # WorkspaceShell — renders 10 capability panels + modal
+│   │   │   │   ├── graph/page.tsx       # P2; v1 = mini-graph slide-over
+│   │   │   │   └── compare/page.tsx     # /compare?ids=... (read-only v1)
+│   │   │   ├── mission-feed/page.tsx    # /mission-feed
+│   │   │   ├── ai-roster/page.tsx      # /ai-roster (per §14.2 Q6 + Pricing §0a)
+│   │   │   └── dashboard/page.tsx       # /dashboard (Mission Feed + 8-pillar)
+│   │   ├── login/page.tsx
+│   │   └── onboarding/page.tsx
+│   ├── api/                             # Generated API client (codegen output)
 │   │   └── generated/
-│   │       ├── types.ts            # From openapi-typescript
-│   │       └── client.ts           # Typed restClient wrappers per endpoint
-│   ├── entity/[type]/[id]/         # NEW — universal entity workspace
-│   │   ├── page.tsx
-│   │   ├── graph/page.tsx          # P2
-│   │   └── compare/page.tsx        # read-only v1
-│   ├── ai-roster/                  # NEW per §14.2 Q6
-│   ├── knowledge/                  # NEW per EAOS-4
-│   └── ...
+│   │       ├── types.ts                 # From openapi-typescript
+│   │       └── client.ts                # Typed restClient wrappers per endpoint
+│   ├── knowledge/                       # /knowledge (EAOS-4)
+│   └── marketplace/                     # /marketplace (EAOS-5)
 │
-├── auth/                           # NEW — permission system
-│   ├── permissions.ts              # ROLE_PERMISSIONS map (mirrors backend)
-│   ├── useRole.ts
-│   ├── useCan.ts
-│   ├── Can.tsx
-│   └── token-key-migration.ts      # one-time migration of old key
+├── auth/                                # Permission system (re-exports from @neurecore/ui)
 │
-├── core/
-│   ├── services/api/               # Existing new layer (binding)
-│   │   ├── clients/RestClient.ts   # ← used by all
-│   │   ├── adapters/               # Entity mappers (raw → domain)
-│   │   └── interfaces/IApiClient.ts
-│   ├── infrastructure/
-│   │   ├── auth/TokenManager.ts
-│   │   ├── socket/SocketManager.ts # ← used by all
-│   │   ├── socket/queryEventBridge.ts  # NEW (replaces storeEventBridge)
-│   │   ├── sse/SSEClient.ts        # NEW
-│   │   └── ErrorHandler.ts
-│   ├── hooks/                      # NEW — domain hooks (Tier 1)
-│   │   ├── entity/
-│   │   │   ├── useEntityWorkspace.ts
-│   │   │   ├── useEntityIntelligence.ts
-│   │   │   ├── useEntityActivity.ts
-│   │   │   ├── useEntityLifecycle.ts
-│   │   │   └── ...
-│   │   ├── mission-feed/useMissionFeed.ts
-│   │   ├── ai-roster/useAiRoster.ts
-│   │   ├── knowledge/useKnowledgeSearch.ts
-│   │   ├── auth/useCurrentUser.ts
-│   │   └── ...
-│   └── ...
+├── components/
+│   ├── workspace/                       # NEW — replaces frontend-tenant/app/departments/[id]/workspace
+│   ├── widgets/                         # Tremor wrappers
+│   ├── citation/                        # CitationChip + CitationSlideOver
+│   ├── density/                         # DensityProvider + useDensity + DensityToggle
+│   └── (re-exports from @neurecore/ui for primitives)
 │
-├── shared/
-│   ├── query-keys.ts               # NEW — query key factory
-│   ├── schemas/                    # NEW — zod schemas
-│   │   ├── entity.ts
-│   │   ├── task.ts
-│   │   └── ...
-│   ├── constants/
-│   │   ├── api-endpoints.ts        # Existing — expanded
-│   │   └── error-codes.ts
-│   ├── components/
-│   │   ├── states/                 # NEW — LoadingState, ErrorState, EmptyState
-│   │   ├── Toaster.tsx             # NEW — wires the dead ToastStrategy
-│   │   └── ...
-│   └── stores/                     # Existing — UI only
-│
-├── stores/                         # ← data stores RETIRED; only UI stores remain
-│   ├── authStore.ts                # kept
-│   ├── commandStore.ts             # kept (UI)
-│   ├── inspectorStore.ts           # kept (UI)
-│   └── (agentStore, taskStore, etc. — DELETED, replaced by TanStack Query)
-│
-├── lib/
-│   ├── errors.ts                   # Single AppError + ErrorCode enum
-│   ├── errorHandler.ts             # Global setup
-│   └── ...
+├── infrastructure/
+│   ├── api/RestClient.ts                # Wraps axios
+│   ├── socket/SocketManager.ts          # Socket.IO
+│   ├── sse/SSEClient.ts                 # EventSource wrapper
+│   ├── socket/queryEventBridge.ts       # Replaces storeEventBridge
+│   └── auth/CookieManager.ts            # httpOnly cookies (Phase 9 pulled forward)
 │
 ├── config/
-│   ├── api.config.ts               # baseURL, timeouts
-│   ├── query-stale-times.ts        # NEW
-│   ├── feature-flags.ts            # Refactored to single system
-│   └── ...
+│   ├── api.config.ts                    # baseURL, timeouts
+│   ├── query-stale-times.ts             # Per-entity staleTime
+│   ├── feature-flags.ts                 # Consolidated single system
+│   └── tenant-routing.ts                # {tenantCompanyName} → tenantId
 │
-└── components/
-    ├── workspace/                  # Existing — refactored
-    ├── widgets/                    # Tremor wrappers
-    ├── forms/                      # refactored to react-hook-form + zod
-    └── ...
+└── services/                            # Thin — TanStack Query owns the rest
+    └── tenant-context.ts                # Resolves {tenantCompanyName} from URL
+
+packages/ui/src/                         # SHARED
+├── tokens/                              # colors, typography, spacing, density
+├── components/                          # primitives, feedback, data
+├── auth/                                # permissions.ts, useRole, useCan, Can
+├── query/                               # queryKeys, useListQuery, useDetailQuery, mutations
+├── endpoints/                           # API_ENDPOINTS registry
+└── index.ts
 ```
 
 ---
 
-## 15. Migration Plan
+## 15. Migration Plan (v1.1 — D-022: now a build, not a migration)
 
-The migration is **incremental** so the app remains shippable at every step.
+**Per D-022:** the `frontend-tenant/` migration described in v1.0 §15 is **no longer the path**. EAOS is being built in a **new** app (`frontend-eaos/`) from day 1, with TanStack Query as the default, httpOnly cookies for auth, and `packages/ui/` for shared design system. The "migration" cost on the old `frontend-tenant/` is now **zero** — the old app is frozen and will be decommissioned after `frontend-eaos` reaches feature parity + 90-day 301 redirect.
+
+The remaining work for `frontend-eaos/` is essentially **the build phases of Phase 1 and Phase 2 of v1.0 §15**, condensed because the new app doesn't have legacy code to coexist with. See [`EAOS-implementation-roadmap.md` Phase 1 + Phase 2](./EAOS-implementation-roadmap.md) for the authoritative plan.
+
+### What was the "migration" in v1.0 (now obsolete)
+
+The v1.0 §15 detailed 6 phases of incremental migration on `frontend-tenant/`:
+1. Foundations
+2. Retire dual layers (api.ts, socket.ts, CacheManager, etc.)
+3. Entity workspace
+4. httpOnly cookie auth
+5. Forms + validation
+6. Polish
+
+In v1.1, the entire migration is **replaced by the new-app build**. The only legacy-related work remaining is:
+
+- **Phase 9 (httpOnly cookies) is pulled forward** — the backend switches to httpOnly cookies BEFORE `frontend-eaos` ships, so the new app is cookie-auth from day 1. Dual-support window = 90 days for any existing tenant still on `frontend-tenant/`.
+- **Phase 10 (cleanup) adds** a new step: delete `frontend-tenant/` after `frontend-eaos` reaches feature parity + 90-day 301 redirect.
+
+### Build phases for `frontend-eaos/` (per roadmap Phase 1 + 2)
+
+The build is **incremental** so the app remains shippable at every step.
 
 ### Phase 1 — Foundations (1-2 weeks)
 

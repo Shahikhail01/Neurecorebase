@@ -28,6 +28,22 @@ EAOS/
 └── EAOS-rbac-model.md
 ```
 
+**Frontend architecture (per D-022, 2026-06-27):**
+
+The EAOS workspace is built as a **new frontend** (`frontend-eaos/`), separate from the existing `frontend-tenant/`. Both share a `packages/ui/` package for design tokens, components, and permission hooks.
+
+```
+neurecore/
+├── backend/                    # shared, refactored in place
+├── frontend-admin/             # platform console; RBAC updates only
+├── frontend-tenant/            # OLD — frozen; no new features
+├── frontend-eaos/              # NEW — full EAOS implementation
+└── packages/
+    └── ui/                     # shared design system + permission hooks
+```
+
+URL: `https://eaos.neurecore.com/{tenantCompanyName}`. Old frontend continues to work at its current URL until decommission. See [`02-decisions-log.md` D-022](./02-decisions-log.md).
+
 ---
 
 ## Architectural & Contract Documents (read on demand)
