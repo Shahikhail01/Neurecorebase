@@ -20,6 +20,8 @@ import { UpdateAgentDto } from './dto/update-agent.dto';
 import { DispatchTaskDto } from './dto/dispatch-task.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { resolveTenantContext } from '../../common/utils/resolve-tenant-context';
+import { assertSameTenant } from '../../common/utils/assert-same-tenant';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
 import { AgentStatus, AgentType } from '@prisma/client';
 import { UserRole } from '@prisma/client';
@@ -86,12 +88,24 @@ export class AgentsController {
   // ─── Read one ────────────────────────────────────────────
 
   @Get(':id')
-  findOne(
+  async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtPayload,
     @Query('tenantId') tenantId?: string,
   ) {
-    return this.agentsService.findOne(id, this.resolveTenantId(user, tenantId));
+    // Phase 0 (FIX-007): use the canonical tenant-context resolver.
+    const ctx = resolveTenantContext(user, {
+      query: { tenantId },
+    });
+    const agent = await this.agentsService.findOne(id, ctx.tenantId);
+    // Defense-in-depth: explicit check even though the service's
+    // findFirst already filters by `where: { id, tenantId }`. If a future
+    // service method forgets the tenantId filter, this catches it.
+    assertSameTenant(user, (agent as { tenantId?: string | null })?.tenantId, {
+      resourceType: 'agent',
+      resourceId: id,
+    });
+    return agent;
   }
 
   // ─── Status ──────────────────────────────────────────────

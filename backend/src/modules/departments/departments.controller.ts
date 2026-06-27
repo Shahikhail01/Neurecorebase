@@ -20,6 +20,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { TierLimit } from '../../common/decorators/tier-limit.decorator';
 import { TierLimitsGuard } from '../../common/guards/tier-limits.guard';
+import { resolveTenantContext } from '../../common/utils/resolve-tenant-context';
+import { assertSameTenant } from '../../common/utils/assert-same-tenant';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
 import { UserRole } from '@prisma/client';
 
@@ -49,15 +51,19 @@ export class DepartmentsController {
   }
 
   @Get(':id')
-  findOne(
+  async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtPayload,
     @Query('tenantId') tenantId?: string,
   ) {
-    return this.departmentsService.findOne(
-      id,
-      this.resolveTenantId(user, tenantId),
-    );
+    // Phase 0 (FIX-007): canonical tenant-context + defense-in-depth check.
+    const ctx = resolveTenantContext(user, { query: { tenantId } });
+    const dept = await this.departmentsService.findOne(id, ctx.tenantId);
+    assertSameTenant(user, (dept as { tenantId?: string | null })?.tenantId, {
+      resourceType: 'department',
+      resourceId: id,
+    });
+    return dept;
   }
 
   @Post()
