@@ -68,7 +68,7 @@ None — all Phase 0/0.1-0.2 work + EAOS docs are committed to `eaos-base`.
 - `rm -rf frontend-tenant/`
 - Monorepo now contains only: `backend/`, `frontend-admin/`, `frontend-eaos/` (new, not yet built), `packages/ui/` (new, not yet built)
 
-### Doc updates (v2.7 → v2.8 in progress)
+### Doc updates (v2.7 → v2.8)
 
 - `02-decisions-log.md` — D-023 added
 - `00-index.md` — remove "frozen" status, single-frontend architecture
@@ -79,6 +79,56 @@ None — all Phase 0/0.1-0.2 work + EAOS docs are committed to `eaos-base`.
 - `EAOS-NUWS-principles.md` v1.3 → v1.4 — remove `frontend-tenant` glossary entry
 - `EAOS-frontend-data-layer.md` v1.1 → v1.2 — update §14 to single-frontend
 - `EAOS-implementation-roadmap.md` v1.1 → v1.2 — remove Phase 10 decommission; remove Phase 9 dual-support
+
+---
+
+## 2026-06-27 16:30 · Phase 0 — Tasks 0.3, 0.4, 0.5 (backend)
+
+### Task 0.3 — SSE session-ownership check (commit `795702dd`)
+
+- `backend/src/modules/agents/streaming/agent-streaming.controller.ts`: 124 lines changed
+- Added `JwtAuthGuard` at class level (was previously unauthenticated)
+- New `@CurrentUser() user: JwtPayload` on all session-bearing methods
+- New private `canAccessSession(user, session)` is the single chokepoint for cross-tenant/cross-user denial
+- Platform roles (SUPER_ADMIN, PLATFORM_ADMIN, SECURITY_OFFICER, SUPPORT) bypass
+- `createSession` no longer accepts `?userId=` / `?tenantId=` query params (was a hijack vector); userId/tenantId are derived from the authenticated user
+- `listSessions` is now scoped to caller's tenant (unless platform role)
+- tsc: clean
+
+### Task 0.4 — AuditInterceptor writes to DB (commit `8d6fe982`)
+
+- `backend/src/common/interceptors/audit.interceptor.ts`: 156 lines changed
+- Inject `AuditService` (was Reflector only)
+- Skip `GET/HEAD/OPTIONS` (volume concern)
+- On `POST/PUT/PATCH/DELETE`: fire-and-forget call to `auditService.log()`
+- Action format: `api.POST /tools/:id` (UUIDs normalized to `:id` to avoid cardinality explosion)
+- Resource extracted from `request.params` (id, entityId, userId)
+- `AuditLog.tenantId` set from `user.tenantId` (tenant-scoped queries now work)
+- Result: `success` for 2xx, `failure` for 4xx/5xx
+- Console logging preserved (ops-friendly); DB write is the compliance trail
+- Audit-write failure is non-blocking (request flow never broken)
+- tsc: clean
+
+### Task 0.5 — Tenant isolation helpers (commit `4ef6ef97`)
+
+- `backend/src/common/utils/resolve-tenant-context.ts`: 117 lines, NEW
+- `backend/src/common/utils/assert-same-tenant.ts`: 70 lines, NEW
+- Applied to `agents.findOne` and `departments.findOne` as proof of pattern
+- `resolveTenantContext` matches `EAOS-api-contract.md` §6.2 spec; supports platform role override via header/query/body
+- `assertSameTenant` is the defense-in-depth check on loaded entities (matches `EAOS-rbac-model.md` §5)
+- Both helpers are platform-role-aware
+- Full migration of 15+ duplicate per-controller `resolveTenantId` methods is scheduled for Phase 1
+- tsc: clean
+
+### Phase 0 — backend complete
+
+All 5 backend tasks shipped. 4 commits total on `eaos-base`:
+- `c00dff57` — Tasks 0.1, 0.2
+- `795702dd` — Task 0.3
+- `8d6fe982` — Task 0.4
+- `4ef6ef97` — Task 0.5
+
+Awaiting user PR review and merge to `main`.
 
 ---
 
