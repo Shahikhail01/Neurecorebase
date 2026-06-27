@@ -2,7 +2,20 @@
  * ═══════════════════════════════════════════════════════════════════════════
  * Audit Interceptor - Security Event Logging
  * ═══════════════════════════════════════════════════════════════════════════
+ *
  * Logs all API requests for security audit and compliance.
+ *
+ * Phase 0 (D-013, FIX-003): The interceptor used to only `console.log` events.
+ * `AuditService.log()` (which writes to the `AuditLog` DB table) is now called
+ * for every mutating request (POST/PATCH/DELETE/PUT). GET requests are
+ * intentionally NOT logged (volume concern). Writes are fire-and-forget — a
+ * failed audit write does not break the main request flow.
+ *
+ * Per `EAOS-rbac-model.md` §8:
+ *   - Mutating requests: 2xx → success, 4xx/5xx → failure
+ *   - Login events: handled by auth service
+ *   - GET: not logged
+ *
  * Follows SOLID principles - Single Responsibility for audit logging.
  */
 
@@ -13,11 +26,11 @@ import {
   CallHandler,
   Logger,
 } from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { Observable, catchError, of, tap } from 'rxjs';
 import { Request } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { Reflector } from '@nestjs/core';
+import { AuditService } from '../../modules/audit/audit.service';
 
 export const AUDIT_KEY = 'audit';
 
@@ -38,11 +51,16 @@ export const Audit =
     return descriptor;
   };
 
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
   private readonly logger = new Logger(AuditInterceptor.name);
 
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly auditService: AuditService,
+  ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
@@ -50,8 +68,9 @@ export class AuditInterceptor implements NestInterceptor {
 
     const auditId = uuidv4();
     const startTime = Date.now();
+    const method = request.method?.toUpperCase() ?? 'UNKNOWN';
 
-    // Get audit metadata
+    // Get audit metadata (per-method @Audit() decorator)
     const auditOptions = this.reflector.getAllAndOverride<AuditOptions>(
       AUDIT_KEY,
       [context.getHandler(), context.getClass()],
@@ -59,16 +78,36 @@ export class AuditInterceptor implements NestInterceptor {
 
     // Extract user information
     const user = (request as any).user;
-    const userId = user?.id;
+    const userId = user?.id ?? user?.sub;
     const tenantId = user?.tenantId;
+    const actor = userId ?? 'anonymous';
 
-    // Log request
+    // Resolve the action label
+    const action =
+      auditOptions?.action ?? `api.${method} ${this.normalizePath(request.path)}`;
+    const resource = auditOptions?.resource ?? 'http';
+    const resourceId = this.extractResourceId(request);
+
+    // Skip non-mutating methods (GET, HEAD, OPTIONS) — volume concern.
+    const shouldAudit = MUTATING_METHODS.has(method);
+
+    if (!shouldAudit) {
+      return next.handle();
+    }
+
+    const ipAddress = this.extractIp(request);
+    const userAgent = request.headers['user-agent'] as string | undefined;
+
+    // Still log to stdout (preserves prior dev-friendly console output) AND
+    // write to DB. The console line stays for ops debugging; the DB row is
+    // the compliance-grade audit trail.
     this.logRequest(auditId, request, auditOptions, userId, tenantId);
 
     return next.handle().pipe(
       tap({
         next: (data) => {
           const duration = Date.now() - startTime;
+          const statusCode = response?.statusCode ?? 0;
           this.logResponse(
             auditId,
             request,
@@ -77,12 +116,113 @@ export class AuditInterceptor implements NestInterceptor {
             auditOptions,
             data,
           );
+          this.writeAudit({
+            actor,
+            action,
+            resource,
+            resourceId,
+            tenantId,
+            ipAddress,
+            userAgent,
+            result: statusCode >= 400 ? 'failure' : 'success',
+            details: {
+              auditId,
+              statusCode,
+              durationMs: Date.now() - startTime,
+              method,
+              path: request.path,
+              ...this.buildDetails(request, auditOptions, data, undefined),
+            },
+          });
         },
         error: (error) => {
           const duration = Date.now() - startTime;
           this.logError(auditId, request, error, duration, auditOptions);
+          this.writeAudit({
+            actor,
+            action,
+            resource,
+            resourceId,
+            tenantId,
+            ipAddress,
+            userAgent,
+            result: 'failure',
+            details: {
+              auditId,
+              statusCode: error?.status ?? 500,
+              durationMs: Date.now() - startTime,
+              method,
+              path: request.path,
+              ...this.buildDetails(request, auditOptions, undefined, error),
+            },
+          });
         },
       }),
+      // catchError ensures an audit-write failure does not break the response;
+      // the outer tap already fired and wrote the primary audit row.
+      catchError((err) => {
+        this.logger.warn(
+          `[Audit] Non-fatal: post-response handler issue: ${String(err)}`,
+        );
+        return of();
+      }),
+    );
+  }
+
+  /**
+   * Phase 0 (D-013, FIX-003): fire-and-forget audit write. Service handles
+   * its own error logging; we don't await.
+   */
+  private writeAudit(input: {
+    actor: string;
+    action: string;
+    resource?: string;
+    resourceId?: string;
+    tenantId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+    result?: 'success' | 'failure';
+    details?: Record<string, unknown>;
+  }): void {
+    // Void the promise so the request flow never blocks on DB write.
+    void this.auditService.log(input).catch((err) => {
+      this.logger.warn(
+        `[Audit] DB write rejected (request NOT blocked): ${String(err)}`,
+      );
+    });
+  }
+
+  private buildDetails(
+    request: Request,
+    options: AuditOptions | undefined,
+    responseData: unknown,
+    error: Error | undefined,
+  ): Record<string, unknown> {
+    const details: Record<string, unknown> = {};
+    if (options?.includeBody && MUTATING_METHODS.has(request.method ?? '')) {
+      details.requestBody = this.sanitizeBody(request.body);
+    }
+    if (options?.includeResponse) {
+      details.responseBody = this.sanitizeResponse(responseData);
+    }
+    if (error) {
+      details.errorMessage = error.message;
+      details.errorName = error.name;
+    }
+    return details;
+  }
+
+  private extractResourceId(request: Request): string | undefined {
+    // Common param names; adjust as needed.
+    const params = request.params as Record<string, string | undefined> | undefined;
+    return params?.id ?? params?.entityId ?? params?.userId;
+  }
+
+  private normalizePath(path: string): string {
+    // Replace UUIDs with :id to avoid cardinality explosion in the audit log.
+    return path.replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+      ':id',
     );
   }
 
@@ -111,10 +251,9 @@ export class AuditInterceptor implements NestInterceptor {
       resource: options?.resource,
     };
 
-    // Include body for non-GET requests (but exclude sensitive data)
     if (
       options?.includeBody &&
-      ['POST', 'PUT', 'PATCH'].includes(request.method)
+      ['POST', 'PUT', 'PATCH'].includes(request.method ?? '')
     ) {
       const sanitizedBody = this.sanitizeBody(request.body);
       Object.assign(logData, { body: sanitizedBody });
@@ -146,7 +285,6 @@ export class AuditInterceptor implements NestInterceptor {
       resource: options?.resource,
     };
 
-    // Include response if requested
     if (options?.includeResponse) {
       Object.assign(logData, { response: this.sanitizeResponse(data) });
     }
