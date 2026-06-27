@@ -1,7 +1,9 @@
 # NeureCore — EAOS Documentation Index
 
-**Last updated:** 2026-06-27
+**Last updated:** 2026-06-27 20:13
 **Purpose:** Master navigation for all EAOS documentation. Start here.
+
+**Status snapshot (2026-06-27 20:13):** Phase 0 done (5/5 backend). Phase 1 in progress; sub-phases 1D + 1B partially done. 1E, 1C, and 1B's runtime checks still pending. 4 commits today + 2 prior days.
 
 ---
 
@@ -36,9 +38,9 @@ The EAOS workspace is built as a **new frontend** (`frontend-eaos/`). The previo
 neurecore/
 ├── backend/                    # shared, refactored in place
 ├── frontend-admin/             # platform console; RBAC updates only
-├── frontend-eaos/              # EAOS — the only tenant frontend
+├── frontend-eaos/              # EAOS — the only tenant frontend (bootstrapped 2026-06-27)
 └── packages/
-    └── ui/                     # shared design system + permission hooks
+    └── ui/                     # shared design system + permission hooks (pending — see 1C)
 ```
 
 URL: `https://eaos.neurecore.com/{tenantCompanyName}`. No legacy frontend to maintain. No 90-day redirect. No dual-support window for cookies. See [`02-decisions-log.md` D-022 + D-023](./02-decisions-log.md).

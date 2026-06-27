@@ -1,6 +1,6 @@
 # NeureCore — EAOS Fixes Tracker
 
-**Last updated:** 2026-06-27
+**Last updated:** 2026-06-27 20:13
 **Purpose:** Track bugs, security issues, and their fixes found during the EAOS audits and subsequent work. Each entry: ID, severity, status, file references, doc reference.
 
 **Severity scale:**
@@ -278,6 +278,34 @@ These were found during the audits but are scheduled for later phases per the ro
 ### WONTFIX-003 · Field-level redaction (e.g., "USER can see budget but not line items")
 
 - **Reason:** Requires per-user field-level permission model. Deferred to v2.
+
+---
+
+## Phase 1 Issues (found 2026-06-27)
+
+### FIX-123 · Tasks/workflow sub-controllers not annotated by the bulk script
+
+- **Severity:** 🟡 Medium (blocks 1B exit criterion 1.15)
+- **Status:** Open
+- **Description:** The `scripts/annotate-controllers.js` script (commit `af81470d`) only processes top-level `.controller.ts` files. Sub-controllers in `modules/tasks/` and `modules/workflows/` were not annotated with `@ApiCommon()`.
+- **Fix:** Add a recursive walk to the script (already in `walk()` function but `walk()` was never actually called recursively for the `tasks/` and `workflows/` sub-controllers — the `src/modules/tasks/` directory may have no top-level `.controller.ts`, and the sub-controllers live in `tasks/` and `workflows/` modules where the script only looks for a top-level controller).
+- **Doc ref:** `EAOS-implementation-roadmap.md` v1.3 tasks 1.11-1.14; `01-active-context.md` open thread #9.
+
+### FIX-124 · Departments findAll partial migration (uncommitted in working tree)
+
+- **Severity:** 🟢 Low (trivial — just needs to be finished and committed)
+- **Status:** In Progress
+- **Description:** `backend/src/modules/departments/departments.controller.ts` findAll was partially migrated to `PaginatedResponse<DepartmentResponseDto>` but the change is uncommitted. The user paused the session to record progress. The change uses in-memory pagination (small lists: departments per tenant are bounded).
+- **Fix:** Continue the pattern for projects, goals, tasks, workflows, routines, tools, users, tenants + all other Tier-2/3/4 list endpoints per roadmap §5 task 1.17.
+- **Doc ref:** `EAOS-implementation-roadmap.md` v1.3 task 1.17.
+
+### FIX-125 · 15+ duplicate per-controller `resolveTenantId` methods still in place (DIP violation)
+
+- **Severity:** 🟠 High (architectural; the TenantContextService has 0 consumers)
+- **Status:** Open (Phase 1E, all 8 tasks pending)
+- **Description:** The `TenantContextService` (1A) is unused. 15+ controllers each have a private `resolveTenantId(user, tenantId)` method that returns `string` or throws. This is a textbook DIP violation: the abstraction was built without consumers.
+- **Fix:** Phase 1E (tasks 1.41-1.48) — migrate all services to read from `TenantContextService.tenantId`, then delete the 15+ duplicate methods.
+- **Doc ref:** `EAOS-implementation-roadmap.md` v1.3 sub-phase 1E.
 
 ---
 

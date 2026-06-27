@@ -78,15 +78,13 @@ All changes are small and additive (guards, helpers, audit logging). If somethin
 
 ---
 
-## Phase 1 — Foundations + `frontend-eaos` Scaffold (Weeks 2–3) 🟡 IN PROGRESS
+## Phase 1 — Foundations + `frontend-eaos` Scaffold (Weeks 2–5) 🟡 IN PROGRESS
 
-**Goal:** Make the contract docs enforceable. Every subsequent phase depends on this. **Also bootstrap the new `frontend-eaos/` app and `packages/ui/` shared library.**
+**Goal:** Make every contract doc enforceable. Bootstrap `frontend-eaos/` and `packages/ui/`. Add the EAOS-1 Prisma schema. Migrate services to the `TenantContextService`. **Everything in this phase ships with consumers** (no DIP/SRP violations, no deferred-blocking-dependencies).
 
-**Status:** 🟡 Tier A (backend) + Tier B (frontend scaffold) complete. Tier C (annotations) and Tier D (packages/ui internals) deferred.
+**Status (2026-06-27 20:13):** 1A done ✅, 1D done ✅, 1B 4/10 done ⚠, 1E 0/8, 1C 0/19.
 **Started:** 2026-06-27
 **Branch:** `eaos-base`
-**Started:** —
-**Target completion:** —
 **Per-tenant flag:** None
 **Risk:** 🟢 Low
 

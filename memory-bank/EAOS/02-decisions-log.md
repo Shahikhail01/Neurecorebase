@@ -37,6 +37,36 @@
 
 ## 2026-06-27 (continued)
 
+### D-025 · Phase 1 execution order: sequential, priority-ordered (1D → 1B → 1E → 1C)
+
+**Decision:** Execute Phase 1 sub-phases in this order:
+1. **1D** (Prisma EAOS-1 schema) — 3 tasks, unblocks Phase 3
+2. **1B** (Annotation roll-out) — 10 tasks, makes OpenAPI comprehensive
+3. **1E** (Tenant-context migration) — 8 tasks, fixes the DIP violation
+4. **1C** (Frontend packages/ui) — 19 tasks, required by every page
+
+**Rationale:** the user said "Sequential, priority-ordered". This order reflects:
+- **1D first** because the EAOS-1 Prisma schema is the strictest blocking dependency for Phase 3 (entity workspace). Without it, Phase 3 cannot start.
+- **1B second** because the OpenAPI artifact is the single source of truth for the frontend codegen pipeline (Phase 2) and the entire EAOS-1 frontend work. Annotating only `agents` (as v1.2 did) leaves every other endpoint undefined.
+- **1E third** because the `TenantContextService` was shipped in 1A but still has zero consumers (DIP violation). After 1B, the canonical envelopes are in place; after 1E, services use them through the AsyncLocalStorage-backed service.
+- **1C last** because the `packages/ui` primitives are the foundation for every page. After 1D+1B+1E, the backend is solid; building the frontend on a solid backend is lower risk.
+
+**Trade-offs accepted:**
+- This is strictly serial, not parallel. A 2-pair team could parallelize (backend does 1B+1D+1E, frontend does 1C). For 1 pair, serial is correct.
+- 1E comes after 1B but is the smallest. That's fine; 1B is the heaviest.
+- 1C is deferred to the end. The frontend-eaos placeholder is functional but doesn't use the new primitives yet.
+
+**Doc references:**
+- `EAOS-implementation-roadmap.md` v1.3 §5
+- `01-active-context.md` (D-025)
+- `03-implementation-log.md` (D-025)
+
+**Status:** Approved 2026-06-27 19:00. 1D done ✅ (commit `3d7a2b14`). 1B in progress (4/10 tasks done as of 20:13, commit `af81470d`).
+
+---
+
+## 2026-06-27 (continued)
+
 ### D-023 · Delete `frontend-tenant/` immediately (no production users, no release)
 
 **Decision:** Delete the entire `frontend-tenant/` folder. No "frozen" intermediate state, no 90-day redirect window, no Phase 10 decommission task.

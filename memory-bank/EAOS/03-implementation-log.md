@@ -1,6 +1,6 @@
 # NeureCore — EAOS Implementation Log
 
-**Last updated:** 2026-06-27
+**Last updated:** 2026-06-27 20:13
 **Purpose:** Chronological log of code changes, file references, and shipped features for the EAOS implementation. Newest first.
 
 **Format:** `## DATE · phase N · short title`, then a brief description with file:line references and PR link (when applicable).
@@ -259,6 +259,76 @@ Per [`EAOS-implementation-roadmap.md` §4](./EAOS-implementation-roadmap.md), 7 
 **Frontend:**
 - 0.6: Fix wrong-token-key bug in 11+ files
 - 0.7: Wire `<Toaster />` to existing `ToastStrategy`
+
+---
+
+## 2026-06-27 20:13 · Phase 1 sub-phase 1B — annotation roll-out (in progress)
+
+### Task 1.9 — `api-common.decorator.ts` (commit `af81470d`)
+
+- `backend/src/common/decorators/api-common.decorator.ts`: bundle of `@ApiTags` + `@ApiBearerAuth('JWT')` + `@ApiSecurity('X-Tenant-ID')` + `@ApiSecurity('Idempotency-Key')`. Single source of truth for controller-level OpenAPI annotations.
+
+### Task 1.10 — 9 new XxxResponseDto for Tier-1 entities (commit `af81470d`)
+
+Created wire-shape DTOs for the 9 Tier-1 entities that didn't have one yet (`AgentResponseDto` was already done in 1.8):
+- `DepartmentResponseDto` — `src/modules/departments/dto/`
+- `ProjectResponseDto` — `src/modules/projects/dto/`
+- `GoalResponseDto` — `src/modules/goals/dto/`
+- `TaskResponseDto` — `src/modules/tasks/dto/`
+- `WorkflowResponseDto` — `src/modules/workflows/dto/`
+- `RoutineResponseDto` — `src/modules/routines/dto/`
+- `ToolIntegrationResponseDto` — `src/modules/tools/dto/`
+- `UserResponseDto` — `src/modules/users/dto/`
+- `TenantResponseDto` — `src/modules/tenants/dto/`
+
+Each uses `@ApiProperty` + `@Expose()` + `class-transformer` `excludeExtraneousValues` for safe serialization. Sensitive fields (passwordHash, refreshTokens, config auth secrets) are excluded.
+
+### Task 1.11-1.14 — Bulk annotation of all 34 controllers (commit `af81470d`)
+
+- `backend/scripts/annotate-controllers.js`: idempotent script that adds `@ApiCommon()` to every controller. Handles 3 patterns: (a) already has `@ApiTags` (replace), (b) no `@ApiTags` (insert after `@Controller`), (c) no `@nestjs/swagger` import (add the import). Recalculated import path correctly after first attempt was wrong.
+- All 34 controllers now use `@ApiCommon()` with the right resource tag.
+
+**Caveat:** tasks/workflow sub-controllers were not annotated (script only processes top-level `.controller.ts` files). Follow-up pass needed.
+
+---
+
+## 2026-06-27 20:00 · Phase 1 sub-phase 1D — EAOS-1 Prisma schema (DONE)
+
+### Task 1.38 + 1.39 + 1.40 — 11 new EAOS-1 Prisma models (commit `3d7a2b14`)
+
+11 new Prisma models (all tenant-scoped, all ADDITIVE — no existing model changed):
+
+- `EntityState` — the universal state machine (DRAFT/PENDING_APPROVAL/ACTIVE/PAUSED/SUSPENDED/ARCHIVED/DELETED). One row per entity, per tenant.
+- `StateHistory` — append-only log of state transitions (from/to/reason/actor/isAuto). Back-linkable to EntityState.
+- `EntityOwnership` — owner, responsibleTeam, manager, aiAssistant. The accountability chain for any EAOS resource.
+- `EntityLabel` — structured labels (kind: STANDARD/CUSTOM/PRIORITY/QUARTER, key, value, color).
+- `UserFavorite` — per-user pinned entities with sort order.
+- `UserRecentAccess` — per-user recent entity access (upserted on each access).
+- `EntityWatcher` — per-user watch subscriptions (notifyOnStateChange/Update/Comment/Assign).
+- `EntityHealth` — computed health (severity, trend, score 0-100, openAlerts, signals JSON).
+- `EntityRelationship` — typed edges between entities (parent_of/child_of/operates_in/.../depends_on).
+- `WorkspaceLayout` — per-user per-entity-type layout.
+- `CapabilityConfig` — per-user per-capability panel config.
+
+6 new enums: `UniversalStateValue`, `EntityType`, `HealthSeverity`, `HealthTrend`, `LabelKind`, `RelationshipType`.
+
+Back-relations added to `Tenant` (11), `User` (10), `Department` (1).
+
+Migration file: `backend/prisma/migrations/20260627_eaos_1_entity_model/migration.sql` (62KB, 11 CREATE TABLE + 6 CREATE TYPE + all FKs/unique/indexes). Hand-extracted from the full prisma diff to ensure ADDITIVE ONLY.
+
+Verified:
+- `prisma validate`: ✅ "The schema at prisma/schema.prisma is valid"
+- `prisma generate`: ✅ regenerated
+- `tsc --noEmit`: ✅ passes
+- Real DB migration: **user action** (need to run `pnpm prisma migrate dev` against a live DB)
+
+---
+
+## 2026-06-27 18:00 · Phase 1 v1.3 plan update (D-024)
+
+(See [`02-decisions-log.md` D-024](./02-decisions-log.md))
+
+Roadmap v1.2 → v1.3. Phase 1 expanded from 17 → 48 tasks across 5 sub-phases (A, B, C, D, E). Every task has explicit SOLID adherence. The four "CRITICAL" deferrals from v1.2 are now in-scope: 1B annotation roll-out, 1C packages/ui internals, 1D EAOS-1 Prisma schema, 1E tenant-context migration.
 
 ---
 
