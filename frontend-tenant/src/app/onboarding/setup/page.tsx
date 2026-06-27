@@ -202,7 +202,8 @@ export default function OnboardingSetupPage() {
         .map((i) => ({ ...i, email: i.email.trim() }))
         .filter((i) => i.email.length > 0);
       if (valid.length === 0) {
-        await goTo('complete');
+        setSubmitting(false);
+        goTo('complete');
         return;
       }
       const invalid = valid.filter(
@@ -222,12 +223,17 @@ export default function OnboardingSetupPage() {
           token: typeof t === 'string' ? t : (t as { token: string }).token,
         })),
       );
-      await goTo('complete');
+      setSubmitting(false);
+      goTo('complete');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send invites.');
-    } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSkipInvites = () => {
+    setSubmitting(false);
+    goTo('complete');
   };
 
   const handleFinish = async () => {
@@ -612,12 +618,21 @@ export default function OnboardingSetupPage() {
               </div>
               <div className="flex justify-between">
                 <Button variant="ghost" onClick={() => setStep('review')}>
-                  Skip for now
+                  <ArrowLeft className="w-4 h-4 mr-1" /> Back
                 </Button>
-                <Button onClick={handleSendInvites} disabled={submitting}>
-                  {submitting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                  Send invites <ArrowRight className="w-4 h-4 ml-1" />
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleSkipInvites}
+                    disabled={submitting}
+                  >
+                    Skip for now
+                  </Button>
+                  <Button onClick={handleSendInvites} disabled={submitting}>
+                    {submitting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                    Send invites <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
               </div>
             </Card>
           )}
