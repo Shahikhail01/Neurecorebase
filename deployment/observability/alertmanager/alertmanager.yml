@@ -1,0 +1,47 @@
+# NeureCore Alertmanager configuration
+# Phase 5 pre-req (Observability + alerting).
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'default'
+  routes:
+    - match:
+        severity: critical
+      receiver: 'critical'
+      continue: true
+    - match:
+        category: kill-switch
+      receiver: 'kill-switch'
+      continue: true
+
+receivers:
+  - name: 'default'
+    webhook_configs:
+      # Add a webhook URL here when an on-call channel exists.
+      # Until then, alerts are visible in the Alertmanager UI only.
+      - url: 'http://127.0.0.1:5001/alerts'
+        send_resolved: true
+        max_alerts: 0
+
+  - name: 'critical'
+    webhook_configs:
+      - url: 'http://127.0.0.1:5001/alerts/critical'
+        send_resolved: true
+
+  - name: 'kill-switch'
+    webhook_configs:
+      - url: 'http://127.0.0.1:5001/alerts/kill-switch'
+        send_resolved: true
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service']

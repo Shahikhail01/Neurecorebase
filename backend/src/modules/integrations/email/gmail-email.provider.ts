@@ -9,7 +9,7 @@ export class GmailEmailProvider implements IEmailProvider {
   constructor(private readonly gmail: GoogleGmailService) {}
 
   async send(input: ProviderSendInput): Promise<ProviderSendResult> {
-    const result = await this.gmail.sendEmail(input.tenantId, {
+    const result = await this.gmail.sendEmail({
       to: input.to,
       cc: input.cc,
       bcc: input.bcc,

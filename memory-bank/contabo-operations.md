@@ -16,6 +16,7 @@
 | Backend cwd (PM2) | `/opt/neurecore/backend/backend` |
 | Backend startup command | `node ./dist/src/main.js` (runs from `dist/`, not `src/`) |
 | Backend listening port | **3003** (NOT 3000 — port 3000 is `nghttpx`/LiteSpeed proxy) |
+| Backend `/api/metrics` | Prometheus scrape endpoint (Phase 5, 2026-06-28) |
 | Public backend URL | `https://brain.neurecore.com/api/v1/` |
 | Env file | `/opt/neurecore/backend/backend/.env` (DO NOT overwrite) |
 | Database | Neon PostgreSQL at `ep-summer-pond-adpkqy1m-pooler.c-2.us-east-1.aws.neon.tech` |
@@ -25,6 +26,10 @@
 | `node_modules` | On Contabo — use Contabo's, do NOT upload from local |
 | Frontend (tenant) | Vercel (NOT Contabo) — `https://hq.neurecore.com` |
 | Frontend (admin) | Vercel (NOT Contabo) — `https://cc.neurecore.com` |
+| **Observability stack** | `/opt/neurecore/observability/` (docker-compose) |
+| Prometheus | `http://127.0.0.1:9090` (host network) |
+| Alertmanager | `http://127.0.0.1:9093` (host network) |
+| Grafana | `http://127.0.0.1:3200` (host network; 3000/3100/3201 in use) |
 
 ---
 
@@ -472,6 +477,102 @@ If you need to rotate `BREVO_API_KEY`: also update the Brevo dashboard; new key 
 |---|---|---|---|
 | 2026-06-26 | Phase B: Google Workspace core | ✅ Live | First migration apply needed DB write access verified |
 | 2026-06-27 | Phase C–F + Onboarding + Tier limits | ✅ Live (PID 647920) | `EmailTool` injected unused `PrismaIntegrationCredentialStore` → DI error on first restart. Fixed by removing unused dep from constructor. |
+| 2026-06-28 | Phase 5 pre-req: Prometheus + Grafana + Alertmanager + `/api/metrics` | ✅ Live | Two issues: (a) `ChatModule` import referenced deleted module — removed from `app.module.ts`; (b) port collisions with `nghttpx` (3000) and `next-server` (3100) — Grafana moved to **3200** (host network). Smoke test passes 8/8. |
+
+---
+
+## 10. Observability Stack (Phase 5 pre-req)
+
+**Location:** `/opt/neurecore/observability/` (git-tracked at `neurecore-base/neurecore/deployment/observability/`).
+
+**Services:**
+
+| Service | Image | URL | Container | Purpose |
+|---|---|---|---|---|
+| Prometheus | `prom/prometheus:v2.55.1` | `http://127.0.0.1:9090` | `neurecore-prometheus` | Scrapes `/api/metrics` from backend every 15s |
+| Alertmanager | `prom/alertmanager:v0.27.0` | `http://127.0.0.1:9093` | `neurecore-alertmanager` | Routes alerts to receivers |
+| Grafana | `grafana/grafana:11.3.0` | `http://127.0.0.1:3200` | `neurecore-grafana` | Dashboards + ad-hoc queries |
+
+All three use `network_mode: host` so they bind directly to the host's network. **No port mapping needed** — but you MUST pick ports not used by other services.
+
+**Port conflicts to know:**
+- `3000` — `nghttpx` proxy (backend is at 3003, not 3000 — see §0)
+- `3100` — `next-server` (neurecore-tenant next runtime)
+- `9090`, `9093` — usually free
+- `3200` — picked for Grafana (overlap with the pre-existing 3100 frontend runtime was the original mistake — see 2026-06-28 deploy log)
+
+**Key files:**
+
+```
+/opt/neurecore/observability/
+├── docker-compose.yml          # 3-service stack
+├── .env                        # GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD
+├── prometheus/
+│   ├── prometheus.yml          # scrape config (backend on 127.0.0.1:3003 /api/metrics)
+│   └── alerts.yml              # 6 rules: token cap, cost cap, error rate, kill-switch, scrape health, latency
+├── alertmanager/
+│   └── alertmanager.yml        # default / critical / kill-switch receivers
+├── grafana/
+│   ├── provisioning/
+│   │   ├── datasources/prometheus.yml
+│   │   └── dashboards/dashboards.yml
+│   └── dashboards/             # 4 dashboards: latency, tokens, cost, errors
+└── scripts/smoke.sh            # verifies every link in the chain
+```
+
+**Backend `/api/metrics`:**
+
+The Nest backend exposes Prometheus metrics at `GET /api/metrics` (NOT `/metrics` — the global `/api` prefix applies). Metrics include:
+- `neurecore_ai_action_invocations_total{status, actionId}` — counter
+- `neurecore_ai_action_duration_seconds{actionId}` — histogram
+- `neurecore_ai_action_tokens_total{direction, actionId}` — counter (input + output)
+- `neurecore_ai_action_cost_usd_total{model, actionId}` — counter
+- `neurecore_ai_action_errors_total{actionId, errorType}` — counter
+- `neurecore_node_*` — Node.js default metrics (CPU, memory, GC, event loop)
+
+Source: `backend/src/modules/metrics/{metrics.module,metrics.service,metrics.controller}.ts`.
+
+**Smoke test:**
+
+```bash
+ssh contabo 'cd /opt/neurecore/observability && bash scripts/smoke.sh'
+# Expect: PASS: 8 / FAIL: 0
+```
+
+Checks: Prometheus up + scraping, Alertmanager up, Grafana healthy + datasource + dashboards loaded, alert rules loaded.
+
+**Re-deploy procedure (after backend code changes):**
+
+```bash
+ssh contabo 'cd /opt/neurecore/backend/backend && ./node_modules/.bin/nest build && pm2 restart neurecore-backend'
+# Prometheus auto-picks up new metrics on next scrape (15s)
+```
+
+**Restart observability stack (if it dies):**
+
+```bash
+ssh contabo 'cd /opt/neurecore/observability && docker compose down && docker compose up -d'
+```
+
+**Tail logs:**
+
+```bash
+ssh contabo 'docker logs -f neurecore-prometheus | tail -50'
+ssh contabo 'docker logs -f neurecore-grafana | tail -50'
+```
+
+**Alert rules summary** (see `prometheus/alerts.yml`):
+
+| Alert | Severity | Trigger |
+|---|---|---|
+| `AIActionSingleInvocationTooLarge` | critical | Single call > 10K tokens in 5m |
+| `AIActionCostCapApproaching` | warning | Per-action hourly cost > $1 |
+| `AIActionErrorRateHigh` | critical | Errors > 10% over 5m |
+| `AIActionKillSwitchIneffective` | warning | Invocations detected but backend up — kill-switch broken? |
+| `BackendMetricsScrapeFailing` | critical | Prometheus can't scrape `/api/metrics` for 5m |
+| `AIActionLatencyHigh` | warning | p95 latency > 30s for 10m |
+
+**Phase 5 Pre-req status:** ✅ Met. Backend instrumentation is wired (MetricsModule live on Contabo). `MetricsService.recordAiAction()` API ready for the interceptor (Phase 5 task 5.3) to call. `FeatureFlagService` with `DISABLE_AI_ACTIONS` support ready for the kill-switch guard (task 5.3). Prom-client + Grafana + 4 dashboards + 6 alerts fully deployed and verified on Contabo.
 
 ---
 

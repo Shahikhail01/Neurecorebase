@@ -46,7 +46,6 @@ export interface UpdateAgentInput {
 }
 
 export interface AgentFilter {
-  tenantId?: string | null;
   departmentId?: string;
   status?: AgentStatus;
   type?: AgentType;
@@ -67,22 +66,19 @@ export interface IAgentService {
     limit: number;
     totalPages: number;
   }>;
-  findOne(id: string, tenantId: string): Promise<unknown>;
+  findOne(id: string): Promise<unknown>;
   create(
     input: CreateAgentInput,
-    tenantId: string,
     userId: string,
   ): Promise<unknown>;
   update(
     id: string,
     input: UpdateAgentInput,
-    tenantId: string,
   ): Promise<unknown>;
-  remove(id: string, tenantId: string): Promise<void>;
+  remove(id: string): Promise<void>;
   updateStatus(
     id: string,
     status: AgentStatus,
-    tenantId: string,
   ): Promise<unknown>;
 }
 

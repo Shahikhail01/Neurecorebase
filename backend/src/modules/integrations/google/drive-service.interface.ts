@@ -7,19 +7,18 @@ import type { DriveFile, CreateFolderInput, CreateFileInput } from './google-dri
  * Allows swapping the implementation (e.g., Dropbox, OneDrive) without consumer changes.
  */
 export interface IDriveService {
-  createFolder(tenantId: string, input: CreateFolderInput): Promise<DriveFile>;
-  createFile(tenantId: string, input: CreateFileInput): Promise<DriveFile>;
+  createFolder(input: CreateFolderInput): Promise<DriveFile>;
+  createFile(input: CreateFileInput): Promise<DriveFile>;
   listFiles(
-    tenantId: string,
     folderId: string,
     options?: { pageSize?: number },
   ): Promise<DriveFile[]>;
-  deleteFile(tenantId: string, fileId: string): Promise<void>;
-  listAgentFolders(tenantId: string): Promise<{
+  deleteFile(fileId: string): Promise<void>;
+  listAgentFolders(): Promise<{
     rootFolderId: string;
     agents: { agentId: string; agentName: string; folderId: string; folderLink?: string }[];
   }>;
-  listRootTree(tenantId: string): Promise<{
+  listRootTree(): Promise<{
     rootFolderId: string | null;
     children: { id: string; name: string; mimeType: string; webViewLink?: string; children: DriveFile[] }[];
   }>;

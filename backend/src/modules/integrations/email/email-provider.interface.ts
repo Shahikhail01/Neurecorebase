@@ -8,7 +8,6 @@
 export type EmailProviderName = 'gmail' | 'brevo';
 
 export interface ProviderSendInput {
-  tenantId: string;
   from: string;
   fromName?: string;
   to: string;

@@ -5,13 +5,13 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { TenantContextService } from '../../common/context/tenant-context.service';
 import type { IProjectRepository } from './interfaces/project.interface';
 
 // DI Token
 export const PROJECT_REPOSITORY = 'PROJECT_REPOSITORY';
 
 export interface CreateProjectInput {
-  tenantId: string;
   name: string;
   description?: string;
   departmentId?: string;
@@ -35,23 +35,21 @@ export class ProjectsService {
 
   constructor(
     @Inject(PROJECT_REPOSITORY) private readonly repository: IProjectRepository,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
-  async create(tenantId: string, input: CreateProjectInput) {
-    this.logger.log(`Creating project for tenant ${tenantId}: ${input.name}`);
+  async create(input: CreateProjectInput) {
+    this.logger.log(`Creating project: ${input.name}`);
 
     if (!input.name || input.name.trim().length === 0) {
       throw new BadRequestException('Project name is required');
     }
 
-    return this.repository.create({
-      ...input,
-      tenantId,
-    });
+    return this.repository.create(input);
   }
 
-  async findById(id: string, tenantId: string) {
-    const project = await this.repository.findById(id, tenantId);
+  async findById(id: string) {
+    const project = await this.repository.findById(id);
 
     if (!project) {
       throw new NotFoundException(`Project ${id} not found`);
@@ -61,7 +59,6 @@ export class ProjectsService {
   }
 
   async findAll(
-    tenantId: string,
     options?: {
       status?: 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
       departmentId?: string;
@@ -70,48 +67,40 @@ export class ProjectsService {
       limit?: number;
     },
   ) {
-    return this.repository.findAll({
-      tenantId,
-      ...options,
-    });
+    return this.repository.findAll(options ?? {});
   }
 
-  async findByDepartment(departmentId: string, tenantId: string) {
-    return this.repository.findByDepartment(departmentId, tenantId);
+  async findByDepartment(departmentId: string) {
+    return this.repository.findByDepartment(departmentId);
   }
 
-  async update(id: string, tenantId: string, input: UpdateProjectInput) {
-    // Verify project exists
-    await this.findById(id, tenantId);
+  async update(id: string, input: UpdateProjectInput) {
+    await this.findById(id);
 
-    return this.repository.update(id, tenantId, input);
+    return this.repository.update(id, input);
   }
 
-  async delete(id: string, tenantId: string) {
-    // Verify project exists
-    await this.findById(id, tenantId);
+  async delete(id: string) {
+    await this.findById(id);
 
-    await this.repository.delete(id, tenantId);
+    await this.repository.delete(id);
     this.logger.log(`Deleted project ${id}`);
   }
 
-  async addGoal(projectId: string, tenantId: string, goalId: string) {
-    // Verify project exists
-    await this.findById(projectId, tenantId);
+  async addGoal(projectId: string, goalId: string) {
+    await this.findById(projectId);
 
-    return this.repository.addGoal(projectId, tenantId, goalId);
+    return this.repository.addGoal(projectId, goalId);
   }
 
-  async removeGoal(projectId: string, tenantId: string, goalId: string) {
-    // Verify project exists
-    await this.findById(projectId, tenantId);
+  async removeGoal(projectId: string, goalId: string) {
+    await this.findById(projectId);
 
-    return this.repository.removeGoal(projectId, tenantId, goalId);
+    return this.repository.removeGoal(projectId, goalId);
   }
 
-  async getProjectStats(tenantId: string) {
+  async getProjectStats() {
     const { data: allProjects, total } = await this.repository.findAll({
-      tenantId,
       limit: 1000,
     });
 

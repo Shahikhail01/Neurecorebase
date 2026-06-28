@@ -1,16 +1,6 @@
-import {
-  IsArray,
-  ArrayNotEmpty,
-  IsString,
-  IsOptional,
-  IsUUID,
-} from 'class-validator';
+import { IsArray, ArrayNotEmpty, IsString } from 'class-validator';
 
 export class EmbedRequestDto {
-  @IsOptional()
-  @IsUUID()
-  tenantId?: string;
-
   @IsArray()
   @ArrayNotEmpty()
   @IsString({ each: true })

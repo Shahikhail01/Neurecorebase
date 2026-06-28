@@ -151,7 +151,7 @@ export class DocumentsTool extends BaseStructuredTool {
       format === 'html' ? 'text/html' : 'text/plain';
     const safeTitle = input.title.replace(/[\\/:*?"<>|]/g, '-').slice(0, 200);
 
-    const file = await this.drive.createFile(tenantId, {
+    const file = await this.drive.createFile({
       name: safeTitle,
       content: input.content,
       mimeType,
@@ -182,7 +182,7 @@ export class DocumentsTool extends BaseStructuredTool {
   ): Promise<StructuredToolResult<DocumentOutput>> {
     const folder = input.folder ?? 'Documents';
     const parentId = await this.resolveSubfolder(tenantId, agentId, folder);
-    const files = await this.drive.listFiles(tenantId, parentId, {
+    const files = await this.drive.listFiles(parentId, {
       pageSize: input.pageSize ?? 50,
     });
 
@@ -271,7 +271,7 @@ export class DocumentsTool extends BaseStructuredTool {
   ): Promise<string> {
     if (!agentId) {
       // No agent context — fall back to the tenant's root NeureCore folder
-      const root = await this.drive.ensureRootFolder(tenantId);
+      const root = await this.drive.ensureRootFolder();
       return root.id;
     }
 
@@ -285,7 +285,6 @@ export class DocumentsTool extends BaseStructuredTool {
 
     // Ensure the agent folder structure exists (idempotent)
     const folders = await this.drive.setupAgentFolders(
-      tenantId,
       agent.id,
       agent.name,
     );

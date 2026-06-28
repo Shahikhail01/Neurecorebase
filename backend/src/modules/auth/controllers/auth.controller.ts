@@ -24,8 +24,8 @@ import type { ValidatedUser } from '../interfaces/auth.interface';
 import type { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 
+@ApiCommon('auth')
 @Controller({ path: 'auth', version: '1' })
-@ApiCommon('controllers')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
   private readonly googleClientId: string;

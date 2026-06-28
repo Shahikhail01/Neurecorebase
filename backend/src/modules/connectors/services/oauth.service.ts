@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { PrismaOAuthTokenStore } from './oauth-token.service';
 import { CryptoService } from './crypto.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 
 export type OAuthProvider = 'hubspot' | 'salesforce' | 'pipedrive';
 
@@ -18,6 +19,7 @@ export class OAuthService {
     private readonly prisma: PrismaService,
     private readonly tokenStore: PrismaOAuthTokenStore,
     private readonly crypto: CryptoService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   buildState(payload: Record<string, unknown>): string {
@@ -33,16 +35,16 @@ export class OAuthService {
   }
 
   authorizeHubSpot(input: {
-    tenantId: string;
     redirectUri: string;
     scopes: string[];
   }): OAuthAuthorizeResult {
+    const tenantId = this.tenantContext.tenantId;
     const clientId = process.env.HUBSPOT_CLIENT_ID;
     if (!clientId)
       throw new BadRequestException('HUBSPOT_CLIENT_ID is not set');
 
     const state = this.buildState({
-      tenantId: input.tenantId,
+      tenantId,
       provider: 'hubspot',
     });
     const scope = encodeURIComponent(input.scopes.join(' '));

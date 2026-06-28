@@ -171,7 +171,7 @@ export class ReportsTool extends BaseStructuredTool {
     if (input.saveToDrive !== false) {
       try {
         const parentId = await this.resolveReportsFolder(tenantId, agentId);
-        const file = await this.drive.createFile(tenantId, {
+        const file = await this.drive.createFile({
           name: `${title} — ${new Date().toISOString().slice(0, 10)}.html`,
           content: html,
           mimeType: 'text/html',
@@ -210,7 +210,7 @@ export class ReportsTool extends BaseStructuredTool {
   ): Promise<StructuredToolResult<ReportOutput>> {
     if (!input.fileId) return { success: false, error: 'export_pdf requires fileId' };
 
-    const accessToken = await this.drive['authClient'].getAccessToken(tenantId);
+    const accessToken = await this.drive.getAccessToken();
     if (!accessToken) return { success: false, error: 'Google is not connected' };
 
     const res = await fetch(
@@ -409,7 +409,7 @@ ${sections.join('\n')}
     agentId: string | undefined,
   ): Promise<string> {
     if (!agentId) {
-      const root = await this.drive.ensureRootFolder(tenantId);
+      const root = await this.drive.ensureRootFolder();
       return root.id;
     }
     const agent = await this.prisma.agent.findUnique({
@@ -419,7 +419,7 @@ ${sections.join('\n')}
     if (!agent || agent.tenantId !== tenantId) {
       throw new Error(`Agent ${agentId} not found for tenant ${tenantId}`);
     }
-    const folders = await this.drive.setupAgentFolders(tenantId, agent.id, agent.name);
+    const folders = await this.drive.setupAgentFolders(agent.id, agent.name);
     return folders.subfolders.Reports;
   }
 }

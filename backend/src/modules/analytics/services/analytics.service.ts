@@ -1,96 +1,69 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { PrismaFeatureStore } from './featureStore.prisma';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
+import type { IFeatureStore } from '../interfaces/IFeatureStore';
 import { HttpModelRunner } from './modelRunner.http';
 
-/**
- * AnalyticsService
- *
- * SRP:  Orchestrates analytics flows — delegates storage to PrismaFeatureStore
- *       and model execution to HttpModelRunner.
- * DIP:  Depends on injectable abstractions; resolved by NestJS DI container.
- * OCP:  New operations (cohort analysis, custom reports) can be added without
- *       modifying existing score/forecast/anomaly methods.
- */
 @Injectable()
 export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly featureStore: PrismaFeatureStore,
+    private readonly featureStore: IFeatureStore,
     private readonly modelRunner: HttpModelRunner,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
-  // ─── Models ──────────────────────────────────────────────────────────────
-
-  async getModels(tenantId?: string) {
+  async getModels() {
+    const tenantId = this.tenantContext.tenantId;
     return this.prisma.analyticsModel.findMany({
-      where: { ...(tenantId ? { tenantId } : {}) },
+      where: { tenantId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  // ─── Score ───────────────────────────────────────────────────────────────
-
-  async score(
-    tenantId: string,
-    features: Record<string, unknown>,
-  ): Promise<Record<string, unknown>> {
-    await this.featureStore.save(tenantId, features);
-    const models = await this.getModels(tenantId);
+  async score(features: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const tenantId = this.tenantContext.tenantId;
+    await this.featureStore.save(features);
+    const models = await this.getModels();
     const model = models[0];
     if (!model)
       this.logger.warn(`No model for tenant ${tenantId}; using runner default`);
     return this.modelRunner.runModel(model?.id ?? 'default', features);
   }
 
-  // ─── Forecast ────────────────────────────────────────────────────────────
-
-  async forecast(
-    tenantId: string,
-    periods: number,
-  ): Promise<Record<string, unknown>> {
+  async forecast(periods: number): Promise<Record<string, unknown>> {
+    const tenantId = this.tenantContext.tenantId;
     const result = await this.modelRunner.forecast(periods);
     return { tenantId, periods, ...result };
   }
 
-  // ─── Anomaly ─────────────────────────────────────────────────────────────
-
-  async detectAnomalies(
-    tenantId: string,
-    vectors: number[][],
-  ): Promise<Record<string, unknown>> {
+  async detectAnomalies(vectors: number[][]): Promise<Record<string, unknown>> {
+    const tenantId = this.tenantContext.tenantId;
     const result = await this.modelRunner.detectAnomalies(vectors);
     return { tenantId, ...result };
   }
 
-  // ─── Embeddings ──────────────────────────────────────────────────────────
-
-  async embed(
-    tenantId: string,
-    texts: string[],
-  ): Promise<Record<string, unknown>> {
+  async embed(texts: string[]): Promise<Record<string, unknown>> {
+    const tenantId = this.tenantContext.tenantId;
     const result = await this.modelRunner.embed(texts);
     return { tenantId, count: texts.length, ...result };
   }
 
-  // ─── Feature history ─────────────────────────────────────────────────────
-
-  async getFeatureHistory(tenantId: string, limit = 50) {
-    return this.featureStore.list(tenantId, limit);
+  async getFeatureHistory(limit = 50) {
+    return this.featureStore.list(limit);
   }
 
-  async getLatestFeatures(tenantId: string) {
-    return this.featureStore.getLatest(tenantId);
+  async getLatestFeatures() {
+    return this.featureStore.getLatest();
   }
 
-  // ─── Report ──────────────────────────────────────────────────────────────
-
-  async getReport(tenantId: string) {
+  async getReport() {
+    const tenantId = this.tenantContext.tenantId;
     const [models, latest] = await Promise.all([
-      this.getModels(tenantId),
-      this.featureStore.getLatest(tenantId),
+      this.getModels(),
+      this.featureStore.getLatest(),
     ]);
     return {
       tenantId,

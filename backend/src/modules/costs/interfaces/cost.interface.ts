@@ -15,13 +15,14 @@
 /**
  * Interface for cost data aggregation from various sources (LangSmith, LLMFactory, etc.)
  * Single Responsibility: Only aggregates cost data
+ *
+ * NOTE: tenantId is read from TenantContextService internally by implementations.
  */
 export interface ICostAggregationProvider {
   /**
    * Get aggregated cost summary for a tenant within a date range
    */
   getCostByTenant(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<CostSummary>;
@@ -30,7 +31,6 @@ export interface ICostAggregationProvider {
    * Get cost breakdown by specific agent
    */
   getCostByAgent(
-    tenantId: string,
     agentId: string,
     startDate: Date,
     endDate: Date,
@@ -40,7 +40,6 @@ export interface ICostAggregationProvider {
    * Get cost breakdown by LLM model
    */
   getCostByModel(
-    tenantId: string,
     model: string,
     startDate: Date,
     endDate: Date,
@@ -50,7 +49,6 @@ export interface ICostAggregationProvider {
    * Get cost breakdown by provider (OPENAI, ANTHROPIC, MINIMAX, etc.)
    */
   getCostByProvider(
-    tenantId: string,
     provider: string,
     startDate: Date,
     endDate: Date,
@@ -85,6 +83,8 @@ export interface CostTimelinePoint {
 /**
  * Interface for persisting and retrieving cost records
  * Single Responsibility: Only handles cost record CRUD
+ *
+ * NOTE: tenantId is read from TenantContextService internally by implementations.
  */
 export interface ICostRecordRepository {
   /**
@@ -101,7 +101,6 @@ export interface ICostRecordRepository {
    * Find cost records for a tenant within date range
    */
   findByTenant(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
     options?: FindCostRecordsOptions,
@@ -116,7 +115,6 @@ export interface ICostRecordRepository {
    * Get total cost for tenant in period
    */
   getTotalCost(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<number>;
@@ -126,7 +124,6 @@ export interface ICostRecordRepository {
    * Phase 2 — optional `departmentId` filter
    */
   getCostByAgent(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
     departmentId?: string,
@@ -143,7 +140,6 @@ export interface ICostRecordRepository {
    * Phase 2 — get cost summary aggregated for a single department.
    */
   getCostSummaryByDepartment(
-    tenantId: string,
     departmentId: string,
     startDate: Date,
     endDate: Date,
@@ -161,7 +157,6 @@ export interface ICostRecordRepository {
    * Get cost records grouped by model
    */
   getCostByModel(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<
@@ -207,18 +202,19 @@ export interface CreateCostRecordInput {
 /**
  * Interface for budget policy CRUD operations
  * Single Responsibility: Only handles budget policy persistence
+ *
+ * NOTE: tenantId is read from TenantContextService internally by implementations.
  */
 export interface IBudgetPolicyRepository {
   /**
    * Find all budget policies for a tenant
    */
-  findByTenant(tenantId: string): Promise<unknown[]>;
+  findByTenant(): Promise<unknown[]>;
 
   /**
    * Find budget policies by scope (e.g., all for an agent)
    */
   findByScope(
-    tenantId: string,
     scope: 'TENANT' | 'DEPARTMENT' | 'AGENT' | 'MODEL',
     scopeId?: string,
   ): Promise<unknown[]>;
@@ -226,7 +222,7 @@ export interface IBudgetPolicyRepository {
   /**
    * Find active budget policies that need checking
    */
-  findActivePolicies(tenantId: string): Promise<unknown[]>;
+  findActivePolicies(): Promise<unknown[]>;
 
   /**
    * Create a new budget policy
@@ -295,7 +291,7 @@ export interface IBudgetIncidentRepository {
   /**
    * Find active incidents for a tenant
    */
-  findActiveByTenant(tenantId: string): Promise<unknown[]>;
+  findActiveByTenant(): Promise<unknown[]>;
 
   /**
    * Acknowledge an incident

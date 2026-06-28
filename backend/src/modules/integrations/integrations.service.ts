@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { IntegrationProvider, IntegrationStatus } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { PrismaIntegrationCredentialStore, GoogleCredentials } from './services/integration-credential.store';
+import { TenantContextService } from '../../common/context/tenant-context.service';
 
 const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -20,9 +21,11 @@ export class IntegrationsService {
     private readonly credentialStore: PrismaIntegrationCredentialStore,
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
-  async initiateGoogleOAuth(tenantId: string, redirectUri?: string): Promise<{ url: string; state: string }> {
+  async initiateGoogleOAuth(redirectUri?: string): Promise<{ url: string; state: string }> {
+    const tenantId = this.tenantContext.tenantId;
     const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
     const clientSecret = this.config.get<string>('GOOGLE_CLIENT_SECRET');
 
@@ -132,7 +135,8 @@ export class IntegrationsService {
     return { connected: true, email };
   }
 
-  async disconnectGoogle(tenantId: string): Promise<void> {
+  async disconnectGoogle(): Promise<void> {
+    const tenantId = this.tenantContext.tenantId;
     await this.credentialStore.delete(tenantId, IntegrationProvider.GOOGLE);
     // Clear cached Google identifiers on tenant
     await this.prisma.tenant.update({
@@ -144,12 +148,13 @@ export class IntegrationsService {
     this.logger.log(`Google OAuth disconnected for tenant ${tenantId}`);
   }
 
-  async getGoogleConnectionStatus(tenantId: string): Promise<{
+  async getGoogleConnectionStatus(): Promise<{
     connected: boolean;
     email?: string;
     scopes?: string[];
     expiresAt?: Date;
   }> {
+    const tenantId = this.tenantContext.tenantId;
     const creds = await this.credentialStore.get(tenantId, IntegrationProvider.GOOGLE);
     if (!creds) return { connected: false };
 
@@ -161,7 +166,8 @@ export class IntegrationsService {
     };
   }
 
-  async connectBrevo(tenantId: string, apiKey: string): Promise<{ connected: boolean }> {
+  async connectBrevo(apiKey: string): Promise<{ connected: boolean }> {
+    const tenantId = this.tenantContext.tenantId;
     const validateRes = await fetch('https://api.brevo.com/v3/account', {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
@@ -181,20 +187,23 @@ export class IntegrationsService {
     return { connected: true };
   }
 
-  async disconnectBrevo(tenantId: string): Promise<void> {
+  async disconnectBrevo(): Promise<void> {
+    const tenantId = this.tenantContext.tenantId;
     await this.credentialStore.delete(tenantId, IntegrationProvider.BREVO);
     this.logger.log(`Brevo disconnected for tenant ${tenantId}`);
   }
 
-  async getBrevoConnectionStatus(tenantId: string): Promise<{ connected: boolean }> {
+  async getBrevoConnectionStatus(): Promise<{ connected: boolean }> {
+    const tenantId = this.tenantContext.tenantId;
     const connected = await this.credentialStore.exists(tenantId, IntegrationProvider.BREVO);
     return { connected };
   }
 
-  async listIntegrations(tenantId: string): Promise<Record<string, unknown>> {
+  async listIntegrations(): Promise<Record<string, unknown>> {
+    const tenantId = this.tenantContext.tenantId;
     const [google, brevo] = await Promise.all([
-      this.getGoogleConnectionStatus(tenantId),
-      this.getBrevoConnectionStatus(tenantId),
+      this.getGoogleConnectionStatus(),
+      this.getBrevoConnectionStatus(),
     ]);
 
     return {
@@ -214,9 +223,9 @@ export class IntegrationsService {
   }
 
   async getDecryptedCredentials(
-    tenantId: string,
     provider: IntegrationProvider,
   ): Promise<GoogleCredentials | { apiKey: string } | null> {
+    const tenantId = this.tenantContext.tenantId;
     return this.credentialStore.get(tenantId, provider);
   }
 }

@@ -175,7 +175,7 @@ export class ContextTool extends BaseStructuredTool {
 
     let parentId: string;
     if (folderName === 'root' || !agentId) {
-      const root = await this.drive.ensureRootFolder(tenantId);
+      const root = await this.drive.ensureRootFolder();
       parentId = root.id;
     } else {
       const agent = await this.prisma.agent.findUnique({
@@ -185,11 +185,11 @@ export class ContextTool extends BaseStructuredTool {
       if (!agent || agent.tenantId !== tenantId) {
         return { success: false, error: `Agent ${agentId} not found` };
       }
-      const folders = await this.drive.setupAgentFolders(tenantId, agent.id, agent.name);
+      const folders = await this.drive.setupAgentFolders(agent.id, agent.name);
       parentId = folders.subfolders[folderName] ?? folders.folderId;
     }
 
-    const files = await this.drive.listFiles(tenantId, parentId, { pageSize: fileLimit });
+    const files = await this.drive.listFiles(parentId, { pageSize: fileLimit });
 
     const items: Array<{
       id: string;

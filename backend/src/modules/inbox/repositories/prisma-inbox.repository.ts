@@ -1,19 +1,12 @@
-/**
- * Inbox Repository - Prisma Implementation
- *
- * Implements IInboxRepository for persisting inbox items
- * Uses existing Notification model from schema
- */
-
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { NotificationType } from '@prisma/client';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import type {
   IInboxRepository,
   InboxItem,
   InboxItemInput,
   FindInboxOptions,
-  InboxStatus,
   InboxKind,
 } from '../interfaces/inbox.interface';
 
@@ -21,16 +14,13 @@ import type {
 export class PrismaInboxRepository implements IInboxRepository {
   private readonly logger = new Logger(PrismaInboxRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
-  /**
-   * Create a new inbox item (stored as Notification)
-   */
-  async create(
-    tenantId: string,
-    userId: string,
-    input: InboxItemInput,
-  ): Promise<InboxItem> {
+  async create(userId: string, input: InboxItemInput): Promise<InboxItem> {
+    const tenantId = this.tenantContext.tenantId;
     const notificationType = this.mapKindToNotificationType(input.kind);
 
     const notification = await this.prisma.notification.create({
@@ -54,14 +44,11 @@ export class PrismaInboxRepository implements IInboxRepository {
     return this.mapToInboxItem(notification);
   }
 
-  /**
-   * Find all inbox items for a user
-   */
   async findByUser(
-    tenantId: string,
     userId: string,
     options?: FindInboxOptions,
   ): Promise<InboxItem[]> {
+    const tenantId = this.tenantContext.tenantId;
     const where: Record<string, unknown> = {
       tenantId,
       userId,
@@ -90,20 +77,13 @@ export class PrismaInboxRepository implements IInboxRepository {
     return notifications.map((n) => this.mapToInboxItem(n));
   }
 
-  /**
-   * Find item by ID
-   */
   async findById(id: string): Promise<InboxItem | null> {
     const notification = await this.prisma.notification.findUnique({
       where: { id },
     });
-
     return notification ? this.mapToInboxItem(notification) : null;
   }
 
-  /**
-   * Mark item as read
-   */
   async markRead(id: string, userId: string): Promise<void> {
     await this.prisma.notification.updateMany({
       where: { id, userId },
@@ -111,11 +91,7 @@ export class PrismaInboxRepository implements IInboxRepository {
     });
   }
 
-  /**
-   * Mark item as archived
-   */
   async markArchived(id: string, userId: string): Promise<void> {
-    // For now, mark as read and add archived metadata
     await this.prisma.notification.updateMany({
       where: { id, userId },
       data: {
@@ -128,28 +104,21 @@ export class PrismaInboxRepository implements IInboxRepository {
     });
   }
 
-  /**
-   * Mark all items as read for a user
-   */
-  async markAllRead(tenantId: string, userId: string): Promise<void> {
+  async markAllRead(userId: string): Promise<void> {
+    const tenantId = this.tenantContext.tenantId;
     await this.prisma.notification.updateMany({
       where: { tenantId, userId, isRead: false },
       data: { isRead: true },
     });
   }
 
-  /**
-   * Get unread count for a user
-   */
-  async getUnreadCount(tenantId: string, userId: string): Promise<number> {
+  async getUnreadCount(userId: string): Promise<number> {
+    const tenantId = this.tenantContext.tenantId;
     return this.prisma.notification.count({
       where: { tenantId, userId, isRead: false },
     });
   }
 
-  /**
-   * Delete old archived items
-   */
   async cleanupOldItems(olderThanDays: number): Promise<number> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
@@ -164,9 +133,6 @@ export class PrismaInboxRepository implements IInboxRepository {
     return result.count;
   }
 
-  /**
-   * Map InboxKind to NotificationType
-   */
   private mapKindToNotificationType(kind: InboxKind): NotificationType {
     const mapping: Record<InboxKind, NotificationType> = {
       APPROVAL: 'APPROVAL_REQUEST',
@@ -179,9 +145,6 @@ export class PrismaInboxRepository implements IInboxRepository {
     return mapping[kind] ?? 'INFO';
   }
 
-  /**
-   * Map Prisma Notification to InboxItem
-   */
   private mapToInboxItem(notification: {
     id: string;
     tenantId: string | null;

@@ -8,6 +8,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import type {
   ICostRecordRepository,
   CreateCostRecordInput,
@@ -19,7 +20,10 @@ import type { CostRecord, Prisma } from '@prisma/client';
 export class PrismaCostRecordRepository implements ICostRecordRepository {
   private readonly logger = new Logger(PrismaCostRecordRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   /**
    * Save a new cost record
@@ -86,11 +90,11 @@ export class PrismaCostRecordRepository implements ICostRecordRepository {
    * Find cost records for a tenant within date range
    */
   async findByTenant(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
     options?: FindCostRecordsOptions,
   ): Promise<CostRecord[]> {
+    const tenantId = this.tenantContext.tenantId;
     const where: Prisma.CostRecordWhereInput = {
       tenantId,
       windowStart: { gte: startDate },
@@ -130,10 +134,10 @@ export class PrismaCostRecordRepository implements ICostRecordRepository {
    * Get total cost for tenant in period
    */
   async getTotalCost(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<number> {
+    const tenantId = this.tenantContext.tenantId;
     const result = await this.prisma.costRecord.aggregate({
       where: {
         tenantId,
@@ -151,7 +155,6 @@ export class PrismaCostRecordRepository implements ICostRecordRepository {
    * Phase 2 — optional `departmentId` filter
    */
   async getCostByAgent(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
     departmentId?: string,
@@ -163,6 +166,7 @@ export class PrismaCostRecordRepository implements ICostRecordRepository {
       departmentId?: string | null;
     }>
   > {
+    const tenantId = this.tenantContext.tenantId;
     const where: Record<string, unknown> = {
       tenantId,
       windowStart: { gte: startDate },
@@ -190,7 +194,6 @@ export class PrismaCostRecordRepository implements ICostRecordRepository {
    * Returns totals + agent breakdown scoped to that department.
    */
   async getCostSummaryByDepartment(
-    tenantId: string,
     departmentId: string,
     startDate: Date,
     endDate: Date,
@@ -203,6 +206,7 @@ export class PrismaCostRecordRepository implements ICostRecordRepository {
       recordCount: number;
     }>;
   }> {
+    const tenantId = this.tenantContext.tenantId;
     const where = {
       tenantId,
       departmentId,
@@ -240,7 +244,6 @@ export class PrismaCostRecordRepository implements ICostRecordRepository {
    * Get cost records grouped by model
    */
   async getCostByModel(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<
@@ -251,6 +254,7 @@ export class PrismaCostRecordRepository implements ICostRecordRepository {
       recordCount: number;
     }>
   > {
+    const tenantId = this.tenantContext.tenantId;
     const result = await this.prisma.costRecord.groupBy({
       by: ['model', 'provider'],
       where: {

@@ -33,7 +33,6 @@ export type Project = {
 // ============ Repository Types ============
 
 export interface CreateProjectInput {
-  tenantId: string;
   name: string;
   description?: string;
   departmentId?: string;
@@ -52,7 +51,6 @@ export interface UpdateProjectInput {
 }
 
 export interface ListProjectsOptions {
-  tenantId: string;
   status?: ProjectType;
   departmentId?: string;
   search?: string;
@@ -62,27 +60,18 @@ export interface ListProjectsOptions {
 
 export interface IProjectRepository {
   create(data: CreateProjectInput): Promise<Project>;
-  findById(id: string, tenantId: string): Promise<Project | null>;
+  findById(id: string): Promise<Project | null>;
   findAll(
     options: ListProjectsOptions,
   ): Promise<{ data: Project[]; total: number }>;
-  findByDepartment(departmentId: string, tenantId: string): Promise<Project[]>;
+  findByDepartment(departmentId: string): Promise<Project[]>;
   update(
     id: string,
-    tenantId: string,
     data: UpdateProjectInput,
   ): Promise<Project>;
-  delete(id: string, tenantId: string): Promise<void>;
-  addGoal(
-    projectId: string,
-    tenantId: string,
-    goalId: string,
-  ): Promise<Project>;
-  removeGoal(
-    projectId: string,
-    tenantId: string,
-    goalId: string,
-  ): Promise<Project>;
+  delete(id: string): Promise<void>;
+  addGoal(projectId: string, goalId: string): Promise<Project>;
+  removeGoal(projectId: string, goalId: string): Promise<Project>;
 }
 
 // ============ Service Types ============

@@ -16,15 +16,15 @@ import {
   Body,
   Param,
   Query,
-  Req,
   UseGuards,
-  BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GoalsService } from './goals.service';
 import { CreateGoalDto, UpdateGoalDto, ListGoalsDto } from './dto/goal.dto';
+import { PaginatedResponse } from '../../common/responses/paginated.response';
+import type { GoalResponseDto } from './dto/goal-response.dto';
+import { TenantIsolated } from '../../common/guards/tenant-isolated.decorator';
 
 @Controller({ path: 'goals', version: '1' })
 @ApiCommon('goals')
@@ -32,34 +32,9 @@ import { CreateGoalDto, UpdateGoalDto, ListGoalsDto } from './dto/goal.dto';
 export class GoalsController {
   constructor(private readonly goalsService: GoalsService) {}
 
-  /**
-   * Phase 1 Gap 6 — resolve target tenant based on caller role.
-   */
-  private resolveTenantId(
-    user: { tenantId?: string; role?: string },
-    tenantId?: string,
-  ): string {
-    if (user.role === 'SUPER_ADMIN') {
-      if (!tenantId) {
-        throw new BadRequestException('tenantId is required for SUPER_ADMIN');
-      }
-      return tenantId;
-    }
-    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
-    return user.tenantId;
-  }
-
-  /**
-   * Create a new goal
-   * POST /api/v1/goals
-   */
   @Post()
-  async create(
-    @Body() dto: CreateGoalDto,
-    @Req() req: { user: { tenantId: string; role?: string } },
-  ) {
-    return this.goalsService.create(req.user.tenantId, {
-      tenantId: req.user.tenantId,
+  async create(@Body() dto: CreateGoalDto) {
+    return this.goalsService.create({
       title: dto.title,
       description: dto.description,
       level: dto.level,
@@ -71,115 +46,61 @@ export class GoalsController {
     });
   }
 
-  /**
-   * List all goals for tenant
-   * GET /api/v1/goals
-   */
   @Get()
-  async findAll(
-    @Query() query: ListGoalsDto,
-    @Req() req: { user: { tenantId: string; role?: string } },
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tenant = this.resolveTenantId(req.user, tenantId);
-    return this.goalsService.findAll({
-      tenantId: tenant,
-      ...query,
-    });
+  async findAll(@Query() query: ListGoalsDto): Promise<PaginatedResponse<GoalResponseDto>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const { data, total } = await this.goalsService.findAll({ ...query, page, limit });
+    return {
+      items: data as unknown as GoalResponseDto[],
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    };
   }
 
-  /**
-   * Get goal tree (hierarchical)
-   * GET /api/v1/goals/tree
-   */
   @Get('tree')
-  async getTree(
-    @Req() req: { user: { tenantId: string; role?: string } },
-    @Query('tenantId') tenantId?: string,
-  ) {
-    return this.goalsService.getGoalTree(
-      this.resolveTenantId(req.user, tenantId),
-    );
+  async getTree() {
+    return this.goalsService.getGoalTree();
   }
 
-  /**
-   * Get root goals only
-   * GET /api/v1/goals/roots
-   */
   @Get('roots')
-  async findRoots(
-    @Req() req: { user: { tenantId: string; role?: string } },
-    @Query('tenantId') tenantId?: string,
-  ) {
-    return this.goalsService.findRootGoals(
-      this.resolveTenantId(req.user, tenantId),
-    );
+  async findRoots() {
+    return this.goalsService.findRootGoals();
   }
 
-  /**
-   * Get single goal by ID
-   * GET /api/v1/goals/:id
-   */
   @Get(':id')
-  async findOne(
-    @Param('id') id: string,
-    @Req() req: { user: { tenantId: string; role?: string } },
-  ) {
-    return this.goalsService.findById(id, req.user.tenantId);
+  @TenantIsolated()
+  async findOne(@Param('id') id: string) {
+    return this.goalsService.findById(id);
   }
 
-  /**
-   * Get child goals
-   * GET /api/v1/goals/:id/children
-   */
   @Get(':id/children')
-  async findChildren(
-    @Param('id') id: string,
-    @Req() req: { user: { tenantId: string } },
-  ) {
-    return this.goalsService.findByParentId(id, req.user.tenantId);
+  async findChildren(@Param('id') id: string) {
+    return this.goalsService.findByParentId(id);
   }
 
-  /**
-   * Update goal
-   * PUT /api/v1/goals/:id
-   */
   @Put(':id')
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateGoalDto,
-    @Req() req: { user: { tenantId: string } },
   ) {
-    return this.goalsService.update(id, req.user.tenantId, {
+    return this.goalsService.update(id, {
       ...dto,
       targetDate: dto.targetDate ? new Date(dto.targetDate) : undefined,
       completedAt: dto.completedAt ? new Date(dto.completedAt) : undefined,
     });
   }
 
-  /**
-   * Update goal progress
-   * PATCH /api/v1/goals/:id/progress
-   */
   @Patch(':id/progress')
   async updateProgress(
     @Param('id') id: string,
     @Body('progress') progress: number,
-    @Req() req: { user: { tenantId: string } },
   ) {
-    return this.goalsService.updateProgress(id, req.user.tenantId, progress);
+    return this.goalsService.updateProgress(id, progress);
   }
 
-  /**
-   * Delete goal
-   * DELETE /api/v1/goals/:id
-   */
   @Delete(':id')
-  async delete(
-    @Param('id') id: string,
-    @Req() req: { user: { tenantId: string } },
-  ) {
-    await this.goalsService.delete(id, req.user.tenantId);
-    return { success: true };
+  async delete(@Param('id') id: string) {
+    await this.goalsService.delete(id);
+    return { success: true, message: 'Goal deleted' };
   }
 }

@@ -1,22 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { IFeatureStore } from '../interfaces/IFeatureStore';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { Prisma } from '@prisma/client';
 
-/**
- * PrismaFeatureStore
- * SRP: persists and retrieves feature snapshots from analytics_features table.
- * Satisfies LSP: swappable with MemoryFeatureStore under IFeatureStore.
- */
 @Injectable()
 export class PrismaFeatureStore implements IFeatureStore {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
-  async save(
-    tenantId: string,
-    features: Record<string, unknown>,
-    timestamp?: string,
-  ): Promise<void> {
+  async save(features: Record<string, unknown>, timestamp?: string): Promise<void> {
+    const tenantId = this.tenantContext.tenantId;
     await this.prisma.analyticsFeature.create({
       data: {
         tenantId,
@@ -26,9 +22,8 @@ export class PrismaFeatureStore implements IFeatureStore {
     });
   }
 
-  async getLatest(
-    tenantId: string,
-  ): Promise<{ features: Record<string, unknown>; timestamp: string } | null> {
+  async getLatest(): Promise<{ features: Record<string, unknown>; timestamp: string } | null> {
+    const tenantId = this.tenantContext.tenantId;
     const row = await this.prisma.analyticsFeature.findFirst({
       where: { tenantId },
       orderBy: { recordedAt: 'desc' },
@@ -40,10 +35,8 @@ export class PrismaFeatureStore implements IFeatureStore {
     };
   }
 
-  async list(
-    tenantId: string,
-    limit = 50,
-  ): Promise<Array<{ features: Record<string, unknown>; timestamp: string }>> {
+  async list(limit = 50): Promise<Array<{ features: Record<string, unknown>; timestamp: string }>> {
+    const tenantId = this.tenantContext.tenantId;
     const rows = await this.prisma.analyticsFeature.findMany({
       where: { tenantId },
       orderBy: { recordedAt: 'desc' },

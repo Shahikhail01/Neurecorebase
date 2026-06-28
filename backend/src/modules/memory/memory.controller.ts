@@ -16,6 +16,7 @@ import { CreateMemoryDto, SearchMemoryDto } from './dto/memory.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
+import { TenantIsolated } from '../../common/guards/tenant-isolated.decorator';
 
 @Controller({ path: 'memory', version: '1' })
 @ApiCommon('memory')
@@ -41,6 +42,7 @@ export class MemoryController {
   }
 
   @Get('agent/:agentId')
+  @TenantIsolated()
   findByAgent(
     @Param('agentId', ParseUUIDPipe) agentId: string,
     @CurrentUser() user: JwtPayload,

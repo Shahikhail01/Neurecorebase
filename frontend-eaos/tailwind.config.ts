@@ -14,7 +14,17 @@ import type { Config } from 'tailwindcss';
  */
 const config: Config = {
   darkMode: 'class',
-  content: ['./src/**/*.{ts,tsx}'],
+  content: [
+    './src/**/*.{ts,tsx}',
+    './node_modules/@tremor/**/*.{js,ts,jsx,tsx}',
+  ],
+  safelist: [
+    // Tremor's colour classes used dynamically — keep them in the build.
+    {
+      pattern:
+        /^(bg|text|border|ring|fill|stroke)-(tremor|brand|emerald|green|lime|amber|yellow|red|rose|blue|sky|cyan|teal|indigo|violet|purple|fuchsia|pink|slate|gray|zinc|neutral|stone)-(50|100|200|300|400|500|600|700|800|900)$/,
+    },
+  ],
   theme: {
     extend: {
       fontFamily: {

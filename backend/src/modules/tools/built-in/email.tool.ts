@@ -145,11 +145,11 @@ export class EmailTool extends BaseStructuredTool {
     try {
       switch (input.action) {
         case 'read_inbox':
-          return await this.readInbox(tenantId, input);
+          return await this.readInbox(input);
         case 'get_message':
-          return await this.getMessage(tenantId, input);
+          return await this.getMessage(input);
         case 'send':
-          return await this.send(tenantId, input, context);
+          return await this.send(input, context);
         case 'flag':
           return await this.flag(tenantId, input);
         default:
@@ -167,10 +167,9 @@ export class EmailTool extends BaseStructuredTool {
   // ─── read_inbox ────────────────────────────────────────────────────────
 
   private async readInbox(
-    tenantId: string,
     input: EmailInput,
   ): Promise<StructuredToolResult<EmailOutput>> {
-    const result = await this.gmail.listInbox(tenantId, {
+    const result = await this.gmail.listInbox({
       maxResults: input.maxResults ?? 10,
       labelIds: input.labelIds ?? ['INBOX'],
       q: input.q,
@@ -190,14 +189,13 @@ export class EmailTool extends BaseStructuredTool {
   // ─── get_message ───────────────────────────────────────────────────────
 
   private async getMessage(
-    tenantId: string,
     input: EmailInput,
   ): Promise<StructuredToolResult<EmailOutput>> {
     if (!input.messageId) {
       return { success: false, error: 'messageId is required for get_message' };
     }
-    const meta = await this.gmail.getMessage(tenantId, input.messageId);
-    const body = await this.gmail.getMessageBody(tenantId, input.messageId);
+    const meta = await this.gmail.getMessage(input.messageId);
+    const body = await this.gmail.getMessageBody(input.messageId);
     return {
       success: true,
       data: {
@@ -218,7 +216,6 @@ export class EmailTool extends BaseStructuredTool {
   // ─── send ──────────────────────────────────────────────────────────────
 
   private async send(
-    tenantId: string,
     input: EmailInput,
     context?: Partial<ToolExecutionContext>,
   ): Promise<StructuredToolResult<EmailOutput>> {
@@ -229,16 +226,15 @@ export class EmailTool extends BaseStructuredTool {
       };
     }
 
+    const tenantId = context?.tenantId!;
     const agentId = context?.agentId;
     const sender = await this.resolveSender(tenantId, agentId, input.provider ?? 'auto');
     const provider = await this.providerFactory.forSend(
-      tenantId,
       sender.provider,
       input.provider ?? 'auto',
     );
 
     const result = await provider.send({
-      tenantId,
       from: sender.email,
       fromName: sender.displayName,
       to: input.to,

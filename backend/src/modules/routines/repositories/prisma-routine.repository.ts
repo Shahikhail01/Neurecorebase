@@ -64,7 +64,7 @@ export class PrismaRoutineRepository implements IRoutineRepository {
   async findAll(
     tenantId: string,
     options?: ListRoutinesOptions,
-  ): Promise<Routine[]> {
+  ): Promise<{ routines: Routine[]; total: number }> {
     const where: Prisma.RoutineWhereInput = { tenantId };
 
     if (options?.status) {
@@ -78,15 +78,20 @@ export class PrismaRoutineRepository implements IRoutineRepository {
       where.ownerAgentId = { in: options.ownerAgentIds };
     }
 
-    return this.prisma.routine.findMany({
-      where,
-      orderBy: { [options?.orderBy || 'createdAt']: options?.order || 'desc' },
-      take: options?.limit || 50,
-      skip: options?.offset || 0,
-      include: {
-        _count: { select: { triggers: true, runs: true } },
-      },
-    });
+    const [routines, total] = await this.prisma.$transaction([
+      this.prisma.routine.findMany({
+        where,
+        orderBy: { [options?.orderBy || 'createdAt']: options?.order || 'desc' },
+        take: options?.limit || 50,
+        skip: options?.offset || 0,
+        include: {
+          _count: { select: { triggers: true, runs: true } },
+        },
+      }),
+      this.prisma.routine.count({ where }),
+    ]);
+
+    return { routines, total };
   }
 
   async update(
@@ -290,40 +295,50 @@ export class PrismaRoutineRunRepository implements IRoutineRunRepository {
   async findByRoutineId(
     routineId: string,
     options?: ListRunsOptions,
-  ): Promise<RoutineRun[]> {
+  ): Promise<{ runs: RoutineRun[]; total: number }> {
     const where: Prisma.RoutineRunWhereInput = { routineId };
 
     if (options?.status) {
       where.status = options.status as any;
     }
 
-    return this.prisma.routineRun.findMany({
-      where,
-      orderBy: { [options?.orderBy || 'createdAt']: options?.order || 'desc' },
-      take: options?.limit || 50,
-      skip: options?.offset || 0,
-    });
+    const [runs, total] = await this.prisma.$transaction([
+      this.prisma.routineRun.findMany({
+        where,
+        orderBy: { [options?.orderBy || 'createdAt']: options?.order || 'desc' },
+        take: options?.limit || 50,
+        skip: options?.offset || 0,
+      }),
+      this.prisma.routineRun.count({ where }),
+    ]);
+
+    return { runs, total };
   }
 
   async findByTenantId(
     tenantId: string,
     options?: ListRunsOptions,
-  ): Promise<RoutineRun[]> {
+  ): Promise<{ runs: RoutineRun[]; total: number }> {
     const where: Prisma.RoutineRunWhereInput = { tenantId };
 
     if (options?.status) {
       where.status = options.status as any;
     }
 
-    return this.prisma.routineRun.findMany({
-      where,
-      orderBy: { [options?.orderBy || 'createdAt']: options?.order || 'desc' },
-      take: options?.limit || 100,
-      skip: options?.offset || 0,
-      include: {
-        routine: { select: { id: true, name: true } },
-      },
-    });
+    const [runs, total] = await this.prisma.$transaction([
+      this.prisma.routineRun.findMany({
+        where,
+        orderBy: { [options?.orderBy || 'createdAt']: options?.order || 'desc' },
+        take: options?.limit || 100,
+        skip: options?.offset || 0,
+        include: {
+          routine: { select: { id: true, name: true } },
+        },
+      }),
+      this.prisma.routineRun.count({ where }),
+    ]);
+
+    return { runs, total };
   }
 
   async updateState(id: string, state: Record<string, unknown>): Promise<void> {

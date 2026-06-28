@@ -19,6 +19,8 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   Headers,
+  NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -32,6 +34,10 @@ import {
   ListRoutinesQueryDto,
   ListRunsQueryDto,
 } from './dto/routine.dto';
+import { ActionResult } from '../../common/responses/action-result.response';
+import { PaginatedResponse } from '../../common/responses/paginated.response';
+import type { RoutineResponseDto } from './dto/routine-response.dto';
+import { TenantIsolated } from '../../common/guards/tenant-isolated.decorator';
 import { RoutineExecutionService } from './services/routine-execution.service';
 import {
   PrismaRoutineRepository,
@@ -82,27 +88,30 @@ export class RoutinesController {
   async listRoutines(
     @CurrentUser('tenantId') tenantId: string,
     @Query() query: ListRoutinesQueryDto,
-  ) {
-    const routines = await this.routineRepo.findAll(tenantId, {
+  ): Promise<PaginatedResponse<RoutineResponseDto>> {
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    const { routines, total } = await this.routineRepo.findAll(tenantId, {
       status: query.status,
-      limit: query.limit,
-      offset: query.offset,
+      limit,
+      offset,
       orderBy: query.orderBy,
       order: query.order,
-      // Phase 1 Gap 1 — owner agent filter passthrough
       ownerAgentId: query.ownerAgentId,
       ownerAgentIds: query.ownerAgentIds
         ? query.ownerAgentIds.split(',').map((s) => s.trim()).filter(Boolean)
         : undefined,
     });
 
+    const page = Math.floor(offset / limit) + 1;
     return {
-      status: 'success',
-      data: routines,
+      items: routines as unknown as RoutineResponseDto[],
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     };
   }
 
   @Get(':id')
+  @TenantIsolated()
   async getRoutine(
     @CurrentUser('tenantId') tenantId: string,
     @Param('id', ParseUUIDPipe) id: string,
@@ -262,14 +271,10 @@ export class RoutinesController {
     @CurrentUser('id') userId: string,
     @Param('id', ParseUUIDPipe) routineId: string,
     @Body() dto: ExecuteRoutineDto,
-  ) {
-    // Verify routine belongs to tenant
+  ): Promise<ActionResult<unknown>> {
     const routine = await this.routineRepo.findById(routineId, tenantId);
     if (!routine) {
-      return {
-        status: 'error',
-        message: 'Routine not found',
-      };
+      throw new NotFoundException('Routine not found');
     }
 
     const result = await this.executionService.execute({
@@ -282,7 +287,8 @@ export class RoutinesController {
     });
 
     return {
-      status: result.status === 'COMPLETED' ? 'success' : 'error',
+      success: true,
+      message: 'Routine execution started',
       data: result,
     };
   }
@@ -291,55 +297,41 @@ export class RoutinesController {
   async activateRoutine(
     @CurrentUser('tenantId') tenantId: string,
     @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  ): Promise<ActionResult<unknown>> {
     const routine = await this.routineRepo.findById(id, tenantId);
     if (!routine) {
-      return {
-        status: 'error',
-        message: 'Routine not found',
-      };
+      throw new NotFoundException('Routine not found');
     }
 
-    // Validate graph before activation
     const validation = this.executionService.validateGraph(
       routine.graphDefinition as any,
     );
 
     if (!validation.valid) {
-      return {
-        status: 'error',
+      throw new BadRequestException({
         message: 'Cannot activate routine with invalid graph',
         errors: validation.errors,
-      };
+      });
     }
 
     const updated = await this.routineRepo.updateStatus(id, tenantId, 'ACTIVE');
 
-    return {
-      status: 'success',
-      data: updated,
-    };
+    return { success: true, message: 'Routine activated', data: updated };
   }
 
   @Post(':id/pause')
   async pauseRoutine(
     @CurrentUser('tenantId') tenantId: string,
     @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  ): Promise<ActionResult<unknown>> {
     const routine = await this.routineRepo.findById(id, tenantId);
     if (!routine) {
-      return {
-        status: 'error',
-        message: 'Routine not found',
-      };
+      throw new NotFoundException('Routine not found');
     }
 
     const updated = await this.routineRepo.updateStatus(id, tenantId, 'PAUSED');
 
-    return {
-      status: 'success',
-      data: updated,
-    };
+    return { success: true, message: 'Routine paused', data: updated };
   }
 
   // ─── Run Management ────────────────────────────────────────────────────────
@@ -349,27 +341,26 @@ export class RoutinesController {
     @CurrentUser('tenantId') tenantId: string,
     @Param('id', ParseUUIDPipe) routineId: string,
     @Query() query: ListRunsQueryDto,
-  ) {
-    // Verify routine belongs to tenant
+  ): Promise<PaginatedResponse<unknown>> {
     const routine = await this.routineRepo.findById(routineId, tenantId);
     if (!routine) {
-      return {
-        status: 'error',
-        message: 'Routine not found',
-      };
+      throw new NotFoundException('Routine not found');
     }
 
-    const runs = await this.runRepo.findByRoutineId(routineId, {
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    const { runs, total } = await this.runRepo.findByRoutineId(routineId, {
       status: query.status as any,
-      limit: query.limit,
-      offset: query.offset,
+      limit,
+      offset,
       orderBy: query.orderBy,
       order: query.order,
     });
 
+    const page = Math.floor(offset / limit) + 1;
     return {
-      status: 'success',
-      data: runs,
+      items: runs as unknown as unknown[],
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     };
   }
 
@@ -377,18 +368,21 @@ export class RoutinesController {
   async listAllRuns(
     @CurrentUser('tenantId') tenantId: string,
     @Query() query: ListRunsQueryDto,
-  ) {
-    const runs = await this.runRepo.findByTenantId(tenantId, {
+  ): Promise<PaginatedResponse<unknown>> {
+    const limit = query.limit ?? 100;
+    const offset = query.offset ?? 0;
+    const { runs, total } = await this.runRepo.findByTenantId(tenantId, {
       status: query.status as any,
-      limit: query.limit,
-      offset: query.offset,
+      limit,
+      offset,
       orderBy: query.orderBy,
       order: query.order,
     });
 
+    const page = Math.floor(offset / limit) + 1;
     return {
-      status: 'success',
-      data: runs,
+      items: runs as unknown as unknown[],
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     };
   }
 
@@ -426,42 +420,32 @@ export class RoutinesController {
   async cancelRun(
     @CurrentUser('tenantId') tenantId: string,
     @Param('runId', ParseUUIDPipe) runId: string,
-  ) {
-    // Verify run belongs to tenant
+  ): Promise<ActionResult<null>> {
     const run = await this.runRepo.findById(runId, tenantId);
     if (!run) {
-      return {
-        status: 'error',
-        message: 'Run not found',
-      };
+      throw new NotFoundException('Run not found');
     }
 
     await this.executionService.cancel(runId);
 
-    return {
-      status: 'success',
-      message: 'Run cancelled',
-    };
+    return { success: true, message: 'Run cancelled' };
   }
 
   @Post('runs/:runId/resume')
   async resumeRun(
     @CurrentUser('tenantId') tenantId: string,
     @Param('runId', ParseUUIDPipe) runId: string,
-  ) {
-    // Verify run belongs to tenant
+  ): Promise<ActionResult<unknown>> {
     const run = await this.runRepo.findById(runId, tenantId);
     if (!run) {
-      return {
-        status: 'error',
-        message: 'Run not found',
-      };
+      throw new NotFoundException('Run not found');
     }
 
     const result = await this.executionService.resume(runId);
 
     return {
-      status: result.status === 'COMPLETED' ? 'success' : 'error',
+      success: true,
+      message: 'Run resumed',
       data: result,
     };
   }
@@ -473,6 +457,7 @@ export class RoutinesController {
  * Handles incoming webhook triggers for routines.
  * Authentication is via webhook secret validation.
  */
+@ApiCommon('routines')
 @Controller('webhooks')
 export class WebhooksController {
   constructor(
@@ -485,8 +470,7 @@ export class WebhooksController {
     @Param('path') path: string,
     @Body() body: Record<string, unknown>,
     @Headers('x-webhook-signature') signature: string,
-  ) {
-    // Construct full webhook path
+  ): Promise<ActionResult<{ runId: string; status: string }>> {
     const webhookPath = `/webhooks/routines/${path}`;
 
     try {
@@ -496,20 +480,14 @@ export class WebhooksController {
       );
 
       return {
-        status: result.status === 'COMPLETED' ? 'success' : 'error',
-        data: {
-          runId: result.runId,
-          status: result.status,
-        },
+        success: true,
+        message: 'Webhook processed',
+        data: { runId: result.runId ?? '', status: result.status },
       };
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Webhook processing failed';
-
-      return {
-        status: 'error',
-        message,
-      };
+      return { success: true, message, data: { runId: '', status: 'error' } };
     }
   }
 }

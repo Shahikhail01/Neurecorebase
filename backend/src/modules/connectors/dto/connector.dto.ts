@@ -8,10 +8,6 @@ import {
 } from 'class-validator';
 
 export class RegisterConnectorDto {
-  @IsOptional()
-  @IsUUID()
-  tenantId?: string;
-
   @IsString()
   @MaxLength(100)
   name!: string;
@@ -32,10 +28,6 @@ export class ConnectConnectorDto {
 }
 
 export class SyncConnectorDto {
-  @IsOptional()
-  @IsUUID()
-  tenantId?: string;
-
   @IsOptional()
   @IsBoolean()
   contacts?: boolean;

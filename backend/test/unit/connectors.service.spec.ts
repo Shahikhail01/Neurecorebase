@@ -3,10 +3,15 @@ import { ConnectorRegistry } from '../../src/modules/connectors/connector.regist
 import { SalesforceConnector } from '../../src/modules/connectors/adapters/salesforce.adapter';
 import { HubSpotConnector } from '../../src/modules/connectors/adapters/hubspot.adapter';
 import { PipedriveConnector } from '../../src/modules/connectors/adapters/pipedrive.adapter';
+import { TenantContextService } from '../../src/common/context/tenant-context.service';
 
 /**
  * Unit tests for ConnectorService + ConnectorRegistry.
- * Uses manual mocks for Prisma.
+ *
+ * Phase 1E migration: services now read `tenantContext.tenantId` instead
+ * of receiving it as a parameter. These tests construct a real
+ * `TenantContextService` and wrap each call in `.run({ tenantId }, …)`
+ * so the AsyncLocalStorage scope is bound.
  */
 
 const SF_ID = 'conn-sf-1';
@@ -46,8 +51,21 @@ function buildMocks(provider = 'salesforce') {
     },
   };
 
-  const svc = new ConnectorService(prisma, registry);
-  return { svc, registry, prisma };
+  const tenantContext = new TenantContextService();
+  const svc = new ConnectorService(prisma, registry, tenantContext);
+  return { svc, registry, prisma, tenantContext };
+}
+
+/**
+ * Wrap an async call in a tenant scope so `tenantContext.tenantId` works.
+ * Returns the awaited value of the callback.
+ */
+async function asTenant<T>(
+  tenantContext: TenantContextService,
+  tenantId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return tenantContext.run({ tenantId }, fn);
 }
 
 describe('ConnectorRegistry', () => {
@@ -78,34 +96,42 @@ describe('ConnectorService', () => {
   });
 
   it('createConnector() rejects unknown provider', async () => {
-    const { svc } = buildMocks();
+    const { svc, tenantContext } = buildMocks();
     await expect(
-      svc.createConnector(TENANT, 'test', 'unknown-crm', {}),
+      asTenant(tenantContext, TENANT, () =>
+        svc.createConnector('My SF', 'unknown-crm', {}),
+      ),
     ).rejects.toThrow('Provider not supported');
   });
 
   it('createConnector() saves record for known provider', async () => {
-    const { svc, prisma } = buildMocks();
-    const rec = await svc.createConnector(TENANT, 'My SF', 'salesforce', {});
+    const { svc, prisma, tenantContext } = buildMocks();
+    const rec = await asTenant(tenantContext, TENANT, () =>
+      svc.createConnector('My SF', 'salesforce', {}),
+    );
     expect(prisma.crmConnector.create).toHaveBeenCalled();
     expect(rec.provider).toBe('salesforce');
   });
 
   it('connect() calls adapter.connect and updates DB', async () => {
-    const { svc, prisma } = buildMocks();
-    await svc.connect(SF_ID, TENANT, { apiKey: 'secret' });
+    const { svc, prisma, tenantContext } = buildMocks();
+    await asTenant(tenantContext, TENANT, () =>
+      svc.connect(SF_ID, { apiKey: 'secret' }),
+    );
     expect(prisma.crmConnector.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: SF_ID } }),
     );
   });
 
   it('syncContacts() resolves for salesforce', async () => {
-    const { svc } = buildMocks();
-    await expect(svc.syncContacts(SF_ID, TENANT)).resolves.not.toThrow();
+    const { svc, tenantContext } = buildMocks();
+    await expect(
+      asTenant(tenantContext, TENANT, () => svc.syncContacts(SF_ID)),
+    ).resolves.not.toThrow();
   });
 
   it('syncLeads() resolves for hubspot', async () => {
-    const { svc, prisma } = buildMocks('hubspot');
+    const { svc, prisma, tenantContext } = buildMocks('hubspot');
     prisma.crmConnector.findFirst.mockResolvedValue({
       id: SF_ID,
       name: 'hs-demo',
@@ -113,6 +139,8 @@ describe('ConnectorService', () => {
       isActive: true,
       tenantId: TENANT,
     });
-    await expect(svc.syncLeads(SF_ID, TENANT)).resolves.not.toThrow();
+    await expect(
+      asTenant(tenantContext, TENANT, () => svc.syncLeads(SF_ID)),
+    ).resolves.not.toThrow();
   });
 });

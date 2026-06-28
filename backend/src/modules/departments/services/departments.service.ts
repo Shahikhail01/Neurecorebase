@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import type { DepartmentStatus } from '@prisma/client';
 
 export interface CreateDeptInput {
@@ -8,16 +9,18 @@ export interface CreateDeptInput {
   status?: DepartmentStatus;
   headAgentId?: string;
   parentId?: string;
-  tenantId: string;
 }
 
 @Injectable()
 export class DepartmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
-  async findAll(tenantId: string) {
+  async findAll() {
     return this.prisma.department.findMany({
-      where: { tenantId },
+      where: { tenantId: this.tenantContext.tenantId },
       include: {
         children: true,
         parent: { select: { id: true, name: true } },
@@ -26,9 +29,9 @@ export class DepartmentsService {
     });
   }
 
-  async findOne(id: string, tenantId: string) {
+  async findOne(id: string) {
     const dept = await this.prisma.department.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId: this.tenantContext.tenantId },
       include: { children: true, parent: { select: { id: true, name: true } } },
     });
     if (!dept) throw new NotFoundException(`Department ${id} not found`);
@@ -43,22 +46,21 @@ export class DepartmentsService {
         status: input.status ?? 'ACTIVE',
         headAgentId: input.headAgentId,
         parentId: input.parentId,
-        tenantId: input.tenantId,
+        tenantId: this.tenantContext.tenantId,
       },
     });
   }
 
   async update(
     id: string,
-    tenantId: string,
     data: Partial<Omit<CreateDeptInput, 'tenantId'>>,
   ) {
-    await this.findOne(id, tenantId);
+    await this.findOne(id);
     return this.prisma.department.update({ where: { id }, data });
   }
 
-  async remove(id: string, tenantId: string) {
-    await this.findOne(id, tenantId);
+  async remove(id: string) {
+    await this.findOne(id);
     await this.prisma.department.delete({ where: { id } });
   }
 }

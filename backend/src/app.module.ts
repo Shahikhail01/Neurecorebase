@@ -40,16 +40,30 @@ import { InboxModule } from './modules/inbox/inbox.module';
 import { GoalsModule } from './modules/goals/goals.module';
 import { SecurityModule } from './modules/security/security.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+// Phase 3 — EAOS-1 entity workspace
+import { EntitiesModule } from './modules/entities/entities.module';
+import { MissionFeedModule } from './modules/mission-feed/mission-feed.module';
+import { AIActionsModule } from './modules/ai-actions/ai-actions.module';
+// Phase 5 pre-req — Observability (Prometheus metrics)
+import { MetricsModule } from './modules/metrics/metrics.module';
+// Phase 5 pre-req — Feature flag system (kill-switch)
+import { FeatureFlagModule } from './common/feature-flag/feature-flag.module';
+// Phase 4 — EAOS-2 widgets
+import { WidgetsModule } from './modules/widgets/widgets.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { TiersModule } from './modules/tiers/tiers.module';
 import { HealthModule } from './modules/health/health.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { KnowledgeModule } from './modules/knowledge/knowledge.module';
+// Phase 7 — EAOS-5 Solution Packs (Marketplace + install lifecycle)
+import { SolutionPacksModule } from './modules/solution-packs/solution-packs.module';
+import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { TenantContextMiddleware } from './common/context/tenant-context.middleware';
-import { TenantContextService } from './common/context/tenant-context.service';
+import { TenantContextModule } from './common/context/tenant-context.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
 
@@ -57,6 +71,10 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
   imports: [
     // Config — global, validates env vars at boot
     ConfigurationModule,
+
+    // Tenant context — @Global so every module can inject TenantContextService
+    // (Phase 1, Task 1.4 + Phase 1E migration)
+    TenantContextModule,
 
     // Rate limiting: 100 req / 60 s per IP
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
@@ -125,6 +143,25 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
 
     // Phase 5 — Paperclip Projects
     ProjectsModule,
+
+    // Phase 3 — EAOS-1 entity workspace
+    EntitiesModule,
+    MissionFeedModule,
+    AIActionsModule,
+
+    // Phase 5 pre-req — Observability (Prometheus + Grafana)
+    MetricsModule,
+    FeatureFlagModule,
+
+    // Phase 4 — EAOS-2 widgets
+    WidgetsModule,
+
+    // Phase 6 — EAOS-4 Knowledge Hub (RAG pipeline)
+    KnowledgeModule,
+
+    // Phase 7 — EAOS-5 Solution Packs
+    SolutionPacksModule,
+    MarketplaceModule,
   ],
   providers: [
     // Global rate-limit guard
@@ -135,10 +172,6 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
 
     // Global role guard
     { provide: APP_GUARD, useClass: RolesGuard },
-
-    // Phase 1, Task 1.4: TenantContextService is a singleton
-    // (ALS store is per-instance; the service itself is stateless).
-    TenantContextService,
 
     // Global exception → ApiResponse envelope
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },

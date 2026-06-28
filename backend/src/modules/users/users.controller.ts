@@ -29,6 +29,9 @@ import { TierLimit } from '../../common/decorators/tier-limit.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '@prisma/client';
 import { ValidatedUser } from '../auth/interfaces/auth.interface';
+import { PaginatedResponse } from '../../common/responses/paginated.response';
+import { ActionResult } from '../../common/responses/action-result.response';
+import type { UserResponseDto } from './dto/user-response.dto';
 
 // Type for authenticated user from JWT (includes role and tenantId)
 type AuthenticatedUser = ValidatedUser & { sub: string; jti: string };
@@ -46,15 +49,14 @@ export class UsersController {
     UserRole.SECURITY_OFFICER,
     UserRole.SUPPORT,
   )
-  findAll(
+  async findAll(
     @CurrentUser() user: AuthenticatedUser,
     @Query('tenantId') tenantId?: string,
     @Query('departmentId') departmentId?: string,
     @Query('search') search?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
-  ) {
-    // Platform admins can query any tenant; tenant users can only query their own
+  ): Promise<PaginatedResponse<UserResponseDto>> {
     const effectiveTenantId =
       user.role === UserRole.SUPER_ADMIN ||
       user.role === UserRole.PLATFORM_ADMIN ||
@@ -62,13 +64,17 @@ export class UsersController {
       user.role === UserRole.SUPPORT
         ? tenantId
         : (user.tenantId ?? undefined);
-    return this.usersService.findAll(
+    const { items, total } = await this.usersService.findAll(
       effectiveTenantId,
       page,
       limit,
       search,
       departmentId,
     );
+    return {
+      items: items as unknown as UserResponseDto[],
+      pagination: { page: page ?? 1, limit: limit ?? 20, total, totalPages: Math.max(1, Math.ceil(total / (limit ?? 20))) },
+    };
   }
 
   @Get(':id')
@@ -141,13 +147,17 @@ export class UsersController {
 
   @Patch(':id/deactivate')
   @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN, UserRole.OWNER)
-  deactivate(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+  async deactivate(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ActionResult<UserResponseDto | null>> {
     const tenantId =
       user.role === UserRole.SUPER_ADMIN ||
       user.role === UserRole.PLATFORM_ADMIN
         ? undefined
         : (user.tenantId ?? undefined);
-    return this.usersService.deactivate(id, tenantId);
+    const result = await this.usersService.deactivate(id, tenantId);
+    return { success: true, message: 'User deactivated', data: result as unknown as UserResponseDto | null };
   }
 
   // ─── Phase 2 — Department membership ───────────────────────────────────
@@ -171,21 +181,25 @@ export class UsersController {
    * GET /api/v1/users/department/:departmentId
    */
   @Get('department/:departmentId')
-  findByDepartment(
+  async findByDepartment(
     @Param('departmentId') departmentId: string,
     @CurrentUser() user: AuthenticatedUser,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number,
     @Query('search') search?: string,
-  ) {
+  ): Promise<PaginatedResponse<UserResponseDto>> {
     if (!user.tenantId) throw new ForbiddenException('Tenant context required');
-    return this.usersService.findAll(
+    const { items, total } = await this.usersService.findAll(
       user.tenantId,
       page,
       limit,
       search,
       departmentId,
     );
+    return {
+      items: items as unknown as UserResponseDto[],
+      pagination: { page: page ?? 1, limit: limit ?? 50, total, totalPages: Math.max(1, Math.ceil(total / (limit ?? 50))) },
+    };
   }
 
   /**
@@ -195,17 +209,18 @@ export class UsersController {
    */
   @Post(':id/assign-department')
   @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN, UserRole.OWNER, UserRole.ADMIN)
-  assignToDepartment(
+  async assignToDepartment(
     @Param('id') userId: string,
     @Body() dto: AssignUserToDepartmentDto,
     @CurrentUser() user: AuthenticatedUser,
-  ) {
+  ): Promise<ActionResult<null>> {
     if (!user.tenantId) throw new ForbiddenException('Tenant context required');
-    return this.usersService.assignToDepartment(
+    await this.usersService.assignToDepartment(
       userId,
       dto.departmentId,
       user.tenantId,
     );
+    return { success: true, message: 'User assigned to department' };
   }
 
   /**
@@ -214,11 +229,12 @@ export class UsersController {
    */
   @Post(':id/unassign-department')
   @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN, UserRole.OWNER, UserRole.ADMIN)
-  unassignFromDepartment(
+  async unassignFromDepartment(
     @Param('id') userId: string,
     @CurrentUser() user: AuthenticatedUser,
-  ) {
+  ): Promise<ActionResult<null>> {
     if (!user.tenantId) throw new ForbiddenException('Tenant context required');
-    return this.usersService.unassignFromDepartment(userId, user.tenantId);
+    await this.usersService.unassignFromDepartment(userId, user.tenantId);
+    return { success: true, message: 'User unassigned from department' };
   }
 }

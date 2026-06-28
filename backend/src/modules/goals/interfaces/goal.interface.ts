@@ -36,7 +36,6 @@ export type GoalStatus = 'ACTIVE' | 'COMPLETED' | 'PAUSED' | 'ARCHIVED';
 // ─── Input Types ─────────────────────────────────────────────────────────────
 
 export interface CreateGoalInput {
-  tenantId: string;
   title: string;
   description?: string;
   level?: GoalLevel;
@@ -62,7 +61,6 @@ export interface UpdateGoalInput {
 }
 
 export interface ListGoalsOptions {
-  tenantId: string;
   status?: GoalStatus;
   level?: GoalLevel;
   parentId?: string | null;
@@ -81,13 +79,13 @@ export interface ListGoalsOptions {
  */
 export interface IGoalRepository {
   create(data: CreateGoalInput): Promise<Goal>;
-  findById(id: string, tenantId: string): Promise<Goal | null>;
+  findById(id: string): Promise<Goal | null>;
   findAll(options: ListGoalsOptions): Promise<{ data: Goal[]; total: number }>;
-  findByParentId(parentId: string, tenantId: string): Promise<Goal[]>;
-  findRootGoals(tenantId: string): Promise<Goal[]>;
-  update(id: string, tenantId: string, data: UpdateGoalInput): Promise<Goal>;
-  delete(id: string, tenantId: string): Promise<void>;
-  updateProgress(id: string, tenantId: string, progress: number): Promise<Goal>;
+  findByParentId(parentId: string): Promise<Goal[]>;
+  findRootGoals(): Promise<Goal[]>;
+  update(id: string, data: UpdateGoalInput): Promise<Goal>;
+  delete(id: string): Promise<void>;
+  updateProgress(id: string, progress: number): Promise<Goal>;
 }
 
 // ─── Service Types ────────────────────────────────────────────────────────────

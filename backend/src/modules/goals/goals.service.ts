@@ -13,6 +13,7 @@ import {
   BadRequestException,
   Inject,
 } from '@nestjs/common';
+import { TenantContextService } from '../../common/context/tenant-context.service';
 import type { IGoalRepository } from './interfaces/goal.interface';
 import type { Goal, GoalWithChildren } from './interfaces/goal.interface';
 import type {
@@ -29,88 +30,81 @@ export class GoalsService {
 
   constructor(
     @Inject(GOAL_REPOSITORY) private readonly repository: IGoalRepository,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
-  async create(tenantId: string, input: CreateGoalInput) {
-    // Validate parent exists if specified
+  async create(input: CreateGoalInput) {
     if (input.parentId) {
-      const parent = await this.repository.findById(input.parentId, tenantId);
+      const parent = await this.repository.findById(input.parentId);
       if (!parent) {
         throw new NotFoundException(`Parent goal ${input.parentId} not found`);
       }
     }
 
-    return this.repository.create({
-      ...input,
-      tenantId,
-    });
+    return this.repository.create(input);
   }
 
-  async findById(id: string, tenantId: string) {
-    const goal = await this.repository.findById(id, tenantId);
+  async findById(id: string) {
+    const goal = await this.repository.findById(id);
     if (!goal) {
       throw new NotFoundException(`Goal ${id} not found`);
     }
     return goal;
   }
 
-  async findAll(options: ListGoalsOptions) {
-    return this.repository.findAll(options);
+  async findAll(options?: ListGoalsOptions) {
+    return this.repository.findAll(options ?? {});
   }
 
-  async findRootGoals(tenantId: string) {
-    return this.repository.findRootGoals(tenantId);
+  async findRootGoals() {
+    return this.repository.findRootGoals();
   }
 
-  async findByParentId(parentId: string, tenantId: string) {
-    // First verify parent exists
-    const parent = await this.repository.findById(parentId, tenantId);
+  async findByParentId(parentId: string) {
+    const parent = await this.repository.findById(parentId);
     if (!parent) {
       throw new NotFoundException(`Goal ${parentId} not found`);
     }
-    return this.repository.findByParentId(parentId, tenantId);
+    return this.repository.findByParentId(parentId);
   }
 
-  async update(id: string, tenantId: string, input: UpdateGoalInput) {
-    // Verify goal exists
-    const existing = await this.repository.findById(id, tenantId);
+  async update(id: string, input: UpdateGoalInput) {
+    const existing = await this.repository.findById(id);
     if (!existing) {
       throw new NotFoundException(`Goal ${id} not found`);
     }
 
-    // Validate parent if changing
     if (input.parentId !== undefined && input.parentId !== null) {
       if (input.parentId === id) {
         throw new BadRequestException('Goal cannot be its own parent');
       }
-      const parent = await this.repository.findById(input.parentId, tenantId);
+      const parent = await this.repository.findById(input.parentId);
       if (!parent) {
         throw new NotFoundException(`Parent goal ${input.parentId} not found`);
       }
     }
 
-    return this.repository.update(id, tenantId, input);
+    return this.repository.update(id, input);
   }
 
-  async delete(id: string, tenantId: string) {
-    const goal = await this.repository.findById(id, tenantId);
+  async delete(id: string) {
+    const goal = await this.repository.findById(id);
     if (!goal) {
       throw new NotFoundException(`Goal ${id} not found`);
     }
 
-    // Check for children
-    const children = await this.repository.findByParentId(id, tenantId);
+    const children = await this.repository.findByParentId(id);
     if (children.length > 0) {
       throw new BadRequestException(
         `Cannot delete goal with ${children.length} child goals. Delete or reassign children first.`,
       );
     }
 
-    await this.repository.delete(id, tenantId);
+    await this.repository.delete(id);
   }
 
-  async updateProgress(id: string, tenantId: string, progress: number) {
-    const goal = await this.repository.findById(id, tenantId);
+  async updateProgress(id: string, progress: number) {
+    const goal = await this.repository.findById(id);
     if (!goal) {
       throw new NotFoundException(`Goal ${id} not found`);
     }
@@ -119,27 +113,19 @@ export class GoalsService {
       throw new BadRequestException('Progress must be between 0 and 100');
     }
 
-    return this.repository.updateProgress(id, tenantId, progress);
+    return this.repository.updateProgress(id, progress);
   }
 
-  /**
-   * Build a hierarchical tree of goals
-   */
-  async getGoalTree(tenantId: string): Promise<GoalWithChildren[]> {
-    const allGoals = await this.repository.findAll({
-      tenantId,
-      limit: 1000, // Get all goals for tree building
-    });
+  async getGoalTree(): Promise<GoalWithChildren[]> {
+    const allGoals = await this.repository.findAll({ limit: 1000 });
 
     const goalMap = new Map<string, Goal & { children: Goal[] }>();
     const rootGoals: (Goal & { children: Goal[] })[] = [];
 
-    // First pass: create map
     for (const goal of allGoals.data) {
       goalMap.set(goal.id, { ...goal, children: [] });
     }
 
-    // Second pass: build tree
     for (const goal of allGoals.data) {
       const node = goalMap.get(goal.id)!;
       if (goal.parentId) {
@@ -147,7 +133,6 @@ export class GoalsService {
         if (parent) {
           parent.children.push(node);
         } else {
-          // Parent not found, treat as root
           rootGoals.push(node);
         }
       } else {
@@ -158,33 +143,23 @@ export class GoalsService {
     return rootGoals;
   }
 
-  /**
-   * Calculate aggregate progress for a goal including its children
-   */
-  async calculateProgressWithChildren(
-    id: string,
-    tenantId: string,
-  ): Promise<number> {
-    const goal = await this.repository.findById(id, tenantId);
+  async calculateProgressWithChildren(id: string): Promise<number> {
+    const goal = await this.repository.findById(id);
     if (!goal) {
       throw new NotFoundException(`Goal ${id} not found`);
     }
 
-    const children = await this.repository.findByParentId(id, tenantId);
+    const children = await this.repository.findByParentId(id);
 
     if (children.length === 0) {
       return goal.progress;
     }
 
-    // Calculate weighted average of child progress
     let totalProgress = goal.progress;
     let weight = 1;
 
     for (const child of children) {
-      const childProgress = await this.calculateProgressWithChildren(
-        child.id,
-        tenantId,
-      );
+      const childProgress = await this.calculateProgressWithChildren(child.id);
       totalProgress += childProgress;
       weight += 1;
     }

@@ -1,0 +1,125 @@
+# NeureCore Prometheus alert rules
+# Phase 5 pre-req (`EAOS-implementation-roadmap.md` §9, Phase 5 Observability).
+#
+# Critical rules (must alert):
+#   1. Single AI Action invocation > 10K tokens  (cost guard)
+#   2. Per-tenant daily cost > cap                 (cost guard)
+#   3. Error rate > 10% over 5 min                (reliability)
+#   4. DISABLE_AI_ACTIONS flipped — verify zero invocations (kill-switch)
+#
+# Standard rules:
+#   5. Backend /metrics not scraping              (Prometheus health)
+#   6. p95 latency > 30s                          (perf)
+
+groups:
+  - name: neurecore-ai-actions
+    interval: 30s
+    rules:
+      # ── 1. Single AI Action invocation > 10K tokens ────────────────────
+      - alert: AIActionSingleInvocationTooLarge
+        expr: |
+          increase(neurecore_ai_action_tokens_total[5m])
+            > 10000
+        for: 1m
+        labels:
+          severity: critical
+          category: cost
+          service: ai-actions
+        annotations:
+          summary: "AI Action invocation exceeded 10K tokens"
+          description: |
+            An AI Action invocation consumed more than 10,000 tokens in the
+            last 5 minutes. Check for runaway prompts, loops, or model
+            misconfigurations. actionId={{ $labels.actionId }}.
+          runbook: "https://internal.neurecore.com/runbooks/ai-token-spike"
+
+      # ── 2. Per-tenant daily cost cap ────────────────────────────────────
+      - alert: AIActionCostCapApproaching
+        expr: |
+          sum by (actionId) (rate(neurecore_ai_action_cost_usd_total[1h]))
+            > 1.0
+        for: 10m
+        labels:
+          severity: warning
+          category: cost
+          service: ai-actions
+        annotations:
+          summary: "AI Action hourly cost > $1.00 per action"
+          description: |
+            actionId={{ $labels.actionId }} is burning > $1/hour. Investigate
+            for runaway invocations or unintended model selection.
+
+      # ── 3. Error rate > 10% over 5 min ──────────────────────────────────
+      - alert: AIActionErrorRateHigh
+        expr: |
+          (
+            sum(rate(neurecore_ai_action_invocations_total{status!="success"}[5m]))
+            /
+            sum(rate(neurecore_ai_action_invocations_total[5m]))
+          ) > 0.10
+          and
+          sum(rate(neurecore_ai_action_invocations_total[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          category: reliability
+          service: ai-actions
+        annotations:
+          summary: "AI Action error rate > 10%"
+          description: |
+            More than 10% of AI Action invocations in the last 5 minutes
+            failed. Check upstream LLM provider status, rate limits, and
+            recent deploys.
+
+      # ── 4. Kill-switch verification: zero invocations after flag flip ──
+      - alert: AIActionKillSwitchIneffective
+        expr: |
+          up{job="neurecore-backend"} == 1
+            and
+          neurecore_ai_action_invocations_total
+            > 0
+        for: 1m
+        labels:
+          severity: warning
+          category: kill-switch
+          service: ai-actions
+        annotations:
+          summary: "AI Action invocations detected — verify DISABLE_AI_ACTIONS"
+          description: |
+            The kill-switch is intended to block all AI Action invocations.
+            If invocations are still occurring, the kill-switch is not
+            working as expected. Confirm the guard is loaded and the env
+            var is set on the running PM2 process.
+          runbook: "Run: pm2 show neurecore-backend | grep DISABLE_AI_ACTIONS"
+
+      # ── 5. Backend /metrics scrape failing ──────────────────────────────
+      - alert: BackendMetricsScrapeFailing
+        expr: up{job="neurecore-backend"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          category: observability
+          service: backend
+        annotations:
+          summary: "Backend /metrics not scraping"
+          description: |
+            Prometheus has not been able to scrape the backend's /metrics
+            endpoint for 5 minutes. AI Action metrics are blind.
+
+      # ── 6. p95 latency > 30s ────────────────────────────────────────────
+      - alert: AIActionLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (actionId, le) (rate(neurecore_ai_action_duration_seconds_bucket[5m]))
+          ) > 30
+        for: 10m
+        labels:
+          severity: warning
+          category: performance
+          service: ai-actions
+        annotations:
+          summary: "AI Action p95 latency > 30s"
+          description: |
+            actionId={{ $labels.actionId }} has p95 latency above 30 seconds
+            for the last 10 minutes. Consider timeout tuning or model
+            downgrade.

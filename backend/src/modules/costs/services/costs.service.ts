@@ -13,6 +13,7 @@ import {
   PrismaBudgetIncidentRepository,
 } from '../repositories/prisma-budget.repository';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import type { CostSummary } from '../interfaces/cost.interface';
 
 @Injectable()
@@ -25,30 +26,28 @@ export class CostsService {
     private readonly budgetRepository: PrismaBudgetPolicyRepository,
     private readonly incidentRepository: PrismaBudgetIncidentRepository,
     private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   /**
    * Get total cost summary for a tenant
    */
   async getTenantCostSummary(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<CostSummary> {
-    return this.costProvider.getCostByTenant(tenantId, startDate, endDate);
+    return this.costProvider.getCostByTenant(startDate, endDate);
   }
 
   /**
    * Get cost breakdown by agent
    */
   async getCostByAgent(
-    tenantId: string,
     agentId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<CostSummary> {
     return this.costProvider.getCostByAgent(
-      tenantId,
       agentId,
       startDate,
       endDate,
@@ -59,13 +58,11 @@ export class CostsService {
    * Get cost breakdown by model
    */
   async getCostByModel(
-    tenantId: string,
     model: string,
     startDate: Date,
     endDate: Date,
   ): Promise<CostSummary> {
     return this.costProvider.getCostByModel(
-      tenantId,
       model,
       startDate,
       endDate,
@@ -76,13 +73,11 @@ export class CostsService {
    * Get cost breakdown by provider
    */
   async getCostByProvider(
-    tenantId: string,
     provider: string,
     startDate: Date,
     endDate: Date,
   ): Promise<CostSummary> {
     return this.costProvider.getCostByProvider(
-      tenantId,
       provider,
       startDate,
       endDate,
@@ -93,7 +88,6 @@ export class CostsService {
    * Get cost records for a tenant
    */
   async getCostRecords(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
     options?: {
@@ -105,14 +99,12 @@ export class CostsService {
     },
   ) {
     const records = await this.costRepository.findByTenant(
-      tenantId,
       startDate,
       endDate,
       options,
     );
 
     const total = await this.costRepository.getTotalCost(
-      tenantId,
       startDate,
       endDate,
     );
@@ -128,15 +120,14 @@ export class CostsService {
   /**
    * Get all budget policies for a tenant
    */
-  async getBudgetPolicies(tenantId: string) {
-    return this.budgetRepository.findByTenant(tenantId);
+  async getBudgetPolicies() {
+    return this.budgetRepository.findByTenant();
   }
 
   /**
    * Create a new budget policy
    */
   async createBudgetPolicy(input: {
-    tenantId: string;
     name: string;
     limitCents: number;
     period: 'DAILY' | 'WEEKLY' | 'MONTHLY';
@@ -145,7 +136,8 @@ export class CostsService {
     alertThresholds?: number[];
     action?: 'ALERT' | 'BLOCK' | 'DEGRADE';
   }) {
-    return this.budgetRepository.create(input);
+    const tenantId = this.tenantContext.tenantId;
+    return this.budgetRepository.create({ ...input, tenantId });
   }
 
   /**
@@ -173,8 +165,8 @@ export class CostsService {
   /**
    * Get active budget incidents for a tenant
    */
-  async getActiveIncidents(tenantId: string) {
-    return this.incidentRepository.findActiveByTenant(tenantId);
+  async getActiveIncidents() {
+    return this.incidentRepository.findActiveByTenant();
   }
 
   /**
@@ -196,10 +188,10 @@ export class CostsService {
    * Called after cost records are created
    */
   async checkBudgetThresholds(
-    tenantId: string,
     costCents: number,
   ): Promise<void> {
-    const policies = await this.budgetRepository.findActivePolicies(tenantId);
+    const tenantId = this.tenantContext.tenantId;
+    const policies = await this.budgetRepository.findActivePolicies();
 
     for (const policy of policies) {
       const policyAny = policy as Record<string, unknown>;
@@ -254,13 +246,11 @@ export class CostsService {
    * Phase 2 — optional `departmentId` filter
    */
   async getCostByAgentBreakdown(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
     departmentId?: string,
   ) {
     const rows = await this.costRepository.getCostByAgent(
-      tenantId,
       startDate,
       endDate,
       departmentId,
@@ -287,24 +277,21 @@ export class CostsService {
    * Get cost by model breakdown
    */
   async getCostByModelBreakdown(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
   ) {
-    return this.costRepository.getCostByModel(tenantId, startDate, endDate);
+    return this.costRepository.getCostByModel(startDate, endDate);
   }
 
   /**
    * Phase 2 — get per-department cost summary (tenant-scoped).
    */
   async getDepartmentCostSummary(
-    tenantId: string,
     departmentId: string,
     startDate: Date,
     endDate: Date,
   ) {
     return this.costRepository.getCostSummaryByDepartment(
-      tenantId,
       departmentId,
       startDate,
       endDate,

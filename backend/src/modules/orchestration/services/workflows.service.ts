@@ -1,17 +1,19 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import type { WorkflowStatus } from '@prisma/client';
 
 @Injectable()
 export class WorkflowsService {
   private readonly logger = new Logger(WorkflowsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
-  async findAll(
-    tenantId: string,
-    options?: { status?: WorkflowStatus; page?: number; limit?: number },
-  ) {
+  async findAll(options?: { status?: WorkflowStatus; page?: number; limit?: number }) {
+    const tenantId = this.tenantContext.tenantId;
     const { status, page = 1, limit = 20 } = options ?? {};
     const skip = (page - 1) * limit;
 
@@ -33,7 +35,6 @@ export class WorkflowsService {
       this.prisma.workflow.count({ where }),
     ]);
 
-    // Transform the data to match frontend expectations
     const transformedData = data.map((workflow) => ({
       id: workflow.id,
       name: workflow.name,
@@ -42,7 +43,7 @@ export class WorkflowsService {
       isActive: workflow.status === 'ACTIVE',
       createdAt: workflow.createdAt.toISOString(),
       _count: {
-        executions: workflow._count.tasks, // Map tasks count to executions
+        executions: workflow._count.tasks,
       },
     }));
 
@@ -55,7 +56,8 @@ export class WorkflowsService {
     };
   }
 
-  async findOne(id: string, tenantId: string) {
+  async findOne(id: string) {
+    const tenantId = this.tenantContext.tenantId;
     const wf = await this.prisma.workflow.findFirst({
       where: { id, tenantId },
       include: { _count: { select: { tasks: true } } },
@@ -70,8 +72,8 @@ export class WorkflowsService {
     definition?: Record<string, unknown>;
     config?: Record<string, unknown>;
     isTemplate?: boolean;
-    tenantId: string;
   }) {
+    const tenantId = this.tenantContext.tenantId;
     return this.prisma.workflow.create({
       data: {
         name: input.name,
@@ -79,14 +81,13 @@ export class WorkflowsService {
         definition: (input.definition ?? {}) as never,
         config: (input.config ?? {}) as never,
         isTemplate: input.isTemplate ?? false,
-        tenantId: input.tenantId,
+        tenantId,
       },
     });
   }
 
   async update(
     id: string,
-    tenantId: string,
     data: {
       name?: string;
       status?: WorkflowStatus;
@@ -94,7 +95,7 @@ export class WorkflowsService {
       config?: Record<string, unknown>;
     },
   ) {
-    await this.assertOwnership(id, tenantId);
+    await this.assertOwnership(id);
     return this.prisma.workflow.update({
       where: { id },
       data: {
@@ -106,30 +107,22 @@ export class WorkflowsService {
     });
   }
 
-  async remove(id: string, tenantId: string) {
-    await this.assertOwnership(id, tenantId);
+  async remove(id: string) {
+    await this.assertOwnership(id);
     await this.prisma.workflow.delete({ where: { id } });
   }
 
-  async activate(id: string, tenantId: string) {
-    await this.assertOwnership(id, tenantId);
+  async activate(id: string) {
+    await this.assertOwnership(id);
     return this.prisma.workflow.update({
       where: { id },
       data: { status: 'ACTIVE' },
     });
   }
 
-  /**
-   * Execute a workflow — starts all tasks that belong to the workflow.
-   * Returns an execution summary; real-time progress is pushed via WebSocket.
-   * SRP: delegates actual task execution to the caller (AgentExecutorService);
-   *      here we just set status and collect the task list.
-   */
-  async execute(
-    id: string,
-    tenantId: string,
-  ): Promise<{ workflowId: string; taskIds: string[]; status: string }> {
-    const wf = await this.findOne(id, tenantId);
+  async execute(id: string): Promise<{ workflowId: string; taskIds: string[]; status: string }> {
+    const tenantId = this.tenantContext.tenantId;
+    const wf = await this.findOne(id);
 
     if (wf.status === 'DRAFT') {
       await this.prisma.workflow.update({
@@ -154,9 +147,9 @@ export class WorkflowsService {
     };
   }
 
-  /** Returns the current status of a workflow with pending/running/completed task counts */
-  async getStatus(id: string, tenantId: string) {
-    const wf = await this.findOne(id, tenantId);
+  async getStatus(id: string) {
+    const tenantId = this.tenantContext.tenantId;
+    const wf = await this.findOne(id);
     const [pending, running, completed, failed] =
       await this.prisma.$transaction([
         this.prisma.task.count({
@@ -185,7 +178,8 @@ export class WorkflowsService {
     };
   }
 
-  private async assertOwnership(id: string, tenantId: string) {
+  private async assertOwnership(id: string) {
+    const tenantId = this.tenantContext.tenantId;
     const exists = await this.prisma.workflow.findFirst({
       where: { id, tenantId },
       select: { id: true },

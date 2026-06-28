@@ -1,32 +1,39 @@
-/**
- * Root placeholder — Phase 1, Task 1.27.
- *
- * Scaffolds the home route. Real routing comes in EAOS-1 (per the
- * entity workspace plan). For now this proves the toolchain works.
- */
+'use client';
+
+import Link from 'next/link';
+import { MissionFeedBanner } from '@/components/mission-feed/MissionFeedBanner';
+import { useRole } from '@/components/workspace/useRole';
 
 export default function HomePage() {
+  const role = useRole();
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-canvas-50 px-6 py-24 dark:bg-canvas-950 sm:py-32">
-      <div className="mx-auto max-w-2xl text-center">
-        <p className="text-sm font-semibold uppercase tracking-wider text-state-info">
-          NeureCore
-        </p>
-        <h1 className="mt-4 text-4xl font-bold tracking-tight text-canvas-900 dark:text-canvas-50 sm:text-6xl">
-          EAOS — coming soon
-        </h1>
-        <p className="mt-6 text-lg leading-8 text-canvas-600 dark:text-canvas-400">
-          The Enterprise AI Operating System is being built on a clean
-          foundation: NestJS 11 + Next.js 15 + TanStack Query + httpOnly
-          cookies. No legacy code, no tech debt.
-        </p>
-        <p className="mt-4 text-sm text-canvas-500 dark:text-canvas-500">
-          Phase 1, Task 1.27 placeholder. Real workspace arrives in
-          EAOS-1 (per{' '}
-          <code className="font-mono text-state-info">
-            memory-bank/EAOS/EAOS-implementation-roadmap.md
-          </code>
-          ).
+    <main className="min-h-screen bg-canvas-50 px-6 py-12 dark:bg-canvas-950 sm:py-16">
+      <div className="mx-auto max-w-5xl">
+        <header className="mb-8 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-state-info">
+              NeureCore
+            </p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-canvas-900 dark:text-canvas-50">
+              EAOS — Workspace
+            </h1>
+          </div>
+          <nav className="flex gap-3 text-sm">
+            <Link
+              href="/entity/department"
+              className="rounded-md border border-canvas-200 px-3 py-1 text-canvas-700 hover:bg-canvas-100 dark:border-canvas-700 dark:text-canvas-300 dark:hover:bg-canvas-900"
+            >
+              Browse entities
+            </Link>
+          </nav>
+        </header>
+
+        <MissionFeedBanner tenantId="default" role={role ?? undefined} />
+
+        <p className="text-sm text-canvas-500">
+          Open an entity workspace at <code className="font-mono">/entity/[type]/[id]</code>.
+          Use the banner above to act on AI-prioritized items.
         </p>
       </div>
     </main>

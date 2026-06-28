@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { IntegrationProvider } from '@prisma/client';
 import { PrismaIntegrationCredentialStore } from '../services/integration-credential.store';
 import { BrevoUsageService } from './brevo-usage.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 
 export interface SendEmailDto {
   to: string;
@@ -20,22 +21,25 @@ export class BrevoEmailService {
   constructor(
     private readonly credentialStore: PrismaIntegrationCredentialStore,
     private readonly usage: BrevoUsageService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
-  private async getApiKey(tenantId: string): Promise<string | null> {
+  private async getApiKey(): Promise<string | null> {
+    const tenantId = this.tenantContext.tenantId;
     const creds = await this.credentialStore.get(tenantId, IntegrationProvider.BREVO);
     if (!creds || !('apiKey' in creds)) return null;
     return creds.apiKey;
   }
 
-  async sendEmail(tenantId: string, dto: SendEmailDto): Promise<{ messageId: string }> {
-    const apiKey = await this.getApiKey(tenantId);
+  async sendEmail(dto: SendEmailDto): Promise<{ messageId: string }> {
+    const tenantId = this.tenantContext.tenantId;
+    const apiKey = await this.getApiKey();
 
     if (!apiKey) {
       throw new BadRequestException('Brevo is not connected for this tenant');
     }
 
-    await this.usage.checkLimit(tenantId);
+    await this.usage.checkLimit();
 
     const finalHtml = dto.signature
       ? `${dto.htmlContent}<br><br><div class="signature">${escapeHtml(dto.signature)}</div>`
@@ -69,13 +73,14 @@ export class BrevoEmailService {
     const data = (await res.json()) as { messageId?: string };
     const messageId = data.messageId ?? 'unknown';
 
-    await this.usage.recordSend(tenantId);
+    await this.usage.recordSend();
     this.logger.log(`Email sent for tenant ${tenantId}: ${messageId}`);
     return { messageId };
   }
 
-  async getAccountInfo(tenantId: string): Promise<Record<string, unknown>> {
-    const apiKey = await this.getApiKey(tenantId);
+  async getAccountInfo(): Promise<Record<string, unknown>> {
+    const tenantId = this.tenantContext.tenantId;
+    const apiKey = await this.getApiKey();
     if (!apiKey) {
       throw new BadRequestException('Brevo is not connected');
     }

@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { GoogleAuthClient } from './google-auth.client';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 
 export interface CalendarEvent {
   id: string;
@@ -28,10 +29,13 @@ export class GoogleCalendarService {
   private readonly logger = new Logger(GoogleCalendarService.name);
   private readonly CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 
-  constructor(private readonly authClient: GoogleAuthClient) {}
+  constructor(
+    private readonly authClient: GoogleAuthClient,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
-  private async authFetch(tenantId: string, url: string, options: RequestInit = {}): Promise<Response> {
-    const accessToken = await this.authClient.getAccessToken(tenantId);
+  private async authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const accessToken = await this.authClient.getAccessToken(this.tenantContext.tenantId);
     if (!accessToken) {
       throw new BadRequestException('Google is not connected for this tenant');
     }
@@ -49,7 +53,6 @@ export class GoogleCalendarService {
    * List upcoming events from primary calendar
    */
   async listEvents(
-    tenantId: string,
     options: {
       calendarId?: string;
       maxResults?: number;
@@ -68,7 +71,6 @@ export class GoogleCalendarService {
     if (q) params.set('q', q);
 
     const res = await this.authFetch(
-      tenantId,
       `${this.CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
     );
 
@@ -86,7 +88,6 @@ export class GoogleCalendarService {
    * Create a new calendar event
    */
   async createEvent(
-    tenantId: string,
     input: CreateEventInput,
     calendarId = 'primary',
   ): Promise<CalendarEvent> {
@@ -106,7 +107,6 @@ export class GoogleCalendarService {
     };
 
     const res = await this.authFetch(
-      tenantId,
       `${this.CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`,
       {
         method: 'POST',
@@ -127,9 +127,8 @@ export class GoogleCalendarService {
   /**
    * Delete a calendar event
    */
-  async deleteEvent(tenantId: string, eventId: string, calendarId = 'primary'): Promise<void> {
+  async deleteEvent(eventId: string, calendarId = 'primary'): Promise<void> {
     const res = await this.authFetch(
-      tenantId,
       `${this.CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
       { method: 'DELETE' },
     );
@@ -142,9 +141,8 @@ export class GoogleCalendarService {
   /**
    * List available calendars
    */
-  async listCalendars(tenantId: string): Promise<{ id: string; summary: string; primary: boolean }[]> {
+  async listCalendars(): Promise<{ id: string; summary: string; primary: boolean }[]> {
     const res = await this.authFetch(
-      tenantId,
       `${this.CALENDAR_API}/users/me/calendarList`,
     );
 

@@ -10,8 +10,6 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
-  ForbiddenException,
-  BadRequestException,
 } from '@nestjs/common';
 import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { TasksService } from './services/tasks.service';
@@ -20,30 +18,28 @@ import { CreateTaskDto, UpdateTaskDto } from './dto/task.dto';
 import { CreateWorkflowDto, UpdateWorkflowDto } from './dto/workflow.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
-import { UserRole } from '@prisma/client';
 import type { TaskStatus, WorkflowStatus } from '@prisma/client';
+import { TenantIsolated } from '../../common/guards/tenant-isolated.decorator';
 
-// ─────────────────────────────────────────────────────────────
-// Tasks controller
-// ─────────────────────────────────────────────────────────────
-
-@Controller({ path: 'tasks', version: '1' })
 @ApiCommon('orchestration')
-export class TasksController {
-  constructor(private readonly tasksService: TasksService) {}
+@Controller({ version: '1' })
+export class OrchestrationController {
+  constructor(
+    private readonly tasksService: TasksService,
+    private readonly workflowsService: WorkflowsService,
+  ) {}
 
-  @Get()
-  findAll(
+  // ─── Tasks ────────────────────────────────────────────────
+
+  @Get('tasks')
+  findAllTasks(
     @CurrentUser() user: JwtPayload,
     @Query('status') status?: TaskStatus,
     @Query('agentId') agentId?: string,
     @Query('page') page = '1',
     @Query('limit') limit = '20',
   ) {
-    if (!user.tenantId && user.role !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('Tenant context required');
-    }
-    return this.tasksService.findAll(user.tenantId, {
+    return this.tasksService.findAll({
       status,
       agentId,
       page: Number(page),
@@ -51,147 +47,94 @@ export class TasksController {
     });
   }
 
-  @Get(':id')
-  findOne(
+  @Get('tasks/:id')
+  @TenantIsolated()
+  findOneTask(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.tasksService.findOne(id, user.tenantId!);
+    return this.tasksService.findOne(id);
   }
 
-  @Post()
-  create(@Body() dto: CreateTaskDto, @CurrentUser() user: JwtPayload) {
+  @Post('tasks')
+  createTask(@Body() dto: CreateTaskDto, @CurrentUser() user: JwtPayload) {
     return this.tasksService.create({
       ...dto,
-      tenantId: user.tenantId!,
       createdById: user.sub,
     });
   }
 
-  @Patch(':id')
-  update(
+  @Patch('tasks/:id')
+  updateTask(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateTaskDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.tasksService.update(id, user.tenantId!, dto);
+    return this.tasksService.update(id, dto);
   }
 
-  @Delete(':id')
+  @Delete('tasks/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(
+  removeTask(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.tasksService.remove(id, user.tenantId!);
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Workflows controller
-// ─────────────────────────────────────────────────────────────
-
-@Controller({ path: 'workflows', version: '1' })
-export class WorkflowsController {
-  constructor(private readonly workflowsService: WorkflowsService) {}
-
-  private resolveTenantId(user: JwtPayload, tenantId?: string): string {
-    if (user.role === UserRole.SUPER_ADMIN) {
-      if (!tenantId)
-        throw new BadRequestException('tenantId is required for SUPER_ADMIN');
-      return tenantId;
-    }
-    return user.tenantId!;
+    return this.tasksService.remove(id);
   }
 
-  @Get()
-  findAll(
-    @CurrentUser() user: JwtPayload,
+  // ─── Workflows ────────────────────────────────────────────
+
+  @Get('workflows')
+  findAllWorkflows(
     @Query('status') status?: WorkflowStatus,
     @Query('page') page = '1',
     @Query('limit') limit = '20',
-    @Query('tenantId') tenantId?: string,
   ) {
-    const resolvedTenantId = this.resolveTenantId(user, tenantId);
-    return this.workflowsService.findAll(resolvedTenantId, {
+    return this.workflowsService.findAll({
       status,
       page: Number(page),
       limit: Number(limit),
     });
   }
 
-  @Get(':id')
-  findOne(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const resolvedTenantId = this.resolveTenantId(user, tenantId);
-    return this.workflowsService.findOne(id, resolvedTenantId);
+  @Get('workflows/:id')
+  @TenantIsolated()
+  findOneWorkflow(@Param('id', ParseUUIDPipe) id: string) {
+    return this.workflowsService.findOne(id);
   }
 
-  @Post()
-  create(
-    @Body() dto: CreateWorkflowDto,
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const resolvedTenantId = this.resolveTenantId(user, tenantId);
-    return this.workflowsService.create({ ...dto, tenantId: resolvedTenantId });
+  @Post('workflows')
+  createWorkflow(@Body() dto: CreateWorkflowDto) {
+    return this.workflowsService.create(dto);
   }
 
-  @Patch(':id')
-  update(
+  @Patch('workflows/:id')
+  updateWorkflow(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateWorkflowDto,
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const resolvedTenantId = this.resolveTenantId(user, tenantId);
-    return this.workflowsService.update(id, resolvedTenantId, dto);
+    return this.workflowsService.update(id, dto);
   }
 
-  @Post(':id/activate')
-  activate(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const resolvedTenantId = this.resolveTenantId(user, tenantId);
-    return this.workflowsService.activate(id, resolvedTenantId);
+  @Post('workflows/:id/activate')
+  activate(@Param('id', ParseUUIDPipe) id: string) {
+    return this.workflowsService.activate(id);
   }
 
-  /** POST /workflows/:id/execute — trigger workflow execution (fire & forget via WS events) */
-  @Post(':id/execute')
+  @Post('workflows/:id/execute')
   @HttpCode(HttpStatus.ACCEPTED)
-  execute(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const resolvedTenantId = this.resolveTenantId(user, tenantId);
-    return this.workflowsService.execute(id, resolvedTenantId);
+  execute(@Param('id', ParseUUIDPipe) id: string) {
+    return this.workflowsService.execute(id);
   }
 
-  /** GET /workflows/:id/status — current execution summary */
-  @Get(':id/status')
-  getStatus(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const resolvedTenantId = this.resolveTenantId(user, tenantId);
-    return this.workflowsService.getStatus(id, resolvedTenantId);
+  @Get('workflows/:id/status')
+  getStatus(@Param('id', ParseUUIDPipe) id: string) {
+    return this.workflowsService.getStatus(id);
   }
 
-  @Delete(':id')
+  @Delete('workflows/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const resolvedTenantId = this.resolveTenantId(user, tenantId);
-    return this.workflowsService.remove(id, resolvedTenantId);
+  removeWorkflow(@Param('id', ParseUUIDPipe) id: string) {
+    return this.workflowsService.remove(id);
   }
 }

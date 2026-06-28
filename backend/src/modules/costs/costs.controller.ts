@@ -4,8 +4,8 @@
  * REST API endpoints for cost tracking and budget management
  * Following SOLID: Single Responsibility - only handles HTTP
  *
- * Phase 1 Gap 6 — added URI versioning (`/api/v1/costs`) and
- * `resolveTenantId()` helper for SUPER_ADMIN cross-tenant access.
+ * Phase 1 Gap 6 — added URI versioning (`/api/v1/costs`).
+ * tenantId is now read from TenantContextService internally.
  */
 
 import {
@@ -19,12 +19,11 @@ import {
   Query,
   UseGuards,
   Req,
-  BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CostsService } from './services/costs.service';
+import { TenantContextService } from '../../common/context/tenant-context.service';
 import { CreateBudgetPolicyDto, UpdateBudgetPolicyDto } from './dto/cost.dto';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
 
@@ -32,23 +31,10 @@ import type { JwtPayload } from '../auth/interfaces/token.interface';
 @ApiCommon('costs')
 @UseGuards(JwtAuthGuard)
 export class CostsController {
-  constructor(private readonly costsService: CostsService) {}
-
-  /**
-   * Phase 1 Gap 6 — resolve target tenant based on caller role.
-   *   SUPER_ADMIN: must pass `?tenantId=<uuid>`; throws otherwise.
-   *   Other roles: must have tenantId in JWT.
-   */
-  private resolveTenantId(user: JwtPayload, tenantId?: string): string {
-    if (user.role === 'SUPER_ADMIN') {
-      if (!tenantId) {
-        throw new BadRequestException('tenantId is required for SUPER_ADMIN');
-      }
-      return tenantId;
-    }
-    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
-    return user.tenantId;
-  }
+  constructor(
+    private readonly costsService: CostsService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   private parseDateRange(
     startDate?: string,
@@ -70,11 +56,9 @@ export class CostsController {
     @Req() req: { user: JwtPayload },
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tenant = this.resolveTenantId(req.user, tenantId);
     const { start, end } = this.parseDateRange(startDate, endDate);
-    return this.costsService.getTenantCostSummary(tenant, start, end);
+    return this.costsService.getTenantCostSummary(start, end);
   }
 
   /**
@@ -83,15 +67,12 @@ export class CostsController {
    */
   @Get('by-agent')
   async getCostByAgent(
-    @Req() req: { user: JwtPayload },
     @Query('agentId') agentId: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tenant = this.resolveTenantId(req.user, tenantId);
     const { start, end } = this.parseDateRange(startDate, endDate);
-    return this.costsService.getCostByAgent(tenant, agentId, start, end);
+    return this.costsService.getCostByAgent(agentId, start, end);
   }
 
   /**
@@ -100,15 +81,12 @@ export class CostsController {
    */
   @Get('by-model')
   async getCostByModel(
-    @Req() req: { user: JwtPayload },
     @Query('model') model: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tenant = this.resolveTenantId(req.user, tenantId);
     const { start, end } = this.parseDateRange(startDate, endDate);
-    return this.costsService.getCostByModel(tenant, model, start, end);
+    return this.costsService.getCostByModel(model, start, end);
   }
 
   /**
@@ -117,15 +95,12 @@ export class CostsController {
    */
   @Get('by-provider')
   async getCostByProvider(
-    @Req() req: { user: JwtPayload },
     @Query('provider') provider: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tenant = this.resolveTenantId(req.user, tenantId);
     const { start, end } = this.parseDateRange(startDate, endDate);
-    return this.costsService.getCostByProvider(tenant, provider, start, end);
+    return this.costsService.getCostByProvider(provider, start, end);
   }
 
   /**
@@ -134,7 +109,6 @@ export class CostsController {
    */
   @Get('records')
   async getCostRecords(
-    @Req() req: { user: JwtPayload },
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('agentId') agentId?: string,
@@ -142,12 +116,10 @@ export class CostsController {
     @Query('model') model?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tenant = this.resolveTenantId(req.user, tenantId);
     const { start, end } = this.parseDateRange(startDate, endDate);
 
-    return this.costsService.getCostRecords(tenant, start, end, {
+    return this.costsService.getCostRecords(start, end, {
       agentId,
       provider,
       model,
@@ -163,13 +135,8 @@ export class CostsController {
    * GET /api/v1/costs/budgets
    */
   @Get('budgets')
-  async getBudgetPolicies(
-    @Req() req: { user: JwtPayload },
-    @Query('tenantId') tenantId?: string,
-  ) {
-    return this.costsService.getBudgetPolicies(
-      this.resolveTenantId(req.user, tenantId),
-    );
+  async getBudgetPolicies() {
+    return this.costsService.getBudgetPolicies();
   }
 
   /**
@@ -177,15 +144,8 @@ export class CostsController {
    * POST /api/v1/costs/budgets
    */
   @Post('budgets')
-  async createBudgetPolicy(
-    @Req() req: { user: JwtPayload },
-    @Body() dto: CreateBudgetPolicyDto,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    return this.costsService.createBudgetPolicy({
-      ...dto,
-      tenantId: this.resolveTenantId(req.user, tenantId),
-    });
+  async createBudgetPolicy(@Body() dto: CreateBudgetPolicyDto) {
+    return this.costsService.createBudgetPolicy(dto);
   }
 
   /**
@@ -215,13 +175,8 @@ export class CostsController {
    * GET /api/v1/costs/incidents
    */
   @Get('incidents')
-  async getActiveIncidents(
-    @Req() req: { user: JwtPayload },
-    @Query('tenantId') tenantId?: string,
-  ) {
-    return this.costsService.getActiveIncidents(
-      this.resolveTenantId(req.user, tenantId),
-    );
+  async getActiveIncidents() {
+    return this.costsService.getActiveIncidents();
   }
 
   /**
@@ -251,16 +206,12 @@ export class CostsController {
    */
   @Get('breakdown/by-agent')
   async getCostByAgentBreakdown(
-    @Req() req: { user: JwtPayload },
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('tenantId') tenantId?: string,
     @Query('departmentId') departmentId?: string,
   ) {
-    const tenant = this.resolveTenantId(req.user, tenantId);
     const { start, end } = this.parseDateRange(startDate, endDate);
     return this.costsService.getCostByAgentBreakdown(
-      tenant,
       start,
       end,
       departmentId,
@@ -273,14 +224,11 @@ export class CostsController {
    */
   @Get('breakdown/by-model')
   async getCostByModelBreakdown(
-    @Req() req: { user: JwtPayload },
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tenant = this.resolveTenantId(req.user, tenantId);
     const { start, end } = this.parseDateRange(startDate, endDate);
-    return this.costsService.getCostByModelBreakdown(tenant, start, end);
+    return this.costsService.getCostByModelBreakdown(start, end);
   }
 
   /**
@@ -289,16 +237,12 @@ export class CostsController {
    */
   @Get('department/:departmentId')
   async getDepartmentCostSummary(
-    @Req() req: { user: JwtPayload },
     @Param('departmentId') departmentId: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tenant = this.resolveTenantId(req.user, tenantId);
     const { start, end } = this.parseDateRange(startDate, endDate);
     return this.costsService.getDepartmentCostSummary(
-      tenant,
       departmentId,
       start,
       end,

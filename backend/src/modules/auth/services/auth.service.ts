@@ -46,7 +46,7 @@ export class AuthService implements IAuthService {
 
     const valid = await this.passwordService.compare(
       password,
-      user.passwordHash,
+      user.passwordHash ?? '',
     );
     if (!valid) return null;
 

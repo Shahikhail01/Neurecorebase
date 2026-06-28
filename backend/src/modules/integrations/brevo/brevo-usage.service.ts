@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 
 const DAILY_LIMIT = 300;
 const WARNING_THRESHOLD = 240;
@@ -8,14 +9,18 @@ const WARNING_THRESHOLD = 240;
 export class BrevoUsageService {
   private readonly logger = new Logger(BrevoUsageService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   private todayUtc(): Date {
     const now = new Date();
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   }
 
-  async recordSend(tenantId: string): Promise<void> {
+  async recordSend(): Promise<void> {
+    const tenantId = this.tenantContext.tenantId;
     const date = this.todayUtc();
     await this.prisma.brevoUsageCounter.upsert({
       where: { tenantId_date: { tenantId, date } },
@@ -24,7 +29,8 @@ export class BrevoUsageService {
     });
   }
 
-  async getTodayCount(tenantId: string): Promise<number> {
+  async getTodayCount(): Promise<number> {
+    const tenantId = this.tenantContext.tenantId;
     const date = this.todayUtc();
     const row = await this.prisma.brevoUsageCounter.findUnique({
       where: { tenantId_date: { tenantId, date } },
@@ -32,8 +38,8 @@ export class BrevoUsageService {
     return row?.sentCount ?? 0;
   }
 
-  async checkLimit(tenantId: string): Promise<void> {
-    const count = await this.getTodayCount(tenantId);
+  async checkLimit(): Promise<void> {
+    const count = await this.getTodayCount();
     if (count >= DAILY_LIMIT) {
       throw new BadRequestException(
         `Brevo daily limit reached (${count}/${DAILY_LIMIT}). Upgrade plan or wait until tomorrow (UTC).`,
@@ -41,8 +47,8 @@ export class BrevoUsageService {
     }
   }
 
-  async getStatus(tenantId: string) {
-    const count = await this.getTodayCount(tenantId);
+  async getStatus() {
+    const count = await this.getTodayCount();
     return {
       sentToday: count,
       dailyLimit: DAILY_LIMIT,

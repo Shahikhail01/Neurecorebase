@@ -1,14 +1,5 @@
 export interface IFeatureStore {
-  save(
-    tenantId: string,
-    features: Record<string, unknown>,
-    timestamp?: string,
-  ): Promise<void>;
-  getLatest(
-    tenantId: string,
-  ): Promise<{ features: Record<string, unknown>; timestamp: string } | null>;
-  list(
-    tenantId: string,
-    limit?: number,
-  ): Promise<Array<{ features: Record<string, unknown>; timestamp: string }>>;
+  save(features: Record<string, unknown>, timestamp?: string): Promise<void>;
+  getLatest(): Promise<{ features: Record<string, unknown>; timestamp: string } | null>;
+  list(limit?: number): Promise<Array<{ features: Record<string, unknown>; timestamp: string }>>;
 }

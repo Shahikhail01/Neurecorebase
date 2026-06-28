@@ -8,6 +8,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import type {
   IProjectRepository,
   CreateProjectInput,
@@ -20,13 +21,16 @@ import type {
 export class PrismaProjectRepository implements IProjectRepository {
   private readonly logger = new Logger(PrismaProjectRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   async create(data: CreateProjectInput): Promise<Project> {
     this.logger.debug(`Creating project: ${data.name}`);
     const project = await this.prisma.project.create({
       data: {
-        tenantId: data.tenantId,
+        tenantId: this.tenantContext.tenantId,
         name: data.name,
         description: data.description,
         departmentId: data.departmentId,
@@ -39,9 +43,9 @@ export class PrismaProjectRepository implements IProjectRepository {
     return this.mapToProject(project);
   }
 
-  async findById(id: string, tenantId: string): Promise<Project | null> {
+  async findById(id: string): Promise<Project | null> {
     const project = await this.prisma.project.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId: this.tenantContext.tenantId },
     });
     return project ? this.mapToProject(project) : null;
   }
@@ -50,7 +54,7 @@ export class PrismaProjectRepository implements IProjectRepository {
     options: ListProjectsOptions,
   ): Promise<{ data: Project[]; total: number }> {
     const where: Record<string, unknown> = {
-      tenantId: options.tenantId,
+      tenantId: this.tenantContext.tenantId,
     };
 
     if (options.status) {
@@ -87,12 +91,9 @@ export class PrismaProjectRepository implements IProjectRepository {
     };
   }
 
-  async findByDepartment(
-    departmentId: string,
-    tenantId: string,
-  ): Promise<Project[]> {
+  async findByDepartment(departmentId: string): Promise<Project[]> {
     const projects = await this.prisma.project.findMany({
-      where: { departmentId, tenantId },
+      where: { departmentId, tenantId: this.tenantContext.tenantId },
       orderBy: { createdAt: 'desc' },
     });
     return projects.map((p) => this.mapToProject(p));
@@ -100,7 +101,6 @@ export class PrismaProjectRepository implements IProjectRepository {
 
   async update(
     id: string,
-    tenantId: string,
     data: UpdateProjectInput,
   ): Promise<Project> {
     this.logger.debug(`Updating project: ${id}`);
@@ -128,10 +128,10 @@ export class PrismaProjectRepository implements IProjectRepository {
     return this.mapToProject(project);
   }
 
-  async delete(id: string, tenantId: string): Promise<void> {
+  async delete(id: string): Promise<void> {
     this.logger.debug(`Deleting project: ${id}`);
+    const tenantId = this.tenantContext.tenantId;
 
-    // Verify tenant ownership before delete
     const project = await this.prisma.project.findFirst({
       where: { id, tenantId },
     });
@@ -144,13 +144,9 @@ export class PrismaProjectRepository implements IProjectRepository {
     this.logger.log(`Deleted project ${id}`);
   }
 
-  async addGoal(
-    projectId: string,
-    tenantId: string,
-    goalId: string,
-  ): Promise<Project> {
+  async addGoal(projectId: string, goalId: string): Promise<Project> {
     const project = await this.prisma.project.findFirst({
-      where: { id: projectId, tenantId },
+      where: { id: projectId, tenantId: this.tenantContext.tenantId },
     });
 
     if (!project) {
@@ -169,13 +165,9 @@ export class PrismaProjectRepository implements IProjectRepository {
     return this.mapToProject(project);
   }
 
-  async removeGoal(
-    projectId: string,
-    tenantId: string,
-    goalId: string,
-  ): Promise<Project> {
+  async removeGoal(projectId: string, goalId: string): Promise<Project> {
     const project = await this.prisma.project.findFirst({
-      where: { id: projectId, tenantId },
+      where: { id: projectId, tenantId: this.tenantContext.tenantId },
     });
 
     if (!project) {

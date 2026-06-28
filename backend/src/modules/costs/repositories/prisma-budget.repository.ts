@@ -6,6 +6,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import type {
   IBudgetPolicyRepository,
   IBudgetIncidentRepository,
@@ -19,9 +20,13 @@ import type { BudgetPolicy, BudgetIncident, Prisma } from '@prisma/client';
 export class PrismaBudgetPolicyRepository implements IBudgetPolicyRepository {
   private readonly logger = new Logger(PrismaBudgetPolicyRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
-  async findByTenant(tenantId: string): Promise<BudgetPolicy[]> {
+  async findByTenant(): Promise<BudgetPolicy[]> {
+    const tenantId = this.tenantContext.tenantId;
     return this.prisma.budgetPolicy.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
@@ -29,10 +34,10 @@ export class PrismaBudgetPolicyRepository implements IBudgetPolicyRepository {
   }
 
   async findByScope(
-    tenantId: string,
     scope: 'TENANT' | 'DEPARTMENT' | 'AGENT' | 'MODEL',
     scopeId?: string,
   ): Promise<BudgetPolicy[]> {
+    const tenantId = this.tenantContext.tenantId;
     const where: Prisma.BudgetPolicyWhereInput = {
       tenantId,
       scope,
@@ -51,7 +56,8 @@ export class PrismaBudgetPolicyRepository implements IBudgetPolicyRepository {
     });
   }
 
-  async findActivePolicies(tenantId: string): Promise<BudgetPolicy[]> {
+  async findActivePolicies(): Promise<BudgetPolicy[]> {
+    const tenantId = this.tenantContext.tenantId;
     return this.prisma.budgetPolicy.findMany({
       where: {
         tenantId,
@@ -135,7 +141,10 @@ export class PrismaBudgetPolicyRepository implements IBudgetPolicyRepository {
 export class PrismaBudgetIncidentRepository implements IBudgetIncidentRepository {
   private readonly logger = new Logger(PrismaBudgetIncidentRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   async create(input: CreateBudgetIncidentInput): Promise<BudgetIncident> {
     return this.prisma.budgetIncident.create({
@@ -155,7 +164,8 @@ export class PrismaBudgetIncidentRepository implements IBudgetIncidentRepository
     });
   }
 
-  async findActiveByTenant(tenantId: string): Promise<BudgetIncident[]> {
+  async findActiveByTenant(): Promise<BudgetIncident[]> {
+    const tenantId = this.tenantContext.tenantId;
     return this.prisma.budgetIncident.findMany({
       where: {
         budgetPolicy: { tenantId },

@@ -4,6 +4,7 @@ import { IntegrationProvider } from '@prisma/client';
 import type { IEmailProvider, EmailProviderName } from './email-provider.interface';
 import { GmailEmailProvider } from './gmail-email.provider';
 import { BrevoEmailProvider } from './brevo-email.provider';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 
 export type EmailProviderPreference = 'auto' | 'gmail' | 'brevo';
 
@@ -13,6 +14,7 @@ export class EmailProviderFactory {
     private readonly gmail: GmailEmailProvider,
     private readonly brevo: BrevoEmailProvider,
     private readonly credentials: PrismaIntegrationCredentialStore,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   /**
@@ -21,10 +23,10 @@ export class EmailProviderFactory {
    * Throws if no provider is available.
    */
   async forSend(
-    tenantId: string,
     preferred: EmailProviderName,
     requested: EmailProviderPreference,
   ): Promise<IEmailProvider> {
+    const tenantId = this.tenantContext.tenantId;
     const [googleConnected, brevoConnected] = await Promise.all([
       this.credentials.exists(tenantId, IntegrationProvider.GOOGLE),
       this.credentials.exists(tenantId, IntegrationProvider.BREVO),

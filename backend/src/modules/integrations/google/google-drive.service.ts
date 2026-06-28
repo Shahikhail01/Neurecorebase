@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
 import { GoogleAuthClient } from './google-auth.client';
 import type { IDriveService } from './drive-service.interface';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 
 export interface DriveFile {
   id: string;
@@ -40,10 +41,15 @@ export class GoogleDriveService implements IDriveService {
   constructor(
     private readonly authClient: GoogleAuthClient,
     private readonly config: ConfigService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
-  private async authFetch(tenantId: string, url: string, options: RequestInit = {}): Promise<Response> {
-    const accessToken = await this.authClient.getAccessToken(tenantId);
+  async getAccessToken(): Promise<string | null> {
+    return this.authClient.getAccessToken(this.tenantContext.tenantId);
+  }
+
+  private async authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const accessToken = await this.authClient.getAccessToken(this.tenantContext.tenantId);
     if (!accessToken) {
       throw new BadRequestException('Google is not connected for this tenant');
     }
@@ -59,7 +65,8 @@ export class GoogleDriveService implements IDriveService {
   /**
    * Find a folder by name in the Drive root. Used to avoid creating duplicates.
    */
-  async findFolderByName(tenantId: string, name: string, parentId?: string): Promise<DriveFile | null> {
+  async findFolderByName(name: string, parentId?: string): Promise<DriveFile | null> {
+    const tenantId = this.tenantContext.tenantId;
     let query = `mimeType='${FOLDER_MIME_TYPE}' and name='${name.replace(/'/g, "\\'")}' and trashed=false`;
     if (parentId) {
       query += ` and '${parentId}' in parents`;
@@ -71,7 +78,6 @@ export class GoogleDriveService implements IDriveService {
     });
 
     const res = await this.authFetch(
-      tenantId,
       `${this.DRIVE_API}/files?${params.toString()}`,
     );
 
@@ -86,8 +92,9 @@ export class GoogleDriveService implements IDriveService {
   /**
    * Create a folder. Returns existing folder if one with the same name exists.
    */
-  async createFolder(tenantId: string, input: CreateFolderInput): Promise<DriveFile> {
-    const existing = await this.findFolderByName(tenantId, input.name, input.parentId);
+  async createFolder(input: CreateFolderInput): Promise<DriveFile> {
+    const tenantId = this.tenantContext.tenantId;
+    const existing = await this.findFolderByName(input.name, input.parentId);
     if (existing) {
       this.logger.log(
         `Folder "${input.name}" already exists (id=${existing.id}) for tenant ${tenantId}`,
@@ -104,7 +111,6 @@ export class GoogleDriveService implements IDriveService {
     }
 
     const res = await this.authFetch(
-      tenantId,
       `${this.DRIVE_API}/files`,
       {
         method: 'POST',
@@ -128,7 +134,8 @@ export class GoogleDriveService implements IDriveService {
    * Get or create the tenant's root NeureCore folder.
    * Caches the folder ID on the tenant record.
    */
-  async ensureRootFolder(tenantId: string): Promise<DriveFile> {
+  async ensureRootFolder(): Promise<DriveFile> {
+    const tenantId = this.tenantContext.tenantId;
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { googleDriveRootFolderId: true },
@@ -142,7 +149,7 @@ export class GoogleDriveService implements IDriveService {
       };
     }
 
-    const root = await this.createFolder(tenantId, { name: NEURECORE_ROOT_FOLDER });
+    const root = await this.createFolder({ name: NEURECORE_ROOT_FOLDER });
 
     await this.prisma.tenant.update({
       where: { id: tenantId },
@@ -160,10 +167,10 @@ export class GoogleDriveService implements IDriveService {
    * Caches the agent folder ID on the agent record.
    */
   async setupAgentFolders(
-    tenantId: string,
     agentId: string,
     agentName: string,
   ): Promise<{ folderId: string; subfolders: Record<string, string> }> {
+    const tenantId = this.tenantContext.tenantId;
     const agent = await this.prisma.agent.findUnique({
       where: { id: agentId },
       select: { googleDriveFolderId: true, name: true, tenantId: true },
@@ -173,7 +180,7 @@ export class GoogleDriveService implements IDriveService {
       throw new BadRequestException(`Agent ${agentId} not found for tenant ${tenantId}`);
     }
 
-    const root = await this.ensureRootFolder(tenantId);
+    const root = await this.ensureRootFolder();
 
     let agentFolder: DriveFile;
     if (agent.googleDriveFolderId) {
@@ -183,7 +190,7 @@ export class GoogleDriveService implements IDriveService {
         mimeType: FOLDER_MIME_TYPE,
       };
     } else {
-      agentFolder = await this.createFolder(tenantId, {
+      agentFolder = await this.createFolder({
         name: agentName,
         parentId: root.id,
       });
@@ -197,7 +204,7 @@ export class GoogleDriveService implements IDriveService {
     const subfolders: Record<string, string> = {};
 
     for (const subName of subfolderNames) {
-      const sub = await this.createFolder(tenantId, {
+      const sub = await this.createFolder({
         name: subName,
         parentId: agentFolder.id,
       });
@@ -215,7 +222,6 @@ export class GoogleDriveService implements IDriveService {
    * List files in a folder
    */
   async listFiles(
-    tenantId: string,
     folderId: string,
     options: { pageSize?: number } = {},
   ): Promise<DriveFile[]> {
@@ -228,7 +234,6 @@ export class GoogleDriveService implements IDriveService {
     });
 
     const res = await this.authFetch(
-      tenantId,
       `${this.DRIVE_API}/files?${params.toString()}`,
     );
 
@@ -243,7 +248,7 @@ export class GoogleDriveService implements IDriveService {
   /**
    * Create a file in a folder
    */
-  async createFile(tenantId: string, input: CreateFileInput): Promise<DriveFile> {
+  async createFile(input: CreateFileInput): Promise<DriveFile> {
     const metadata: Record<string, unknown> = {
       name: input.name,
       mimeType: input.mimeType ?? 'text/plain',
@@ -263,7 +268,6 @@ export class GoogleDriveService implements IDriveService {
       `--${boundary}--`;
 
     const res = await this.authFetch(
-      tenantId,
       `${this.DRIVE_UPLOAD_API}/files?uploadType=multipart`,
       {
         method: 'POST',
@@ -284,11 +288,12 @@ export class GoogleDriveService implements IDriveService {
   /**
    * List all agent folders for the tenant
    */
-  async listAgentFolders(tenantId: string): Promise<{
+  async listAgentFolders(): Promise<{
     rootFolderId: string;
     agents: { agentId: string; agentName: string; folderId: string; folderLink?: string }[];
   }> {
-    const root = await this.ensureRootFolder(tenantId);
+    const tenantId = this.tenantContext.tenantId;
+    const root = await this.ensureRootFolder();
 
     const agents = await this.prisma.agent.findMany({
       where: { tenantId, googleDriveFolderId: { not: null } },
@@ -309,9 +314,8 @@ export class GoogleDriveService implements IDriveService {
    * WS-6.2: Permanently delete a Drive file or folder (used by cleanup cron).
    * Caller should have already verified the file is empty.
    */
-  async deleteFile(tenantId: string, fileId: string): Promise<void> {
+  async deleteFile(fileId: string): Promise<void> {
     const res = await this.authFetch(
-      tenantId,
       `${this.DRIVE_API}/files/${encodeURIComponent(fileId)}`,
       { method: 'DELETE' },
     );
@@ -326,10 +330,11 @@ export class GoogleDriveService implements IDriveService {
    * WS-3: List the full Drive folder tree under the tenant's NeureCore root.
    * Returns root + immediate children + nested agent subfolders (1 level deep).
    */
-  async listRootTree(tenantId: string): Promise<{
+  async listRootTree(): Promise<{
     rootFolderId: string | null;
     children: { id: string; name: string; mimeType: string; webViewLink?: string; children: DriveFile[] }[];
   }> {
+    const tenantId = this.tenantContext.tenantId;
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { googleDriveRootFolderId: true },
@@ -341,7 +346,7 @@ export class GoogleDriveService implements IDriveService {
 
     let rootChildren: DriveFile[];
     try {
-      rootChildren = await this.listFiles(tenantId, rootFolderId, { pageSize: 50 });
+      rootChildren = await this.listFiles(rootFolderId, { pageSize: 50 });
     } catch {
       return { rootFolderId, children: [] };
     }
@@ -351,7 +356,7 @@ export class GoogleDriveService implements IDriveService {
         let nested: DriveFile[] = [];
         if (folder.mimeType === FOLDER_MIME_TYPE) {
           try {
-            nested = await this.listFiles(tenantId, folder.id, { pageSize: 20 });
+            nested = await this.listFiles(folder.id, { pageSize: 20 });
           } catch {
             nested = [];
           }

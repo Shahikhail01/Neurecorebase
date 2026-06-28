@@ -168,7 +168,7 @@ export class UsersService {
     });
     if (!user) throw new NotFoundException(`User ${id} not found`);
 
-    const valid = await this.passwordService.compare(
+const valid = await this.passwordService.compare(
       dto.currentPassword,
       user.passwordHash ?? '',
     );

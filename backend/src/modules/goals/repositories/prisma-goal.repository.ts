@@ -5,11 +5,12 @@
  * Following SOLID:
  * - Single Responsibility: Only handles Goal persistence
  * - Dependency Inversion: Implements interface, not coupled to service
- * - Tenant Isolation: ALL queries include tenantId filter
+ * - Tenant Isolation: ALL queries include tenantId filter (read from TenantContextService)
  */
 
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import type {
   IGoalRepository,
   CreateGoalInput,
@@ -21,12 +22,15 @@ import type {
 export class PrismaGoalRepository implements IGoalRepository {
   private readonly logger = new Logger(PrismaGoalRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   async create(data: CreateGoalInput) {
     return this.prisma.goal.create({
       data: {
-        tenantId: data.tenantId,
+        tenantId: this.tenantContext.tenantId,
         title: data.title,
         description: data.description,
         level: data.level ?? 'INDIVIDUAL',
@@ -39,20 +43,20 @@ export class PrismaGoalRepository implements IGoalRepository {
     });
   }
 
-  async findById(id: string, tenantId: string) {
+  async findById(id: string) {
     return this.prisma.goal.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId: this.tenantContext.tenantId },
     });
   }
 
   async findAll(options: ListGoalsOptions) {
-    const { tenantId, status, level, parentId, ownerUserId, ownerAgentId } =
+    const { status, level, parentId, ownerUserId, ownerAgentId } =
       options;
     const page = options.page ?? 1;
     const limit = options.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = { tenantId };
+    const where: Record<string, unknown> = { tenantId: this.tenantContext.tenantId };
 
     if (status) where.status = status;
     if (level) where.level = level;
@@ -83,21 +87,21 @@ export class PrismaGoalRepository implements IGoalRepository {
     return { data, total };
   }
 
-  async findByParentId(parentId: string, tenantId: string) {
+  async findByParentId(parentId: string) {
     return this.prisma.goal.findMany({
-      where: { parentId, tenantId },
+      where: { parentId, tenantId: this.tenantContext.tenantId },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async findRootGoals(tenantId: string) {
+  async findRootGoals() {
     return this.prisma.goal.findMany({
-      where: { tenantId, parentId: null },
+      where: { tenantId: this.tenantContext.tenantId, parentId: null },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async update(id: string, tenantId: string, data: UpdateGoalInput) {
+  async update(id: string, data: UpdateGoalInput) {
     const updateData: Record<string, unknown> = {};
 
     if (data.title !== undefined) updateData.title = data.title;
@@ -130,8 +134,8 @@ export class PrismaGoalRepository implements IGoalRepository {
     });
   }
 
-  async delete(id: string, tenantId: string) {
-    // Verify tenant ownership before delete
+  async delete(id: string) {
+    const tenantId = this.tenantContext.tenantId;
     const goal = await this.prisma.goal.findFirst({
       where: { id, tenantId },
     });
@@ -140,15 +144,13 @@ export class PrismaGoalRepository implements IGoalRepository {
       throw new Error(`Goal ${id} not found for tenant ${tenantId}`);
     }
 
-    // Delete goal (cascades to children via DB or handled manually)
     await this.prisma.goal.delete({ where: { id } });
     this.logger.log(`Deleted goal ${id}`);
   }
 
-  async updateProgress(id: string, tenantId: string, progress: number) {
+  async updateProgress(id: string, progress: number) {
     const data: Record<string, unknown> = { progress };
 
-    // Auto-complete if progress reaches 100
     if (progress >= 100) {
       data.status = 'COMPLETED';
       data.completedAt = new Date();

@@ -101,6 +101,7 @@ export class GovernanceRulesController {
 
 // ─── Governance Policies ─────────────────────────────────────────────────────────
 
+@ApiCommon('governance')
 @Controller({ path: 'governance/policies', version: '1' })
 export class GovernancePoliciesController {
   /**
@@ -125,6 +126,7 @@ export class GovernancePoliciesController {
 
 // ─── Governance Anomalies ───────────────────────────────────────────────────────
 
+@ApiCommon('governance')
 @Controller({ path: 'governance/anomalies', version: '1' })
 export class GovernanceAnomaliesController {
   /**
@@ -149,6 +151,7 @@ export class GovernanceAnomaliesController {
 
 // ─── Approvals ────────────────────────────────────────────────────────────────
 
+@ApiCommon('approvals')
 @Controller({ path: 'approvals', version: '1' })
 export class ApprovalsController {
   constructor(private readonly approvalsService: ApprovalsService) {}

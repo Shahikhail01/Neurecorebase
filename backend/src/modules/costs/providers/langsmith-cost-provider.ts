@@ -14,6 +14,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import type {
   ICostAggregationProvider,
   CostSummary,
@@ -25,13 +26,17 @@ import { costPer1KTokens } from './cost-constants';
 export class LangSmithCostProvider implements ICostAggregationProvider {
   private readonly logger = new Logger(LangSmithCostProvider.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   /**
-   * Resolve agent IDs for a tenant. Returns [] if tenant has no agents.
+   * Resolve agent IDs for the current tenant. Returns [] if tenant has no agents.
    * Used as the safe filter for ExecutionLog queries (Gap 6a fix).
    */
-  private async resolveTenantAgentIds(tenantId: string | null): Promise<string[]> {
+  private async resolveTenantAgentIds(): Promise<string[]> {
+    const tenantId = this.tenantContext.tenantId;
     if (!tenantId) return [];
     const agents = await this.prisma.agent.findMany({
       where: { tenantId },
@@ -47,11 +52,11 @@ export class LangSmithCostProvider implements ICostAggregationProvider {
    * Falls back to token-based estimation if no direct cost recorded
    */
   async getCostByTenant(
-    tenantId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<CostSummary> {
-    const agentIds = await this.resolveTenantAgentIds(tenantId);
+    const tenantId = this.tenantContext.tenantId;
+    const agentIds = await this.resolveTenantAgentIds();
     if (agentIds.length === 0) {
       return {
         totalCostCents: 0,
@@ -132,11 +137,11 @@ export class LangSmithCostProvider implements ICostAggregationProvider {
    * Get cost breakdown by specific agent
    */
   async getCostByAgent(
-    tenantId: string,
     agentId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<CostSummary> {
+    const tenantId = this.tenantContext.tenantId;
     // Phase 1 Gap 6a — verify agent belongs to tenant (defense in depth)
     const agent = await this.prisma.agent.findFirst({
       where: { id: agentId, tenantId },
@@ -192,11 +197,11 @@ export class LangSmithCostProvider implements ICostAggregationProvider {
    * Get cost breakdown by LLM model
    */
   async getCostByModel(
-    tenantId: string,
     model: string,
     startDate: Date,
     endDate: Date,
   ): Promise<CostSummary> {
+    const tenantId = this.tenantContext.tenantId;
     // Phase 1 Gap 6a — two-step: resolve tenant agent IDs, then filter
     const tenantAgents = await this.prisma.agent.findMany({
       where: { tenantId, model },
@@ -245,7 +250,6 @@ export class LangSmithCostProvider implements ICostAggregationProvider {
    * Get cost breakdown by provider (inferred from model name)
    */
   async getCostByProvider(
-    tenantId: string,
     provider: string,
     startDate: Date,
     endDate: Date,
@@ -261,7 +265,7 @@ export class LangSmithCostProvider implements ICostAggregationProvider {
     const patterns = providerModelPatterns[provider.toUpperCase()] ?? [];
 
     // Phase 1 Gap 6a — pre-fetch tenant agent IDs (handles null tenantId safely)
-    const agentIds = await this.resolveTenantAgentIds(tenantId);
+    const agentIds = await this.resolveTenantAgentIds();
     if (agentIds.length === 0) {
       return {
         totalCostCents: 0,

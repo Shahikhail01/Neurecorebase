@@ -43,8 +43,8 @@ function resolveTenantId(user: JwtPayload, explicit?: string): string {
  * Exposes admin endpoints for quota management, spending cap configuration,
  * and circuit breaker introspection.
  */
+@ApiCommon('reliability')
 @Controller({ path: 'reliability', version: '1' })
-@ApiCommon('controllers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReliabilityController {
   constructor(

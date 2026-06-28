@@ -10,8 +10,6 @@ import {
   HttpCode,
   HttpStatus,
   Query,
-  ForbiddenException,
-  BadRequestException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiCommon } from '../../common/decorators/api-common.decorator';
@@ -21,8 +19,13 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { TierLimit } from '../../common/decorators/tier-limit.decorator';
 import { TierLimitsGuard } from '../../common/guards/tier-limits.guard';
-import { resolveTenantContext } from '../../common/utils/resolve-tenant-context';
+import { TenantContextService } from '../../common/context/tenant-context.service';
 import { assertSameTenant } from '../../common/utils/assert-same-tenant';
+import { TenantIsolated } from '../../common/guards/tenant-isolated.decorator';
+import { PaginationDto } from '../../common/dto/pagination.dto';
+import { PaginatedResponse } from '../../common/responses/paginated.response';
+import { ApiOkResponse } from '@nestjs/swagger';
+import { DepartmentResponseDto } from './dto/department-response.dto';
 import type { JwtPayload } from '../auth/interfaces/token.interface';
 import { UserRole } from '@prisma/client';
 
@@ -30,37 +33,38 @@ import { UserRole } from '@prisma/client';
 @ApiCommon('departments')
 @UseGuards(TierLimitsGuard)
 export class DepartmentsController {
-  constructor(private readonly departmentsService: DepartmentsService) {}
-
-  private resolveTenantId(user: JwtPayload, tenantId?: string): string {
-    if (user.role === UserRole.SUPER_ADMIN) {
-      if (!tenantId)
-        throw new BadRequestException('tenantId is required for SUPER_ADMIN');
-      return tenantId;
-    }
-    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
-    return user.tenantId;
-  }
+  constructor(
+    private readonly departmentsService: DepartmentsService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   @Get()
-  findAll(
+  @ApiOkResponse({ type: PaginatedResponse<DepartmentResponseDto> })
+  async findAll(
     @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    return this.departmentsService.findAll(
-      this.resolveTenantId(user, tenantId),
-    );
+    @Query() pagination: PaginationDto,
+  ): Promise<PaginatedResponse<DepartmentResponseDto>> {
+    const all = await this.departmentsService.findAll();
+    const start = (pagination.page - 1) * pagination.limit;
+    const items = all.slice(start, start + pagination.limit);
+    return {
+      items: items as unknown as DepartmentResponseDto[],
+      pagination: {
+        page: pagination.page,
+        limit: pagination.limit,
+        total: all.length,
+        totalPages: Math.max(1, Math.ceil(all.length / pagination.limit)),
+      },
+    };
   }
 
   @Get(':id')
+  @TenantIsolated()
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
   ) {
-    // Phase 0 (FIX-007): canonical tenant-context + defense-in-depth check.
-    const ctx = resolveTenantContext(user, { query: { tenantId } });
-    const dept = await this.departmentsService.findOne(id, ctx.tenantId);
+    const dept = await this.departmentsService.findOne(id);
     assertSameTenant(user, (dept as { tenantId?: string | null })?.tenantId, {
       resourceType: 'department',
       resourceId: id,
@@ -71,16 +75,8 @@ export class DepartmentsController {
   @Post()
   @Roles(UserRole.SUPER_ADMIN)
   @TierLimit('maxDepartments')
-  create(
-    @Body() dto: CreateDepartmentDto,
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const effectiveTenantId = dto.tenantId ?? tenantId;
-    return this.departmentsService.create({
-      ...dto,
-      tenantId: this.resolveTenantId(user, effectiveTenantId),
-    });
+  create(@Body() dto: CreateDepartmentDto) {
+    return this.departmentsService.create(dto);
   }
 
   @Patch(':id')
@@ -88,27 +84,14 @@ export class DepartmentsController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateDepartmentDto,
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
   ) {
-    return this.departmentsService.update(
-      id,
-      this.resolveTenantId(user, tenantId),
-      dto,
-    );
+    return this.departmentsService.update(id, dto);
   }
 
   @Delete(':id')
   @Roles(UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    return this.departmentsService.remove(
-      id,
-      this.resolveTenantId(user, tenantId),
-    );
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.departmentsService.remove(id);
   }
 }

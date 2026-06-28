@@ -11,10 +11,17 @@
  * The middleware binds the ALS store for the lifetime of the request.
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Global } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { TenantContext } from './tenant-context';
 
+/**
+ * @Global so every module can inject TenantContextService without
+ * re-importing CommonContextModule. This is required by Phase 1E
+ * (per `EAOS-implementation-plan.md` §11.3) — every service that
+ * reads/writes tenant-scoped entities uses `TenantContextService`.
+ */
+@Global()
 @Injectable()
 export class TenantContextService {
   private readonly als = new AsyncLocalStorage<TenantContext>();

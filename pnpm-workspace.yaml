@@ -2,6 +2,7 @@ packages:
   - 'backend'
   - 'frontend-admin'
   - 'frontend-eaos'
+  - 'packages/ui'
 allowBuilds:
   '@google/genai': set this to true or false
   '@prisma/client': set this to true or false

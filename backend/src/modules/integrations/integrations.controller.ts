@@ -6,8 +6,6 @@ import {
   Body,
   Query,
   Param,
-  ForbiddenException,
-  BadRequestException,
   HttpCode,
   HttpStatus,
   Logger,
@@ -22,15 +20,12 @@ import { GoogleCalendarService } from './google/google-calendar.service';
 import type { CreateEventInput } from './google/google-calendar.service';
 import { GoogleDriveService } from './google/google-drive.service';
 import { BrevoUsageService } from './brevo/brevo-usage.service';
+import { Public } from '../../common/decorators/roles.decorator';
 
 type CreateEventBody = CreateEventInput;
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Public } from '../../common/decorators/roles.decorator';
-import type { JwtPayload } from '../auth/interfaces/token.interface';
-import { UserRole } from '@prisma/client';
 
-@Controller({ path: 'integrations', version: '1' })
 @ApiCommon('integrations')
+@Controller({ path: 'integrations', version: '1' })
 export class IntegrationsController {
   private readonly logger = new Logger(IntegrationsController.name);
 
@@ -42,60 +37,30 @@ export class IntegrationsController {
     private readonly brevoUsage: BrevoUsageService,
   ) {}
 
-  private resolveTenantId(user: JwtPayload, dtoTenantId?: string): string {
-    if (user.role === UserRole.SUPER_ADMIN) {
-      if (!dtoTenantId) throw new BadRequestException('tenantId required for SUPER_ADMIN');
-      return dtoTenantId;
-    }
-    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
-    return user.tenantId;
-  }
-
   @Get()
-  async listIntegrations(
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.integrationsService.listIntegrations(tid);
+  async listIntegrations() {
+    return this.integrationsService.listIntegrations();
   }
 
   @Get('google/status')
-  async getGoogleStatus(
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.integrationsService.getGoogleConnectionStatus(tid);
+  async getGoogleStatus() {
+    return this.integrationsService.getGoogleConnectionStatus();
   }
 
   @Get('brevo/status')
-  async getBrevoStatus(
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.integrationsService.getBrevoConnectionStatus(tid);
+  async getBrevoStatus() {
+    return this.integrationsService.getBrevoConnectionStatus();
   }
 
   @Get('usage/brevo')
-  async getBrevoUsage(
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.brevoUsage.getStatus(tid);
+  async getBrevoUsage() {
+    return this.brevoUsage.getStatus();
   }
 
   @Post('google/authorize')
   @HttpCode(HttpStatus.OK)
-  async authorizeGoogle(
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: ConnectGoogleDto,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.integrationsService.initiateGoogleOAuth(tid, dto.redirectUri);
+  async authorizeGoogle(@Body() dto: ConnectGoogleDto) {
+    return this.integrationsService.initiateGoogleOAuth(dto.redirectUri);
   }
 
   @Public()
@@ -130,49 +95,33 @@ export class IntegrationsController {
 
   @Post('google/disconnect')
   @HttpCode(HttpStatus.OK)
-  async disconnectGoogle(
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    await this.integrationsService.disconnectGoogle(tid);
+  async disconnectGoogle() {
+    await this.integrationsService.disconnectGoogle();
     return { success: true };
   }
 
   @Post('brevo/connect')
   @HttpCode(HttpStatus.OK)
-  async connectBrevo(
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: ConnectBrevoDto,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.integrationsService.connectBrevo(tid, dto.apiKey);
+  async connectBrevo(@Body() dto: ConnectBrevoDto) {
+    return this.integrationsService.connectBrevo(dto.apiKey);
   }
 
   @Post('brevo/disconnect')
   @HttpCode(HttpStatus.OK)
-  async disconnectBrevo(
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    await this.integrationsService.disconnectBrevo(tid);
+  async disconnectBrevo() {
+    await this.integrationsService.disconnectBrevo();
     return { success: true };
   }
 
-  // ─── Gmail endpoints ────────────────────────────────────────────────
+  // ─── Gmail endpoints ────────────────────────────────────────
 
   @Get('gmail/inbox')
   async getInbox(
-    @CurrentUser() user: JwtPayload,
     @Query('maxResults') maxResults?: string,
     @Query('pageToken') pageToken?: string,
     @Query('q') q?: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.gmailService.listInbox(tid, {
+    return this.gmailService.listInbox({
       maxResults: maxResults ? Number(maxResults) : undefined,
       pageToken,
       q,
@@ -180,59 +129,37 @@ export class IntegrationsController {
   }
 
   @Get('gmail/messages/:id')
-  async getMessage(
-    @CurrentUser() user: JwtPayload,
-    @Param('id') id: string,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.gmailService.getMessage(tid, id);
+  async getMessage(@Param('id') id: string) {
+    return this.gmailService.getMessage(id);
   }
 
   @Get('gmail/messages/:id/body')
-  async getMessageBody(
-    @CurrentUser() user: JwtPayload,
-    @Param('id') id: string,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.gmailService.getMessageBody(tid, id);
+  async getMessageBody(@Param('id') id: string) {
+    return this.gmailService.getMessageBody(id);
   }
 
   @Post('gmail/send')
   @HttpCode(HttpStatus.OK)
-  async sendEmail(
-    @CurrentUser() user: JwtPayload,
-    @Body() body: SendEmailInput,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.gmailService.sendEmail(tid, body);
+  async sendEmail(@Body() body: SendEmailInput) {
+    return this.gmailService.sendEmail(body);
   }
 
   @Get('gmail/labels')
-  async getLabels(
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.gmailService.listLabels(tid);
+  async getLabels() {
+    return this.gmailService.listLabels();
   }
 
-  // ─── Calendar endpoints ─────────────────────────────────────────────
+  // ─── Calendar endpoints ─────────────────────────────────────
 
   @Get('calendar/events')
   async getEvents(
-    @CurrentUser() user: JwtPayload,
     @Query('calendarId') calendarId?: string,
     @Query('maxResults') maxResults?: string,
     @Query('timeMin') timeMin?: string,
     @Query('timeMax') timeMax?: string,
     @Query('q') q?: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.calendarService.listEvents(tid, {
+    return this.calendarService.listEvents({
       calendarId,
       maxResults: maxResults ? Number(maxResults) : undefined,
       timeMin,
@@ -244,97 +171,63 @@ export class IntegrationsController {
   @Post('calendar/events')
   @HttpCode(HttpStatus.OK)
   async createEvent(
-    @CurrentUser() user: JwtPayload,
     @Body() body: CreateEventBody,
     @Query('calendarId') calendarId?: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.calendarService.createEvent(tid, body, calendarId);
+    return this.calendarService.createEvent(body, calendarId);
   }
 
   @Delete('calendar/events/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteEvent(
-    @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
     @Query('calendarId') calendarId?: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    await this.calendarService.deleteEvent(tid, id, calendarId);
+    await this.calendarService.deleteEvent(id, calendarId);
   }
 
   @Get('calendar/list')
-  async getCalendarList(
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.calendarService.listCalendars(tid);
+  async getCalendarList() {
+    return this.calendarService.listCalendars();
   }
 
-  // ─── Drive endpoints ────────────────────────────────────────────────
+  // ─── Drive endpoints ────────────────────────────────────────
 
   @Get('drive/folders/agents')
-  async listAgentFolders(
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.driveService.listAgentFolders(tid);
+  async listAgentFolders() {
+    return this.driveService.listAgentFolders();
   }
 
   @Get('google/drive-folders')
-  async getGoogleDriveFolders(
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.driveService.listRootTree(tid);
+  async getGoogleDriveFolders() {
+    return this.driveService.listRootTree();
   }
 
   @Post('drive/folders/agents/:agentId/setup')
   @HttpCode(HttpStatus.OK)
   async setupAgentFolders(
-    @CurrentUser() user: JwtPayload,
     @Param('agentId') agentId: string,
     @Body('agentName') agentName: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.driveService.setupAgentFolders(tid, agentId, agentName);
+    return this.driveService.setupAgentFolders(agentId, agentName);
   }
 
   @Get('drive/folders/:folderId/files')
-  async listDriveFiles(
-    @CurrentUser() user: JwtPayload,
-    @Param('folderId') folderId: string,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.driveService.listFiles(tid, folderId);
+  async listDriveFiles(@Param('folderId') folderId: string) {
+    return this.driveService.listFiles(folderId);
   }
 
   @Post('drive/folders')
   @HttpCode(HttpStatus.OK)
-  async createDriveFolder(
-    @CurrentUser() user: JwtPayload,
-    @Body() body: { name: string; parentId?: string },
-    @Query('tenantId') tenantId?: string,
-  ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.driveService.createFolder(tid, body);
+  async createDriveFolder(@Body() body: { name: string; parentId?: string }) {
+    return this.driveService.createFolder(body);
   }
 
   @Post('drive/files')
   @HttpCode(HttpStatus.OK)
   async createDriveFile(
-    @CurrentUser() user: JwtPayload,
     @Body() body: { name: string; content: string; mimeType?: string; parentId?: string },
-    @Query('tenantId') tenantId?: string,
   ) {
-    const tid = this.resolveTenantId(user, tenantId);
-    return this.driveService.createFile(tid, body);
+    return this.driveService.createFile(body);
   }
 }

@@ -18,6 +18,9 @@ import {
   UpdateTenantDto,
   ChangeTierDto,
 } from './dto/tenant.dto';
+import { PaginatedResponse } from '../../common/responses/paginated.response';
+import { ActionResult } from '../../common/responses/action-result.response';
+import type { TenantResponseDto } from './dto/tenant-response.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -37,12 +40,16 @@ export class TenantsController {
     UserRole.SECURITY_OFFICER,
     UserRole.SUPPORT,
   )
-  findAll(
+  async findAll(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('search') search?: string,
-  ) {
-    return this.tenantsService.findAll(page, limit, search);
+  ): Promise<PaginatedResponse<TenantResponseDto>> {
+    const { items, total } = await this.tenantsService.findAll(page, limit, search);
+    return {
+      items: items as unknown as TenantResponseDto[],
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    };
   }
 
   @Get(':id')
@@ -94,13 +101,15 @@ export class TenantsController {
 
   @Patch(':id/suspend')
   @Roles(UserRole.SUPER_ADMIN)
-  suspend(@Param('id') id: string) {
-    return this.tenantsService.suspend(id);
+  async suspend(@Param('id') id: string): Promise<ActionResult<TenantResponseDto | null>> {
+    const tenant = await this.tenantsService.suspend(id);
+    return { success: true, message: 'Tenant suspended', data: tenant as unknown as TenantResponseDto | null };
   }
 
   @Patch(':id/change-tier')
   @Roles(UserRole.SUPER_ADMIN, UserRole.PLATFORM_ADMIN)
-  changeTier(@Param('id') id: string, @Body() dto: ChangeTierDto) {
-    return this.tenantsService.changeTier(id, dto.tierId);
+  async changeTier(@Param('id') id: string, @Body() dto: ChangeTierDto): Promise<ActionResult<TenantResponseDto | null>> {
+    const tenant = await this.tenantsService.changeTier(id, dto.tierId);
+    return { success: true, message: 'Tier changed', data: tenant as unknown as TenantResponseDto | null };
   }
 }

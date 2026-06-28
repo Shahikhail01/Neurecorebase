@@ -374,30 +374,37 @@ Every phase task in this roadmap cites at least one SOLID principle. The five pr
 
 **Goal:** `frontend-eaos/` is built with TanStack Query from day 1 (no migration needed). This phase adds the missing pieces: standard hooks for every resource, the realtime socket bridge, and the SSE client. No "migration" step because there's no legacy to migrate from.
 
+**Status (2026-06-27):** ✅ **COMPLETE** — all 9 tasks done + 3 bonus
+
 **SOLID:** SRP (one hook per resource), LSP (all hooks return typed data), DIP (hooks depend on the OpenAPI types, not on raw HTTP).
 
 ### Tasks
 
-| # | Task | SOLID | Refs |
-|---|---|---|---|
-| 2.1 | Build `core/hooks/entity/useEntity*.ts` for all 10 EAOS entities (workspace, intelligence, operations, resources, collaboration, insights, automation, activity, lifecycle, context) | SRP | `EAOS-frontend-data-layer.md` §3.4 |
-| 2.2 | Build `core/hooks/mission-feed/useMissionFeed.ts` + `useDismissMissionFeedItem.ts` | SRP | `EAOS-frontend-data-layer.md` §3.4 |
-| 2.3 | Build `core/hooks/ai-roster/useAiRoster.ts` | SRP | `EAOS-frontend-data-layer.md` §3.4 |
-| 2.4 | Build `core/hooks/knowledge/useKnowledgeSearch.ts` + `useRagAsk.ts` (streaming via SSE) | SRP | `EAOS-frontend-data-layer.md` §3.4 |
-| 2.5 | Build `infrastructure/socket/SocketManager.ts` (Socket.IO client with reconnect) | SRP | `EAOS-frontend-data-layer.md` §5.1 |
-| 2.6 | Build `infrastructure/socket/queryEventBridge.ts` (translates socket events to TanStack Query invalidations) | DIP | `EAOS-frontend-data-layer.md` §3.6 |
-| 2.7 | Build `infrastructure/sse/SSEClient.ts` (EventSource wrapper with reconnect + abort signal) | SRP | `EAOS-frontend-data-layer.md` §5.2 |
-| 2.8 | Build `infrastructure/api/RestClient.ts` (the canonical HTTP client; wraps fetch/axios with auth header + 401 refresh) | SRP | `EAOS-frontend-data-layer.md` §2.1 |
-| 2.9 | Build `infrastructure/auth/CookieManager.ts` (httpOnly cookie auth — the sole auth path per D-023) | SRP | `EAOS-frontend-data-layer.md` §4.1 |
+| # | Task | SOLID | Refs | Status |
+|---|---|---|---|---|
+| 2.1 | Build `core/hooks/entity/useEntity*.ts` for all 10 EAOS entities (workspace, intelligence, operations, resources, collaboration, insights, automation, activity, lifecycle, context) | SRP | `EAOS-frontend-data-layer.md` §3.4 | ✅ |
+| 2.2 | Build `core/hooks/mission-feed/useMissionFeed.ts` + `useDismissMissionFeedItem.ts` | SRP | `EAOS-frontend-data-layer.md` §3.4 | ✅ |
+| 2.3 | Build `core/hooks/ai-roster/useAiRoster.ts` | SRP | `EAOS-frontend-data-layer.md` §3.4 | ✅ |
+| 2.4 | Build `core/hooks/knowledge/useKnowledgeSearch.ts` + `useRagAsk.ts` (streaming via SSE) | SRP | `EAOS-frontend-data-layer.md` §3.4 | ✅ |
+| 2.5 | Build `infrastructure/socket/SocketManager.ts` (Socket.IO client with reconnect) | SRP | `EAOS-frontend-data-layer.md` §5.1 | ✅ |
+| 2.6 | Build `infrastructure/socket/queryEventBridge.ts` (translates socket events to TanStack Query invalidations) | DIP | `EAOS-frontend-data-layer.md` §3.6 | ✅ |
+| 2.7 | Build `infrastructure/sse/SSEClient.ts` (EventSource wrapper with reconnect + abort signal) | SRP | `EAOS-frontend-data-layer.md` §5.2 | ✅ |
+| 2.8 | Build `infrastructure/api/RestClient.ts` (the canonical HTTP client; wraps fetch/axios with auth header + 401 refresh) | SRP | `EAOS-frontend-data-layer.md` §2.1 | ✅ |
+| 2.9 | Build `infrastructure/auth/CookieManager.ts` (httpOnly cookie auth — the sole auth path per D-023) | SRP | `EAOS-frontend-data-layer.md` §4.1 | ✅ |
+
+**Bonus (not in original task list):**
+- `AppInitializer.tsx` — socket connect/disconnect on auth state transitions
+- `errorHandler.ts` — global error handler per `EAOS-frontend-data-layer.md` §8.2
+- `core/hooks/resources/` — `useTasks`, `useAgents`, `useDepartments` CRUD hooks
 
 ### Exit criteria
 
-- [ ] `pnpm --filter frontend-eaos tsc --noEmit` passes
-- [ ] `pnpm --filter frontend-eaos build` succeeds
-- [ ] Every entity has a `useEntity*` hook
-- [ ] Socket auto-reconnects after server restart (verified by kill-and-restart)
-- [ ] 401 response triggers silent refresh via `CookieManager`
-- [ ] Zero raw `fetch()` calls in `src/` outside `infrastructure/`
+- [x] `pnpm --filter frontend-eaos tsc --noEmit` passes
+- [x] `pnpm --filter frontend-eaos build` succeeds
+- [x] Every entity has a `useEntity*` hook (10/10)
+- [x] Socket auto-reconnects after server restart (verified by kill-and-restart)
+- [x] 401 response triggers silent refresh via `CookieManager`
+- [x] Zero raw `fetch()` calls in `src/` outside `infrastructure/`
 
 **This phase blocks:** Phase 3 (entity workspace uses all these hooks).
 

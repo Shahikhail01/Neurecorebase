@@ -13,7 +13,7 @@ export class BrevoEmailProvider implements IEmailProvider {
       ? input.body
       : `<p>${escapeHtml(input.body).replace(/\n/g, '<br>')}</p>`;
 
-    const result = await this.brevo.sendEmail(input.tenantId, {
+    const result = await this.brevo.sendEmail({
       to: input.to,
       subject: input.subject,
       htmlContent,

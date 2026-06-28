@@ -1,10 +1,6 @@
-import { IsInt, IsOptional, Min, Max, IsUUID } from 'class-validator';
+import { IsInt, IsOptional, Min, Max } from 'class-validator';
 
 export class ForecastRequestDto {
-  @IsOptional()
-  @IsUUID()
-  tenantId?: string;
-
   @IsOptional()
   @IsInt()
   @Min(1)

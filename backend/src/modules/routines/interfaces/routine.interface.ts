@@ -16,7 +16,7 @@ import { Routine, RoutineTrigger, RoutineRun } from '@prisma/client';
 export interface IRoutineRepository {
   create(data: CreateRoutineInput): Promise<Routine>;
   findById(id: string, tenantId: string): Promise<Routine | null>;
-  findAll(tenantId: string, options?: ListRoutinesOptions): Promise<Routine[]>;
+  findAll(tenantId: string, options?: ListRoutinesOptions): Promise<{ routines: Routine[]; total: number }>;
   update(
     id: string,
     tenantId: string,
@@ -56,11 +56,11 @@ export interface IRoutineRunRepository {
   findByRoutineId(
     routineId: string,
     options?: ListRunsOptions,
-  ): Promise<RoutineRun[]>;
+  ): Promise<{ runs: RoutineRun[]; total: number }>;
   findByTenantId(
     tenantId: string,
     options?: ListRunsOptions,
-  ): Promise<RoutineRun[]>;
+  ): Promise<{ runs: RoutineRun[]; total: number }>;
   updateState(id: string, state: Record<string, unknown>): Promise<void>;
   complete(id: string, output: Record<string, unknown>): Promise<void>;
   fail(id: string, error: string): Promise<void>;

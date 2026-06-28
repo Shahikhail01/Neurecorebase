@@ -7,7 +7,6 @@ import {
   Param,
   Query,
   ParseUUIDPipe,
-  ForbiddenException,
   BadRequestException,
   HttpCode,
   HttpStatus,
@@ -21,43 +20,21 @@ import {
 } from '../dto/connector.dto';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../auth/interfaces/token.interface';
-import { UserRole } from '@prisma/client';
 import { OAuthService } from '../services/oauth.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 
 /**
  * ConnectorsController — Phase 4.2
  * SRP: HTTP routing only — all business logic in ConnectorService.
  */
 @Controller({ path: 'connectors', version: '1' })
-@ApiCommon('controllers')
+@ApiCommon('connectors')
 export class ConnectorsController {
   constructor(
     private readonly connectorService: ConnectorService,
     private readonly oauthService: OAuthService,
+    private readonly tenantContext: TenantContextService,
   ) {}
-
-  private resolveTenantId(
-    user: JwtPayload,
-    dtoTenantId?: string,
-  ): string | null {
-    if (user.role === UserRole.SUPER_ADMIN) {
-      // SUPER_ADMIN can list all connectors by passing no tenantId
-      return dtoTenantId ?? null;
-    }
-    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
-    return user.tenantId;
-  }
-
-  private resolveTenantIdRequired(
-    user: JwtPayload,
-    dtoTenantId?: string,
-  ): string {
-    const tid = this.resolveTenantId(user, dtoTenantId);
-    if (!tid) {
-      throw new BadRequestException('tenantId required for this operation');
-    }
-    return tid;
-  }
 
   /** GET /v1/connectors/providers */
   @Get('providers')
@@ -72,11 +49,9 @@ export class ConnectorsController {
   @Get('oauth/hubspot/authorize')
   oauthHubSpotAuthorize(
     @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
     @Query('redirectUri') redirectUri?: string,
     @Query('scopes') scopes?: string,
   ) {
-    const tid = this.resolveTenantIdRequired(user, tenantId);
     const redirect =
       redirectUri ??
       process.env.HUBSPOT_REDIRECT_URI ??
@@ -88,7 +63,6 @@ export class ConnectorsController {
           .filter(Boolean)
       : ['crm.objects.contacts.read', 'crm.objects.deals.read'];
     return this.oauthService.authorizeHubSpot({
-      tenantId: tid,
       redirectUri: redirect,
       scopes: scopeList,
     });
@@ -118,13 +92,8 @@ export class ConnectorsController {
 
   /** GET /v1/connectors */
   @Get()
-  listConnectors(
-    @CurrentUser() user: JwtPayload,
-    @Query('tenantId') tenantId?: string,
-  ) {
-    return this.connectorService.listConnectors(
-      this.resolveTenantId(user, tenantId),
-    );
+  listConnectors(@CurrentUser() user: JwtPayload) {
+    return this.connectorService.listConnectors();
   }
 
   /** POST /v1/connectors */
@@ -133,9 +102,7 @@ export class ConnectorsController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: RegisterConnectorDto,
   ) {
-    const tid = this.resolveTenantIdRequired(user, dto.tenantId);
     return this.connectorService.createConnector(
-      tid,
       dto.name,
       dto.provider,
       dto.config ?? {},
@@ -148,12 +115,8 @@ export class ConnectorsController {
   async deleteConnector(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    await this.connectorService.deleteConnector(
-      id,
-      this.resolveTenantIdRequired(user, tenantId),
-    );
+    await this.connectorService.deleteConnector(id);
   }
 
   /** POST /v1/connectors/:id/connect */
@@ -164,11 +127,7 @@ export class ConnectorsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ConnectConnectorDto,
   ) {
-    await this.connectorService.connect(
-      id,
-      this.resolveTenantIdRequired(user),
-      dto.config,
-    );
+    await this.connectorService.connect(id, dto.config);
     return { ok: true };
   }
 
@@ -178,12 +137,8 @@ export class ConnectorsController {
   async disconnect(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
-    @Query('tenantId') tenantId?: string,
   ) {
-    await this.connectorService.disconnect(
-      id,
-      this.resolveTenantIdRequired(user, tenantId),
-    );
+    await this.connectorService.disconnect(id);
     return { ok: true };
   }
 
@@ -195,14 +150,13 @@ export class ConnectorsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: SyncConnectorDto,
   ) {
-    const tid = this.resolveTenantIdRequired(user, dto.tenantId);
     const results: Record<string, string> = {};
     if (dto.contacts !== false) {
-      await this.connectorService.syncContacts(id, tid);
+      await this.connectorService.syncContacts(id);
       results.contacts = 'synced';
     }
     if (dto.leads !== false) {
-      await this.connectorService.syncLeads(id, tid);
+      await this.connectorService.syncLeads(id);
       results.leads = 'synced';
     }
     return results;

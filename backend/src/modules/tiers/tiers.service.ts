@@ -20,6 +20,9 @@ import type {
 } from './interfaces/tier.interface';
 import type { Tier, Prisma } from '@prisma/client';
 
+const PACK_TIER_ORDER = ['COMMUNITY', 'STARTER', 'PRO', 'ENTERPRISE'] as const;
+type PackTierRequired = (typeof PACK_TIER_ORDER)[number];
+
 @Injectable()
 export class TiersService implements ITierService {
   private readonly logger = new Logger(TiersService.name);
@@ -227,5 +230,50 @@ export class TiersService implements ITierService {
     const tiers = await this.prisma.$transaction(updates);
     this.logger.log(`Reordered ${tiers.length} tiers`);
     return tiers;
+  }
+
+  // ─── Phase 7 — Solution Pack helpers ───────────────────────────────
+  // Per `EAOS-implementation-plan.md` §9.8 (task 7.6: "Add
+  // canInstallPack(packId) to TierService"). These methods are exposed
+  // directly on TiersService (not the interface) because they're a
+  // focused vertical concern.
+
+  /**
+   * Resolve the canonical PackTierRequired for a tenant by reading their
+   * tier row. Falls back to COMMUNITY if the tenant has no tier set.
+   */
+  async resolveTenantPackTier(tenantId: string): Promise<PackTierRequired> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: { tier: true },
+    });
+    const slug = (tenant?.tier?.slug ?? 'COMMUNITY').toUpperCase();
+    if (slug === 'BUSINESS' || slug === 'STARTER') return 'STARTER';
+    if (slug === 'ENTERPRISE') return 'ENTERPRISE';
+    if (slug === 'PRO') return 'PRO';
+    return 'COMMUNITY';
+  }
+
+  /**
+   * True when the tenant's tier is at or above the pack's `tierRequired`.
+   *
+   * @param tenantId  the tenant to check
+   * @param packId    the SolutionPack id to read `tierRequired` from
+   */
+  async canInstallPack(tenantId: string, packId: string): Promise<boolean> {
+    const [tenantTier, pack] = await Promise.all([
+      this.resolveTenantPackTier(tenantId),
+      this.prisma.solutionPack.findUnique({
+        where: { id: packId },
+        select: { tierRequired: true, status: true },
+      }),
+    ]);
+
+    if (!pack) return false;
+    if (pack.status === 'draft' || pack.status === 'deprecated') return false;
+
+    const tIdx = PACK_TIER_ORDER.indexOf(tenantTier);
+    const rIdx = PACK_TIER_ORDER.indexOf(pack.tierRequired as PackTierRequired);
+    return tIdx >= 0 && rIdx >= 0 && tIdx >= rIdx;
   }
 }

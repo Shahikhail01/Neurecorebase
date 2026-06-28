@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { GoogleAuthClient } from './google-auth.client';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 
 export interface GmailMessage {
   id: string;
@@ -34,10 +35,13 @@ export class GoogleGmailService {
   private readonly logger = new Logger(GoogleGmailService.name);
   private readonly GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
-  constructor(private readonly authClient: GoogleAuthClient) {}
+  constructor(
+    private readonly authClient: GoogleAuthClient,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
-  private async authFetch(tenantId: string, url: string, options: RequestInit = {}): Promise<Response> {
-    const accessToken = await this.authClient.getAccessToken(tenantId);
+  private async authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const accessToken = await this.authClient.getAccessToken(this.tenantContext.tenantId);
     if (!accessToken) {
       throw new BadRequestException('Google is not connected for this tenant');
     }
@@ -55,7 +59,6 @@ export class GoogleGmailService {
    * List inbox messages
    */
   async listInbox(
-    tenantId: string,
     options: { maxResults?: number; labelIds?: string[]; pageToken?: string; q?: string } = {},
   ): Promise<{ messages: GmailMessage[]; nextPageToken?: string }> {
     const { maxResults = 20, labelIds = ['INBOX'], pageToken, q } = options;
@@ -66,7 +69,6 @@ export class GoogleGmailService {
     if (q) params.set('q', q);
 
     const listRes = await this.authFetch(
-      tenantId,
       `${this.GMAIL_API}/messages?${params.toString()}`,
     );
 
@@ -84,7 +86,7 @@ export class GoogleGmailService {
     }
 
     const detailPromises = listData.messages.map((m) =>
-      this.getMessage(tenantId, m.id, m.threadId),
+      this.getMessage(m.id, m.threadId),
     );
     const messages = await Promise.all(detailPromises);
 
@@ -94,9 +96,8 @@ export class GoogleGmailService {
   /**
    * Get a single message with parsed headers and snippet
    */
-  async getMessage(tenantId: string, messageId: string, threadId?: string): Promise<GmailMessage> {
+  async getMessage(messageId: string, threadId?: string): Promise<GmailMessage> {
     const res = await this.authFetch(
-      tenantId,
       `${this.GMAIL_API}/messages/${messageId}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
     );
 
@@ -132,11 +133,9 @@ export class GoogleGmailService {
    * Get the full body of a message (plain text or HTML)
    */
   async getMessageBody(
-    tenantId: string,
     messageId: string,
   ): Promise<{ plainText: string; html: string }> {
     const res = await this.authFetch(
-      tenantId,
       `${this.GMAIL_API}/messages/${messageId}?format=full`,
     );
 
@@ -178,7 +177,8 @@ export class GoogleGmailService {
   /**
    * Send an email via Gmail
    */
-  async sendEmail(tenantId: string, input: SendEmailInput): Promise<{ messageId: string; threadId: string }> {
+  async sendEmail(input: SendEmailInput): Promise<{ messageId: string; threadId: string }> {
+    const tenantId = this.tenantContext.tenantId;
     const headers = [
       `To: ${input.to}`,
       `Subject: ${input.subject}`,
@@ -192,7 +192,6 @@ export class GoogleGmailService {
     ).toString('base64url');
 
     const res = await this.authFetch(
-      tenantId,
       `${this.GMAIL_API}/messages/send`,
       {
         method: 'POST',
@@ -214,8 +213,8 @@ export class GoogleGmailService {
   /**
    * List Gmail labels/folders
    */
-  async listLabels(tenantId: string): Promise<{ id: string; name: string; type: string }[]> {
-    const res = await this.authFetch(tenantId, `${this.GMAIL_API}/labels`);
+  async listLabels(): Promise<{ id: string; name: string; type: string }[]> {
+    const res = await this.authFetch(`${this.GMAIL_API}/labels`);
     if (!res.ok) {
       throw new BadRequestException('Failed to fetch Gmail labels');
     }

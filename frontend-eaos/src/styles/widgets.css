@@ -1,0 +1,62 @@
+/* Widget grid overrides — react-grid-layout default styles. */
+
+/* Make the drag handle obvious only on the wrapper (not the widget body) */
+.widget-grid-container .react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top, width, height;
+}
+
+.widget-grid-container .react-grid-item.cssTransforms {
+  transition-property: transform, width, height;
+}
+
+.widget-grid-container .react-grid-item.react-draggable-dragging,
+.widget-grid-container .react-grid-item.resizing {
+  z-index: 30;
+  opacity: 0.85;
+  box-shadow:
+    0 0 0 2px rgb(59 130 246 / 0.4),
+    0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.widget-grid-container .react-grid-item.react-grid-placeholder {
+  background: rgb(59 130 246 / 0.15);
+  border: 2px dashed rgb(59 130 246 / 0.5);
+  border-radius: 8px;
+  opacity: 1;
+  transition-duration: 100ms;
+  z-index: 1;
+  user-select: none;
+}
+
+/* Cursor — only the wrapper is draggable; inner widgets keep their own
+   cursor (so clicking a button inside a Card visualization still works). */
+.widget-grid-container .react-grid-item > div {
+  cursor: move;
+}
+
+.widget-grid-container .react-grid-item button,
+.widget-grid-container .react-grid-item a,
+.widget-grid-container .react-grid-item input,
+.widget-grid-container .react-grid-item select,
+.widget-grid-container .react-grid-item [role="button"] {
+  cursor: auto;
+}
+
+/* Resize handle visibility */
+.widget-grid-container .react-resizable-handle {
+  background-image: none;
+}
+
+.widget-grid-container .react-resizable-handle::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  color: rgb(113 113 122);
+  opacity: 0.5;
+}

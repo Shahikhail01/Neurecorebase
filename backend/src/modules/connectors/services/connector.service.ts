@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ConnectorRegistry } from '../connector.registry';
 import { ICRMConnector } from '../interfaces/ICRMConnector';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 
 /**
  * ConnectorService — Phase 4.2
@@ -18,14 +19,15 @@ export class ConnectorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly registry: ConnectorRegistry,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   listAvailableProviders(): string[] {
     return this.registry.list();
   }
 
-  async listConnectors(tenantId: string | null) {
-    // If tenantId is null, list all connectors (for SUPER_ADMIN)
+  async listConnectors() {
+    const tenantId = this.tenantContext.tenantId;
     const where = tenantId ? { tenantId } : {};
     return this.prisma.crmConnector.findMany({
       where,
@@ -34,11 +36,11 @@ export class ConnectorService {
   }
 
   async createConnector(
-    tenantId: string,
     name: string,
     provider: string,
     config: Record<string, unknown> = {},
   ) {
+    const tenantId = this.tenantContext.tenantId;
     if (!this.registry.get(provider))
       throw new NotFoundException(`Provider not supported: ${provider}`);
     return this.prisma.crmConnector.create({
@@ -51,7 +53,8 @@ export class ConnectorService {
     });
   }
 
-  async deleteConnector(id: string, tenantId: string) {
+  async deleteConnector(id: string) {
+    const tenantId = this.tenantContext.tenantId;
     const existing = await this.prisma.crmConnector.findFirst({
       where: { id, tenantId },
     });
@@ -61,9 +64,9 @@ export class ConnectorService {
 
   async connect(
     id: string,
-    tenantId: string,
     config: Record<string, unknown>,
   ): Promise<void> {
+    const tenantId = this.tenantContext.tenantId;
     const record = await this.prisma.crmConnector.findFirst({
       where: { id, tenantId },
     });
@@ -78,7 +81,8 @@ export class ConnectorService {
     );
   }
 
-  async disconnect(id: string, tenantId: string): Promise<void> {
+  async disconnect(id: string): Promise<void> {
+    const tenantId = this.tenantContext.tenantId;
     const record = await this.prisma.crmConnector.findFirst({
       where: { id, tenantId },
     });
@@ -91,7 +95,8 @@ export class ConnectorService {
     this.logger.log(`Connector ${record.name} disconnected`);
   }
 
-  async syncContacts(id: string, tenantId: string): Promise<void> {
+  async syncContacts(id: string): Promise<void> {
+    const tenantId = this.tenantContext.tenantId;
     const record = await this.prisma.crmConnector.findFirst({
       where: { id, tenantId, isActive: true },
     });
@@ -105,7 +110,8 @@ export class ConnectorService {
     await adapter.syncContacts(tenantId);
   }
 
-  async syncLeads(id: string, tenantId: string): Promise<void> {
+  async syncLeads(id: string): Promise<void> {
+    const tenantId = this.tenantContext.tenantId;
     const record = await this.prisma.crmConnector.findFirst({
       where: { id, tenantId, isActive: true },
     });

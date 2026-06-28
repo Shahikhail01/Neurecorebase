@@ -166,6 +166,30 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return count > 0;
   }
 
+  /**
+   * Atomically increment a counter, returning the new value.
+   * Used for sliding-window rate limiting (Phase 5 AI Action guard).
+   */
+  async incr(key: string): Promise<number> {
+    if (this.upstashClient) {
+      const res = await this.upstashClient.incr(key);
+      return Number(res ?? 0);
+    }
+    const res = await this.client.incr(key);
+    return Number(res ?? 0);
+  }
+
+  /**
+   * Set a TTL on an existing key. No-op if the key doesn't exist.
+   */
+  async expire(key: string, ttlSeconds: number): Promise<void> {
+    if (this.upstashClient) {
+      await this.upstashClient.expire(key, ttlSeconds);
+      return;
+    }
+    await this.client.expire(key, ttlSeconds);
+  }
+
   async setJson<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
     await this.set(key, JSON.stringify(value), ttlSeconds);
   }

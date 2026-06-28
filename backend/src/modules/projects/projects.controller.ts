@@ -15,12 +15,9 @@ import {
   Body,
   Param,
   Query,
-  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
-  BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { ApiCommon } from '../../common/decorators/api-common.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -30,38 +27,20 @@ import {
   UpdateProjectDto,
   ListProjectsDto,
 } from './dto/project.dto';
+import { PaginatedResponse } from '../../common/responses/paginated.response';
+import { ActionResult } from '../../common/responses/action-result.response';
+import type { ProjectResponseDto } from './dto/project-response.dto';
+import { TenantIsolated } from '../../common/guards/tenant-isolated.decorator';
 
-/**
- * Phase 1 Gap 6 — added URI versioning (`/api/v1/projects`) and
- * `resolveTenantId()` helper for SUPER_ADMIN cross-tenant access.
- */
 @Controller({ path: 'projects', version: '1' })
 @ApiCommon('projects')
 @UseGuards(JwtAuthGuard)
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
-  private resolveTenantId(
-    user: { tenantId?: string; role?: string },
-    tenantId?: string,
-  ): string {
-    if (user.role === 'SUPER_ADMIN') {
-      if (!tenantId) {
-        throw new BadRequestException('tenantId is required for SUPER_ADMIN');
-      }
-      return tenantId;
-    }
-    if (!user.tenantId) throw new ForbiddenException('Tenant context required');
-    return user.tenantId;
-  }
-
   @Post()
-  async create(
-    @Body() dto: CreateProjectDto,
-    @Req() req: { user: { tenantId: string; role?: string } },
-  ) {
-    return this.projectsService.create(req.user.tenantId, {
-      tenantId: req.user.tenantId,
+  async create(@Body() dto: CreateProjectDto) {
+    return this.projectsService.create({
       name: dto.name,
       description: dto.description,
       departmentId: dto.departmentId,
@@ -71,59 +50,44 @@ export class ProjectsController {
   }
 
   @Get()
-  async findAll(
-    @Query() query: ListProjectsDto,
-    @Req() req: { user: { tenantId: string; role?: string } },
-    @Query('tenantId') tenantId?: string,
-  ) {
-    return this.projectsService.findAll(
-      this.resolveTenantId(req.user, tenantId),
-      {
-        status: query.status,
-        departmentId: query.departmentId,
-        search: query.search,
-        page: query.page ? Number(query.page) : undefined,
-        limit: query.limit ? Number(query.limit) : undefined,
-      },
-    );
+  async findAll(@Query() query: ListProjectsDto): Promise<PaginatedResponse<ProjectResponseDto>> {
+    const page = query.page ? Number(query.page) : 1;
+    const limit = query.limit ? Number(query.limit) : 20;
+    const { data, total } = await this.projectsService.findAll({
+      status: query.status,
+      departmentId: query.departmentId,
+      search: query.search,
+      page,
+      limit,
+    });
+    return {
+      items: data as unknown as ProjectResponseDto[],
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    };
   }
 
   @Get('stats')
-  async getStats(
-    @Req() req: { user: { tenantId: string; role?: string } },
-    @Query('tenantId') tenantId?: string,
-  ) {
-    return this.projectsService.getProjectStats(
-      this.resolveTenantId(req.user, tenantId),
-    );
+  async getStats() {
+    return this.projectsService.getProjectStats();
   }
 
   @Get('department/:departmentId')
-  async findByDepartment(
-    @Param('departmentId') departmentId: string,
-    @Req() req: { user: { tenantId: string; role?: string } },
-  ) {
-    return this.projectsService.findByDepartment(
-      departmentId,
-      req.user.tenantId,
-    );
+  async findByDepartment(@Param('departmentId') departmentId: string) {
+    return this.projectsService.findByDepartment(departmentId);
   }
 
   @Get(':id')
-  async findOne(
-    @Param('id') id: string,
-    @Req() req: { user: { tenantId: string } },
-  ) {
-    return this.projectsService.findById(id, req.user.tenantId);
+  @TenantIsolated()
+  async findOne(@Param('id') id: string) {
+    return this.projectsService.findById(id);
   }
 
   @Put(':id')
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateProjectDto,
-    @Req() req: { user: { tenantId: string } },
   ) {
-    return this.projectsService.update(id, req.user.tenantId, {
+    return this.projectsService.update(id, {
       name: dto.name,
       description: dto.description,
       status: dto.status,
@@ -136,20 +100,21 @@ export class ProjectsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async delete(
-    @Param('id') id: string,
-    @Req() req: { user: { tenantId: string } },
-  ) {
-    await this.projectsService.delete(id, req.user.tenantId);
+  async delete(@Param('id') id: string) {
+    await this.projectsService.delete(id);
   }
 
   @Post(':id/goals/:goalId')
   async addGoal(
     @Param('id') id: string,
     @Param('goalId') goalId: string,
-    @Req() req: { user: { tenantId: string } },
-  ) {
-    return this.projectsService.addGoal(id, req.user.tenantId, goalId);
+  ): Promise<ActionResult<ProjectResponseDto>> {
+    const project = await this.projectsService.addGoal(id, goalId);
+    return {
+      success: true,
+      message: 'Goal added to project',
+      data: project as unknown as ProjectResponseDto,
+    };
   }
 
   @Delete(':id/goals/:goalId')
@@ -157,8 +122,7 @@ export class ProjectsController {
   async removeGoal(
     @Param('id') id: string,
     @Param('goalId') goalId: string,
-    @Req() req: { user: { tenantId: string } },
   ) {
-    await this.projectsService.removeGoal(id, req.user.tenantId, goalId);
+    await this.projectsService.removeGoal(id, goalId);
   }
 }

@@ -1,0 +1,39 @@
+# NeureCore Prometheus scrape configuration
+# Phase 5 pre-req (`EAOS-implementation-roadmap.md` §9, Phase 5 Observability).
+#
+# Single scrape target: the NestJS backend on port 3003 (Contabo),
+# which exposes /metrics (Phase 5 pre-req). Prometheus scrapes every 15s.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: neurecore-prod
+    monitor: neurecore
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        # Host network → 127.0.0.1 resolves to Contabo host.
+        - targets: ['127.0.0.1:9093']
+
+scrape_configs:
+  - job_name: 'neurecore-backend'
+    metrics_path: '/api/metrics'
+    scheme: 'http'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      # Prometheus uses the host network (network_mode: host), so
+      # 127.0.0.1 = the Contabo host. Backend listens on 3003 there.
+      - targets: ['127.0.0.1:3003']
+        labels:
+          service: 'neurecore-backend'
+          tier: 'production'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

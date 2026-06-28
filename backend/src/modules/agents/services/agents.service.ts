@@ -2,11 +2,11 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  ForbiddenException,
 } from '@nestjs/common';
 import type { AgentStatus, AgentType } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { EventsGateway } from '../../events/events.gateway';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import type {
   IAgentService,
   AgentFilter,
@@ -14,12 +14,6 @@ import type {
   UpdateAgentInput,
 } from '../interfaces/agent.interface';
 
-/**
- * AgentsService
- *
- * Responsibility (SRP): CRUD operations on Agent records.  Does NOT plan or
- * execute — those concerns live in AgentPlannerService / AgentExecutorService.
- */
 @Injectable()
 export class AgentsService implements IAgentService {
   private readonly logger = new Logger(AgentsService.name);
@@ -51,6 +45,7 @@ export class AgentsService implements IAgentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventsGateway,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   async findAll(filter: AgentFilter): Promise<{
@@ -61,7 +56,6 @@ export class AgentsService implements IAgentService {
     totalPages: number;
   }> {
     const {
-      tenantId,
       departmentId,
       status,
       type,
@@ -70,9 +64,10 @@ export class AgentsService implements IAgentService {
       limit = 20,
     } = filter;
     const skip = (page - 1) * limit;
+    const tenantId = this.tenantContext.tenantId;
 
     const where = {
-      ...(tenantId ? { tenantId } : {}),
+      tenantId,
       ...(departmentId ? { departmentId } : {}),
       ...(status && { status }),
       ...(type && { type }),
@@ -125,9 +120,9 @@ export class AgentsService implements IAgentService {
     }
   }
 
-  async findOne(id: string, tenantId: string): Promise<unknown> {
+  async findOne(id: string): Promise<unknown> {
     const agent = await this.prisma.agent.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId: this.tenantContext.tenantId },
       include: {
         _count: {
           select: { tasks: true, memoryEntries: true, executionLogs: true },
@@ -140,7 +135,6 @@ export class AgentsService implements IAgentService {
 
   async create(
     input: CreateAgentInput,
-    tenantId: string,
     userId: string,
   ): Promise<unknown> {
     return this.prisma.agent.create({
@@ -155,7 +149,7 @@ export class AgentsService implements IAgentService {
         permissions: (input.permissions ?? []) as never,
         config: (input.config ?? {}) as never,
         metadata: (input.metadata ?? {}) as never,
-        tenantId,
+        tenantId: this.tenantContext.tenantId,
         createdById: userId,
       },
     });
@@ -164,9 +158,8 @@ export class AgentsService implements IAgentService {
   async update(
     id: string,
     input: UpdateAgentInput,
-    tenantId: string,
   ): Promise<unknown> {
-    await this.assertOwnership(id, tenantId);
+    await this.assertOwnership(id);
     return this.prisma.agent.update({
       where: { id },
       data: {
@@ -206,18 +199,18 @@ export class AgentsService implements IAgentService {
     });
   }
 
-  async remove(id: string, tenantId: string): Promise<void> {
-    await this.assertOwnership(id, tenantId);
+  async remove(id: string): Promise<void> {
+    await this.assertOwnership(id);
     await this.prisma.agent.delete({ where: { id } });
-    this.logger.log(`Agent ${id} deleted from tenant ${tenantId}`);
+    this.logger.log(`Agent ${id} deleted`);
   }
 
   async updateStatus(
     id: string,
     status: AgentStatus,
-    tenantId: string,
   ): Promise<unknown> {
-    await this.assertOwnership(id, tenantId);
+    await this.assertOwnership(id);
+    const tenantId = this.tenantContext.tenantId;
     const agent = await this.prisma.agent.update({
       where: { id },
       data: { status },
@@ -226,17 +219,12 @@ export class AgentsService implements IAgentService {
     return agent;
   }
 
-  /**
-   * Phase 1 Gap 7 — Lifecycle: archive / deprecate / restore.
-   * Sets agent.status to the requested enum value.
-   * Used by PATCH /agents/:id/archive, /deprecate, /restore.
-   */
   async setStatus(
     id: string,
-    tenantId: string,
     status: AgentStatus,
   ): Promise<unknown> {
-    await this.assertOwnership(id, tenantId);
+    await this.assertOwnership(id);
+    const tenantId = this.tenantContext.tenantId;
     const agent = await this.prisma.agent.update({
       where: { id },
       data: { status },
@@ -248,13 +236,9 @@ export class AgentsService implements IAgentService {
     return agent;
   }
 
-  // ───────────────────────────────────────────────────────────
-  // Private helpers
-  // ───────────────────────────────────────────────────────────
-
-  private async assertOwnership(id: string, tenantId: string): Promise<void> {
+  private async assertOwnership(id: string): Promise<void> {
     const exists = await this.prisma.agent.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId: this.tenantContext.tenantId },
       select: { id: true },
     });
     if (!exists) throw new NotFoundException(`Agent ${id} not found`);
@@ -262,7 +246,7 @@ export class AgentsService implements IAgentService {
 
   private isMissingColumnError(error: unknown): boolean {
     if (!(error instanceof Error)) return false;
-    const code = (error as { code?: string }).code;
-    return code === 'P2022' || error.message.includes('does not exist');
+    const code = error as { code?: string };
+    return code.code === 'P2022' || error.message.includes('does not exist');
   }
 }

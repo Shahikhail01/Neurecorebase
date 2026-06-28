@@ -7,7 +7,8 @@ import {
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { GoogleDriveService } from './google-drive.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
-import { NotificationType } from '@prisma/client';
+import { NotificationType, UserRole } from '@prisma/client';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -24,6 +25,7 @@ export class DriveCleanupService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly drive: GoogleDriveService,
     private readonly notifications: NotificationsService,
+    private readonly tenantContext: TenantContextService,
   ) {
     this.intervalMs = parseInt(
       process.env.DRIVE_CLEANUP_INTERVAL_MS ?? String(DEFAULT_INTERVAL_MS),
@@ -111,9 +113,14 @@ export class DriveCleanupService implements OnModuleInit, OnModuleDestroy {
         }
 
         try {
-          const children = await this.drive.listFiles(tenant.id, agent.googleDriveFolderId, {
-            pageSize: 100,
-          });
+          const folderId = agent.googleDriveFolderId;
+          if (!folderId) continue;
+          const children = await this.tenantContext.run(
+            { tenantId: tenant.id!, isCrossTenant: false, actorRole: 'SUPER_ADMIN' as UserRole, actorUserId: 'system' },
+            async () => this.drive.listFiles(folderId, {
+              pageSize: 100,
+            }),
+          );
           if (children.length > 0) {
             this.logger.warn(
               `Skipping non-empty Drive folder for terminated agent ${agent.id} (${agent.name}); ${children.length} items`,
@@ -121,7 +128,10 @@ export class DriveCleanupService implements OnModuleInit, OnModuleDestroy {
             result.skipped++;
             continue;
           }
-          await this.drive.deleteFile(agent.id, agent.googleDriveFolderId);
+          await this.tenantContext.run(
+            { tenantId: tenant.id!, isCrossTenant: false, actorRole: 'SUPER_ADMIN' as UserRole, actorUserId: 'system' },
+            async () => this.drive.deleteFile(folderId),
+          );
           await this.prisma.agent.update({
             where: { id: agent.id },
             data: { googleDriveFolderId: null },

@@ -1,27 +1,29 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { TenantContextService } from '../../../common/context/tenant-context.service';
 import type { TaskPriority, TaskStatus } from '@prisma/client';
 
 @Injectable()
 export class TasksService {
   private readonly logger = new Logger(TasksService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
-  async findAll(
-    tenantId: string | null | undefined,
-    options?: {
-      status?: TaskStatus;
-      agentId?: string;
-      page?: number;
-      limit?: number;
-    },
-  ) {
+  async findAll(options?: {
+    status?: TaskStatus;
+    agentId?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const { status, agentId, page = 1, limit = 20 } = options ?? {};
     const skip = (page - 1) * limit;
+    const tenantId = this.tenantContext.tenantId;
 
     const where = {
-      ...(tenantId ? { tenantId } : {}),
+      tenantId,
       ...(status && { status }),
       ...(agentId && { agentId }),
     };
@@ -39,7 +41,8 @@ export class TasksService {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async findOne(id: string, tenantId: string) {
+  async findOne(id: string) {
+    const tenantId = this.tenantContext.tenantId;
     const task = await this.prisma.task.findFirst({
       where: { id, tenantId },
       include: {
@@ -59,9 +62,9 @@ export class TasksService {
     agentId?: string;
     workflowId?: string;
     scheduledAt?: string;
-    tenantId: string;
     createdById: string;
   }) {
+    const tenantId = this.tenantContext.tenantId;
     return this.prisma.task.create({
       data: {
         title: input.title,
@@ -73,7 +76,7 @@ export class TasksService {
         scheduledAt: input.scheduledAt
           ? new Date(input.scheduledAt)
           : undefined,
-        tenantId: input.tenantId,
+        tenantId,
         createdById: input.createdById,
       },
     });
@@ -81,26 +84,26 @@ export class TasksService {
 
   async update(
     id: string,
-    tenantId: string,
     data: {
       priority?: TaskPriority;
       input?: Record<string, unknown>;
       agentId?: string;
     },
   ) {
-    await this.assertOwnership(id, tenantId);
+    await this.assertOwnership(id);
     return this.prisma.task.update({
       where: { id },
       data: { ...data, input: data.input as never },
     });
   }
 
-  async remove(id: string, tenantId: string) {
-    await this.assertOwnership(id, tenantId);
+  async remove(id: string) {
+    await this.assertOwnership(id);
     await this.prisma.task.delete({ where: { id } });
   }
 
-  private async assertOwnership(id: string, tenantId: string) {
+  private async assertOwnership(id: string) {
+    const tenantId = this.tenantContext.tenantId;
     const exists = await this.prisma.task.findFirst({
       where: { id, tenantId },
       select: { id: true },

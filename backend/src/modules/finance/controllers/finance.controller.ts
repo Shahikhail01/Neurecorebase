@@ -30,8 +30,8 @@ function resolveTenantId(user: JwtPayload, explicit?: string): string {
   return user.tenantId!;
 }
 
+@ApiCommon('finance')
 @Controller({ path: 'finance', version: '1' })
-@ApiCommon('controllers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class FinanceController {
   constructor(
