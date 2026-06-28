@@ -26,6 +26,12 @@ export default function HomePage() {
             >
               Browse entities
             </Link>
+            <Link
+              href="/retail"
+              className="rounded-md border border-canvas-200 px-3 py-1 text-canvas-700 hover:bg-canvas-100 dark:border-canvas-700 dark:text-canvas-300 dark:hover:bg-canvas-900"
+            >
+              Retail pack
+            </Link>
           </nav>
         </header>
 

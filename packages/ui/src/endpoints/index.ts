@@ -229,6 +229,14 @@ export const API_ENDPOINTS = {
     knowledgePacks: '/marketplace/knowledge-packs',
     docsJson: '/marketplace/docs-json',
   },
+  retail: {
+    actions: '/retail/actions',
+    widgets: '/retail/widgets',
+    computeWidget: (id: string) => `/retail/widgets/${id}/compute`,
+    executeAction: (id: string) => `/retail/actions/${id}/execute`,
+    syncShopify: '/retail/integrations/shopify/sync',
+    syncSquare: '/retail/integrations/square/sync',
+  },
 } as const;
 
 export type API_ENDPOINTS = typeof API_ENDPOINTS;

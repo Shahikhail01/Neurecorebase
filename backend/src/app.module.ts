@@ -58,6 +58,8 @@ import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 // Phase 7 — EAOS-5 Solution Packs (Marketplace + install lifecycle)
 import { SolutionPacksModule } from './modules/solution-packs/solution-packs.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
+// Phase 8 — EAOS-6 First Vertical Pack (Retail)
+import { RetailModule } from './modules/retail/retail.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
@@ -162,6 +164,9 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     // Phase 7 — EAOS-5 Solution Packs
     SolutionPacksModule,
     MarketplaceModule,
+
+    // Phase 8 — EAOS-6 First Vertical Pack (Retail)
+    RetailModule,
   ],
   providers: [
     // Global rate-limit guard

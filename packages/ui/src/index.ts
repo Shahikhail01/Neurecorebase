@@ -2,3 +2,4 @@ export * from './tokens';
 export * from './lib';
 export * from './types';
 export * from './components/feedback';
+export * from './components/data';

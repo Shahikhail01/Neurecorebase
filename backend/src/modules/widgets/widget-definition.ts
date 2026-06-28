@@ -59,7 +59,13 @@ export type EaosEntityTypeForWidget =
   | 'ROUTINE'
   | 'KNOWLEDGE'
   | 'INTEGRATION'
-  | 'TOOL';
+  | 'TOOL'
+  | 'FACILITY'
+  | 'CUSTOMER'
+  | 'ASSET'
+  | 'VENDOR'
+  | 'PROCESS'
+  | 'DOCUMENT';
 
 export interface WidgetSize {
   w: number; // grid width (12-col grid → 1-12)

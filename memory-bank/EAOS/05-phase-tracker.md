@@ -596,14 +596,84 @@ Per [`EAOS-implementation-roadmap.md` §11](./EAOS-implementation-roadmap.md). M
 
 ## Phase 8 — EAOS-6 First Vertical Pack (Weeks 31–40)
 
-**Status:** ⬜ Not started | **Recommended:** Retail pack
+**Status:** ✅ **DONE (8/8 tasks + 33 unit tests)** | **Completed:** 2026-06-28 | **Risk:** 🟢 Low → ✅ Mitigated
+**Vertical chosen:** Retail
 
 Per [`EAOS-implementation-roadmap.md` §12](./EAOS-implementation-roadmap.md).
 
-**Blockers:**
-- 🔴 Vertical choice confirmation (recommend Retail)
+### Tasks (per roadmap §12)
 
-**This is the LAST phase of v1.**
+| # | Task | Status | Refs |
+|---|---|---|---|
+| 8.1 | `FACILITY:retail-store` + `CUSTOMER:shopper` entity subtypes | ✅ | impl-plan §5.2 |
+| 8.2 | 6 retail KPI widgets (sales-per-sqft, stockout-rate, inventory-heatmap, customer-nps, conversion-rate, sales-by-hour) | ✅ | impl-plan §5.3 |
+| 8.3 | 12 retail AI Actions with real LLM-backed handlers | ✅ | impl-plan §4.3 |
+| 8.4 | 50 retail knowledge entries (loss prevention, visual merch, inventory, customer service, returns, opening/closing SOPs, marketing, compliance) | ✅ | impl-plan §5.2 |
+| 8.5 | 4 retail workflow templates (employee onboarding, daily opening, restock, EoD) | ✅ | impl-plan §5.2 |
+| 8.6 | Shopify + Square integration definitions + connector adapters (full HTTP-shape adapters) | ✅ | impl-plan §8.2 |
+| 8.7 | Vertical-specific theming (`#22c55e` retail green accent) | ✅ | NUWS §7.5.2 |
+| 8.8 | Demo tenant seed (`demo-retail`) with 10 retail stores + 25 AI employees + EntityState + EntityOwnership + EntityHealth + WorkspaceLayout + MissionFeed | ✅ | NUWS §1.1 |
+
+### Deliverables
+
+**Backend (`backend/src/modules/retail/`):**
+- `retail.module.ts` — wires retail service + controller + Shopify + Square adapters into the existing connector registry
+- `retail.controller.ts` — 6 endpoints: `GET /retail/actions`, `GET /retail/widgets`, `POST /retail/widgets/:id/compute`, `POST /retail/actions/:id/execute`, `POST /retail/integrations/shopify/sync`, `POST /retail/integrations/square/sync`
+- `retail.service.ts` — orchestrator: registers the 6 retail widgets + 12 retail AI actions; computes widget values; deterministic per-entity demo data
+- `retail-actions.ts` — 12 retail AI action definitions + handlers (10 sync + 2 streaming); each handler loads demo data, calls the LLM-backed `RetailActionContext`, attaches citations
+- `retail-widgets.ts` — 6 retail KPI widget definitions (capability + data source + aggregation + visualization)
+- `dto/retail.dto.ts` — typed DTOs + Swagger annotations
+
+**Connectors (`backend/src/modules/connectors/adapters/`):**
+- `shopify.adapter.ts` — `ShopifyConnector` implementing `IRetailConnector` (list products / orders / update inventory)
+- `square.adapter.ts` — `SquareConnector` implementing `IRetailConnector` (Square POS + payments sync)
+
+**Prisma schema (`backend/prisma/schema.prisma`):**
+- `EntityType` enum extended with 6 new values: `FACILITY`, `CUSTOMER`, `ASSET`, `VENDOR`, `PROCESS`, `DOCUMENT` (additive, no existing model changed)
+
+**Seed scripts:**
+- `prisma/seed-phase8-retail.cjs` — seeds the `retail` SolutionPack row with full 12-action / 6-widget / 50-knowledge / 4-workflow / 2-integration extensions + creates a synthetic `platform-owner` tenant for the workflow templates and knowledge library (idempotent)
+- `prisma/seed-phase8-demo-tenant.cjs` — creates the `demo-retail` tenant with 10 retail-store departments + 25 retail AI employees + EntityState + EntityOwnership + EntityHealth + WorkspaceLayout rows + MissionFeed items + the pack installs (idempotent)
+
+**Frontend (`frontend-eaos/`):**
+- `app/retail/page.tsx` — retail-themed dashboard showing the 6 KPI widgets + 12 AI actions + Shopify/Square integration status
+- `core/hooks/retail/useRetail.ts` — 6 TanStack Query hooks (useRetailActions / useRetailWidgets / useRetailWidgetValue / useExecuteRetailAction / useSyncShopify / useSyncSquare)
+- `core/hooks/retail/index.ts` — barrel
+
+**`packages/ui/`:**
+- `endpoints/index.ts` — added `retail.{actions, widgets, computeWidget, executeAction, syncShopify, syncSquare}` namespace
+- `query/query-keys.ts` — added `retail.{all, actions, widgets, widgetValue}` namespace
+- `components/data/Card.tsx` — new Card primitive (padding + surface variants)
+- `components/data/index.ts` — barrel
+- `src/index.ts` — re-exports data components
+
+**Tests (`backend/test/unit/retail/retail.spec.ts`):**
+- 33 tests covering: 12 actions registered with right shape + streaming handlers work as AsyncGenerators + sync handlers return AIActionResult envelopes + 6 widgets registered with right fields + each widget compute returns right shape + deterministic data per entityId + loadDemoData returns complete shape
+
+### Exit criteria
+
+- [x] `FACILITY:retail-store` + `CUSTOMER:shopper` entity subtypes registered in extensions
+- [x] 12 retail AI actions with LLM-backed handlers wired through `RetailActionContext`
+- [x] 6 retail widgets registered in `WidgetRegistry`
+- [x] 50 retail knowledge entries across 8 categories (LP, visual merch, inventory, customer service, operations, marketing, compliance)
+- [x] 4 retail workflow templates with detailed step lists
+- [x] Shopify + Square connector adapters registered in `ConnectorRegistry`
+- [x] Theming impact (`#22c55e`) applied on pack install
+- [x] Demo tenant `demo-retail` seeded with 10 stores + 25 agents + EntityState/Ownership/Health rows
+- [x] `frontend-eaos` `/retail` route builds + renders
+
+**Verification:**
+- ✅ Backend `tsc --noEmit` clean
+- ✅ Backend `nest build` succeeds
+- ✅ Backend `eslint` clean on retail module
+- ✅ Frontend `tsc --noEmit` clean
+- ✅ Frontend `next build` succeeds (`/retail` = 4.18 kB / 291 kB First Load JS)
+- ✅ `packages/ui` rebuilt with new Card + retail queryKeys + endpoints
+- ✅ 208/208 backend unit tests pass (was 175, +33 new)
+
+**Rollback plan:** `RetailModule` is a single import in `app.module.ts`. The 12 retail AI actions + 6 widgets are registered at boot; removing the import stops both registrations. The Shopify + Square connectors are registered on `RetailModule.onApplicationBootstrap`; same removal flow. The Prisma enum extension is purely additive; rollback is `ALTER TYPE entity_type DROP VALUE ...` (Postgres 12+). The seed scripts create rows idempotently; running them again is safe. The demo tenant + workflow templates are independent.
+
+**This is the LAST phase of v1.** After this, NeureCore has a fully shippable EAOS with one retail-ready vertical pack.
 
 ---
 

@@ -116,4 +116,25 @@ export const queryKeys = {
     items: (tenantId: string, tab: string, q?: string) =>
       ['marketplace', tenantId, 'items', tab, q ?? ''] as const,
   },
+  retail: {
+    all: (tenantId: string) => ['retail', tenantId] as const,
+    actions: (tenantId: string) => ['retail', tenantId, 'actions'] as const,
+    widgets: (tenantId: string) => ['retail', tenantId, 'widgets'] as const,
+    widgetValue: (
+      tenantId: string,
+      widgetId: string,
+      entityType: string,
+      entityId: string,
+      params?: Record<string, unknown>,
+    ) =>
+      [
+        'retail',
+        tenantId,
+        'widget',
+        widgetId,
+        entityType,
+        entityId,
+        params ?? {},
+      ] as const,
+  },
 } as const;

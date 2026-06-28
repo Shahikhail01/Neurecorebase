@@ -1,9 +1,74 @@
 # NeureCore — EAOS Implementation Log
 
-**Last updated:** 2026-06-28 13:35
+**Last updated:** 2026-06-28 20:10
 **Purpose:** Chronological log of code changes, file references, and shipped features for the EAOS implementation. Newest first.
 
 **Format:** `## DATE · phase N · short title`, then a brief description with file:line references and PR link (when applicable).
+
+---
+
+## 2026-06-28 20:10 · Phase 8 — EAOS-6 First Vertical Pack (Retail) COMPLETE ✅
+
+### Phase 8 done (8/8 tasks + 33 unit tests)
+
+**Backend (`backend/src/modules/retail/`):**
+- `retail.module.ts` — wires `RetailService` + `RetailController`; on bootstrap registers `ShopifyConnector` + `SquareConnector` into the existing `ConnectorRegistry` and registers 12 retail AI actions
+- `retail.service.ts` — orchestrator: registers the 6 retail widgets + 12 retail AI actions at boot; computes widget values from deterministic per-entity demo data; exposes `loadDemoData()` + `computeRetailWidget()` + `registerRetailActions()`
+- `retail-actions.ts` — 12 retail AI action definitions + handlers (10 sync + 2 streaming: `visual-merch` + `layout-optimize`). Each handler loads demo data, calls the LLM-backed `RetailActionContext` (which delegates to `LLMFactory.invoke()` in prod, falls back to a deterministic preview in dev), attaches citations
+- `retail-widgets.ts` — 6 retail KPI widget definitions (capability + data source + aggregation + visualization) following the 4-layer widget contract
+- `retail.controller.ts` — 6 endpoints (`GET /retail/actions`, `GET /retail/widgets`, `POST /retail/widgets/:id/compute`, `POST /retail/actions/:id/execute`, `POST /retail/integrations/shopify/sync`, `POST /retail/integrations/square/sync`)
+- `dto/retail.dto.ts` — typed DTOs + Swagger annotations
+
+**Connectors (`backend/src/modules/connectors/adapters/`):**
+- `shopify.adapter.ts` — `ShopifyConnector` implementing `IRetailConnector` (OAuth2 connect, list products, list orders, update inventory). Dev-mode no-op when `SHOPIFY_API_KEY` missing
+- `square.adapter.ts` — `SquareConnector` implementing `IRetailConnector` (OAuth2 connect, list products, list orders, update inventory, list payments). Dev-mode no-op when `SQUARE_ACCESS_TOKEN` missing
+
+**Prisma (`backend/prisma/schema.prisma`):**
+- `EntityType` enum extended with 6 new values: `FACILITY`, `CUSTOMER`, `ASSET`, `VENDOR`, `PROCESS`, `DOCUMENT` (purely additive — no existing model modified)
+
+**Prisma (`backend/prisma/`):**
+- `seed-phase8-retail.cjs` — 423-line seed that updates the `retail` SolutionPack row with the full extensions payload (12 actions + 6 widgets + 6 KPI templates + 2 integrations + 4 workflow templates + 50 knowledge entries + Mission Feed preview + theming impact). Idempotent — safe to re-run. Also creates a synthetic `platform-owner` tenant + 4 workflow templates + 50 knowledge entries for the retail pack
+- `seed-phase8-demo-tenant.cjs` — creates the `demo-retail` tenant on PRO plan with 10 retail-store departments (SoHo Flagship, Williamsburg, Park Slope, UES, Venice Beach, Silver Lake, Mission District, Wicker Park, South Congress, Pearl District) + 6 corporate departments + 25 retail AI employees (Store Managers, Visual Merchandisers, Loss Prevention Leads, etc.) + 3 corporate VPs + EntityState + EntityOwnership + EntityHealth + EntityLabel + UserFavorite + WorkspaceLayout rows + MissionFeed items + installs both `corporate-services` and `retail` packs. Idempotent
+
+**Frontend (`frontend-eaos/`):**
+- `app/retail/page.tsx` — retail-themed dashboard showing the 6 KPI widgets + 12 AI actions + Shopify + Square integration sync controls; the page demonstrates the full LLM-backed flow with the demo entity (`soho-flagship`)
+- `core/hooks/retail/useRetail.ts` — 6 TanStack Query hooks: `useRetailActions`, `useRetailWidgets`, `useRetailWidgetValue`, `useExecuteRetailAction`, `useSyncShopify`, `useSyncSquare` + TS type mirrors of the backend interfaces
+- `core/hooks/retail/index.ts` — barrel
+
+**`packages/ui/`:**
+- `endpoints/index.ts` — added `retail.{actions, widgets, computeWidget, executeAction, syncShopify, syncSquare}` namespace
+- `query/query-keys.ts` — added `retail.{all, actions, widgets, widgetValue}` namespace
+- `components/data/Card.tsx` — new Card primitive (padding + surface variants; rounded-lg, raised/flat/bordered surfaces)
+- `components/data/index.ts` — barrel
+- `src/index.ts` — re-exports data components
+
+**Tests (`backend/test/unit/retail/retail.spec.ts`):**
+- 33 tests covering:
+  - 12 actions registered with the right shape (id, name, category, tier, tokens, handler)
+  - Streaming actions return AsyncGenerators that yield delta + done chunks
+  - Sync actions return AIActionResult envelopes with output + citations + tokens
+  - 6 widgets registered with right fields (capability, aggregation, visualizations, sizing)
+  - Each widget compute endpoint returns the right shape (sales-per-sqft = RATIO with sparkline, stockout-rate = PERCENTAGE with gauge range, inventory-heatmap = heatmap with rows/cols/values, customer-nps = gauge value + trend, conversion-rate = PERCENTAGE with line, sales-by-hour = BAR_CHART with 24 hours)
+  - Deterministic data per entityId (same input → same output)
+  - loadDemoData returns a complete RetailEntityData shape
+
+**Verification:**
+- ✅ Backend `tsc --noEmit` clean
+- ✅ Backend `nest build` succeeds
+- ✅ Backend `eslint` clean on retail module
+- ✅ Frontend `tsc --noEmit` clean
+- ✅ Frontend `next build` succeeds — `/retail` route = 4.18 kB / 291 kB First Load JS
+- ✅ `packages/ui` rebuilt with new Card + retail queryKeys + endpoints
+- ✅ 208/208 backend unit tests pass (was 175, +33 new)
+
+**SOLID adherence:**
+- SRP — `RetailService` orchestrates only; per-action handlers own one action; per-widget definitions own one widget; connector adapters own one integration
+- OCP — new retail actions or widgets are added without modifying the engine, the controller, or the existing actions/widgets
+- LSP — all retail handlers return the same `AIActionResult` shape; all retail widgets follow the same `WidgetDefinition` interface
+- ISP — `RetailActionContext` is a thin interface (5 methods); `IRetailConnector` is an interface that adapters implement
+- DIP — handlers depend on the abstract `RetailActionContext`, never on `LLMFactory` directly; `RetailService` depends on injected `AIActionRegistry` + `WidgetRegistry` + `TenantContextService`, not on concrete implementations
+
+**This is the LAST phase of v1.** NeureCore now ships a complete EAOS with one retail-ready vertical pack.
 
 ---
 

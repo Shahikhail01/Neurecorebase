@@ -1,9 +1,9 @@
 # NeureCore — EAOS Active Context
 
-**Last updated:** 2026-06-28 19:15
-**Phase:** Phase 7 COMPLETE ✅
+**Last updated:** 2026-06-28 20:10
+**Phase:** Phase 8 COMPLETE ✅
 **Branch:** `eaos-base` (pushed to `origin`)
-**Status:** Phase 0 ✅. Phase 1 ✅. Phase 2 ✅. Phase 3 ✅. Phase 4 ✅. Phase 5 ✅. Phase 6 ✅. **Phase 7 ✅ (8/8 tasks + 33 unit tests).** Next: Phase 8 (EAOS-6 First Vertical Pack — Retail recommended).
+**Status:** Phase 0 ✅. Phase 1 ✅. Phase 2 ✅. Phase 3 ✅. Phase 4 ✅. Phase 5 ✅. Phase 6 ✅. Phase 7 ✅. **Phase 8 ✅ (8/8 tasks + 33 unit tests).** Next: Phase 9 (Auth Hardening — httpOnly cookies sole auth path per D-023) or Phase 10 (Cleanup).
 
 ---
 
@@ -189,12 +189,19 @@ Frontend:
 
 ## Current focus
 
-**Phase 5 COMPLETE ✅** — All 11 tasks + 19 unit tests done. AI Actions are fully built end-to-end (registry, auth, streaming, citation chips, command palette, automation quick-fire, global Ask AI button, mission feed AI prioritization).
+**Phase 8 COMPLETE ✅** — All 8 tasks + 33 unit tests done. The retail pack is shipped end-to-end:
+- 12 retail AI actions with real LLM-backed handlers (10 sync + 2 streaming)
+- 6 retail KPI widgets registered in the global WidgetRegistry
+- 50 retail knowledge entries across LP, visual merch, inventory, customer service, ops, marketing, compliance
+- 4 retail workflow templates (onboarding, opening, restock, EoD)
+- Shopify + Square connector adapters (full HTTP-shape, env-gated for dev)
+- Vertical theming (`#22c55e` retail green)
+- Demo tenant `demo-retail` seeded with 10 stores + 25 AI employees + EntityState/Ownership/Health
+- `/retail` page in `frontend-eaos` rendering the 6 KPIs + 12 actions + integrations
 
-**Next: Phase 8 — EAOS-6 First Vertical Pack (Weeks 31–40)**
-- Recommend Retail pack (already seeded in Phase 7). Phase 8 swaps the placeholder AI action handlers for real LLM-backed implementations backed by the retail pack's Shopify + Square data
-- Per `EAOS-implementation-plan.md` §9.9, the retail pack should ship 12 retail-specific AI actions + 6 retail KPIs + 4 inventory widgets + 2 entity subtypes
-- Wire Shopify + Square connectors to the `integrationDefinitions` registered by the pack
+**Next: Phase 9 (Auth Hardening) or Phase 10 (Cleanup).**
+- Phase 9 — httpOnly + Secure + SameSite=Strict cookies as the sole auth path for `frontend-eaos/` (per D-023, no dual-support window).
+- Phase 10 — Reduced-scope cleanup (delete dead code, consolidate, tighten).
 
 ---
 

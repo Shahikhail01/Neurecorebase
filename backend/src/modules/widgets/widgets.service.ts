@@ -40,6 +40,12 @@ const WIDGET_TO_PRISMA_ENTITY: Record<EaosEntityTypeForWidget, PrismaEntityType>
   KNOWLEDGE: PrismaEntityType.KNOWLEDGE_ENTRY,
   INTEGRATION: PrismaEntityType.TOOL_INTEGRATION,
   TOOL: PrismaEntityType.TOOL_INTEGRATION,
+  FACILITY: PrismaEntityType.FACILITY,
+  CUSTOMER: PrismaEntityType.CUSTOMER,
+  ASSET: PrismaEntityType.ASSET,
+  VENDOR: PrismaEntityType.VENDOR,
+  PROCESS: PrismaEntityType.PROCESS,
+  DOCUMENT: PrismaEntityType.DOCUMENT,
 };
 
 function toPrismaEntityType(t: EaosEntityTypeForWidget): PrismaEntityType {

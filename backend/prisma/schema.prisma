@@ -1639,6 +1639,12 @@ enum EntityType {
   INVOICE
   KNOWLEDGE_ENTRY
   TEMPLATE
+  FACILITY
+  CUSTOMER
+  ASSET
+  VENDOR
+  PROCESS
+  DOCUMENT
 
   @@map("entity_type")
 }
