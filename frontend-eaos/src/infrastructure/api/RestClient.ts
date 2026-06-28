@@ -1,4 +1,5 @@
 import { API_CONFIG } from '@/config/api.config';
+import { cookieManager } from '@/infrastructure/auth/CookieManager';
 
 export interface RequestConfig {
   headers?: Record<string, string>;
@@ -6,6 +7,8 @@ export interface RequestConfig {
   signal?: AbortSignal;
   timeoutMs?: number;
   credentials?: RequestCredentials;
+  /** Skip CSRF header injection (e.g., for pre-auth endpoints like /auth/login). */
+  skipCsrf?: boolean;
 }
 
 export interface AppError extends Error {
@@ -36,9 +39,14 @@ let refreshPromise: Promise<void> | null = null;
 async function refreshToken(): Promise<void> {
   if (refreshPromise) return refreshPromise;
 
+  // Phase 9: refresh is a pre-auth endpoint (CSRF-exempt on backend).
+  // We do NOT send X-CSRF-Token here — backend /auth/refresh is in the
+  // exempt list (it relies on the httpOnly refresh cookie as proof of
+  // possession, which is the entire point of double-submit cookies).
   refreshPromise = fetch(`${API_CONFIG.baseURL}/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
   }).then(async (res) => {
     if (!res.ok) {
       refreshPromise = null;
@@ -93,6 +101,21 @@ export class RestClient {
       ...this.defaultHeaders,
       ...headers,
     };
+
+    // Phase 9: CSRF double-submit cookie — on mutating requests, echo the
+    // csrf cookie value as the X-CSRF-Token header. Pre-auth endpoints
+    // (login, register, refresh-from-body) can pass `skipCsrf: true`.
+    const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+    if (
+      !config.skipCsrf &&
+      !SAFE_METHODS.has(method) &&
+      typeof document !== 'undefined'
+    ) {
+      const csrf = cookieManager.getCsrfToken();
+      if (csrf) {
+        requestHeaders['X-CSRF-Token'] = csrf;
+      }
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);

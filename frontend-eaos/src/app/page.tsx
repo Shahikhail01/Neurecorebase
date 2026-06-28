@@ -1,11 +1,46 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useEffect } from 'react';
 import { MissionFeedBanner } from '@/components/mission-feed/MissionFeedBanner';
-import { useRole } from '@/components/workspace/useRole';
+import { useAuthUser, useLogout } from '@/core/hooks/auth/useAuth';
+import { Button } from '@neurecore/ui/components';
 
 export default function HomePage() {
-  const role = useRole();
+  const router = useRouter();
+  const { data: user, isLoading } = useAuthUser();
+  const logout = useLogout();
+
+  // If no auth cookies and not currently authenticated, bounce to /login.
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.replace('/login?next=/');
+    }
+  }, [isLoading, user, router]);
+
+  if (isLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-canvas-50 dark:bg-canvas-950">
+        <p className="text-sm text-canvas-500">Loading…</p>
+      </main>
+    );
+  }
+
+  if (!user) {
+    // Effect above will redirect — render a brief placeholder.
+    return null;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logout.mutateAsync();
+      router.replace('/login');
+    } catch {
+      // Even if the server call fails, the onSettled cleared the local cache.
+      router.replace('/login');
+    }
+  };
 
   return (
     <main className="min-h-screen bg-canvas-50 px-6 py-12 dark:bg-canvas-950 sm:py-16">
@@ -18,6 +53,9 @@ export default function HomePage() {
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-canvas-900 dark:text-canvas-50">
               EAOS — Workspace
             </h1>
+            <p className="mt-1 text-sm text-canvas-500">
+              Signed in as <strong>{user.email}</strong> ({user.role})
+            </p>
           </div>
           <nav className="flex gap-3 text-sm">
             <Link
@@ -32,10 +70,18 @@ export default function HomePage() {
             >
               Retail pack
             </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              disabled={logout.isPending}
+            >
+              {logout.isPending ? 'Signing out…' : 'Sign out'}
+            </Button>
           </nav>
         </header>
 
-        <MissionFeedBanner tenantId="default" role={role ?? undefined} />
+        <MissionFeedBanner tenantId="default" role={user.role} />
 
         <p className="text-sm text-canvas-500">
           Open an entity workspace at <code className="font-mono">/entity/[type]/[id]</code>.

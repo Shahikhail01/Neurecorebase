@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,6 +21,10 @@ async function bootstrap() {
 
   // Security
   app.use(helmet());
+
+  // Phase 9: cookie-parser (parses Cookie header into req.cookies)
+  // Required by CookieAuthService + JwtStrategy cookie-first extraction.
+  app.use(cookieParser());
 
   // Global prefix & versioning
   app.setGlobalPrefix('api');
@@ -53,7 +58,14 @@ async function bootstrap() {
       origin: Array.from(new Set(origins)),
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-ID'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Correlation-ID',
+        'X-CSRF-Token',
+        'X-Tenant-ID',
+        'Idempotency-Key',
+      ],
     });
   } else {
     // In local dev allow all origins to avoid CORS friction

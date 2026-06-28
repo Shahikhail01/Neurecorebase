@@ -20,6 +20,7 @@ import {
 } from '../interfaces/auth.interface';
 import { TokenPair } from '../interfaces/token.interface';
 import { UserRole } from '@prisma/client';
+import { CookieAuthService } from '../../../common/auth/cookie-auth.service';
 
 // Single Responsibility: orchestrate registration, login and logout flows.
 // Dependency Inversion: depends on abstractions (PrismaService, PasswordService, TokenService).
@@ -32,6 +33,7 @@ export class AuthService implements IAuthService {
     private readonly passwordService: PasswordService,
     private readonly tokenService: TokenService,
     private readonly telemetry: TelemetryService,
+    private readonly cookieAuth: CookieAuthService,
   ) {}
 
   async validateUser(
@@ -128,6 +130,9 @@ export class AuthService implements IAuthService {
   }
 
   async refresh(refreshToken: string): Promise<TokenPair> {
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      throw new UnauthorizedException('Refresh token missing');
+    }
     let payload: { sub: string };
     try {
       payload = await this.tokenService.verifyRefreshToken(refreshToken);

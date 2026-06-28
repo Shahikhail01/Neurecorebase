@@ -13,6 +13,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { SecretProviderService } from '../security/providers/secret.provider';
 import { ObservabilityModule } from '../observability/observability.module';
+import { CookieAuthModule } from '../../common/auth/cookie-auth.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { ObservabilityModule } from '../observability/observability.module';
       }),
     }),
     ObservabilityModule,
+    CookieAuthModule,
   ],
   controllers: [AuthController],
   providers: [

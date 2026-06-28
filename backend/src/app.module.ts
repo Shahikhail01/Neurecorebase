@@ -68,11 +68,16 @@ import { TenantContextMiddleware } from './common/context/tenant-context.middlew
 import { TenantContextModule } from './common/context/tenant-context.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
+import { CookieAuthModule } from './common/auth/cookie-auth.module';
+import { CsrfProtectionMiddleware } from './common/auth/csrf.middleware';
 
 @Module({
   imports: [
     // Config — global, validates env vars at boot
     ConfigurationModule,
+
+    // Phase 9 — Cookie auth (httpOnly + Secure + SameSite=Strict, sole auth path)
+    CookieAuthModule,
 
     // Tenant context — @Global so every module can inject TenantContextService
     // (Phase 1, Task 1.4 + Phase 1E migration)
@@ -194,6 +199,13 @@ export class AppModule implements NestModule {
     // Using *path avoids noisy startup warnings like "Unsupported route path: /api/*".
     consumer
       .apply(RequestLoggerMiddleware)
+      .forRoutes({ path: '*path', method: RequestMethod.ALL });
+
+    // Phase 9, Task 9.3: CSRF double-submit cookie validation.
+    // Runs BEFORE the JWT guard so unauthenticated mutating requests
+    // without a CSRF token are rejected (defense-in-depth).
+    consumer
+      .apply(CsrfProtectionMiddleware)
       .forRoutes({ path: '*path', method: RequestMethod.ALL });
 
     // Phase 1, Task 1.4: bind the AsyncLocalStorage tenant context for

@@ -12,8 +12,20 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { RedisService } from '../../infrastructure/cache/redis.service';
+import { CookieAuthService, ACCESS_TOKEN_COOKIE } from '../../common/auth/cookie-auth.service';
 
-// Single Responsibility: manage real-time Socket.IO connections with JWT auth + tenant namespacing.
+/**
+ * EventsGateway — Phase 9 update (Auth Hardening).
+ *
+ * Token extraction priority for Socket.IO handshakes:
+ *   1. `__Host-nc_at` cookie (browser sends it automatically when
+ *      `withCredentials: true` is set on the client AND the server has
+ *      `credentials: true` in the CORS config).
+ *   2. `handshake.auth.token` (CLI / server-to-server / legacy clients).
+ *   3. `Authorization: Bearer` header in handshake.
+ *
+ * Per `EAOS-implementation-roadmap.md` §13 task 9.6.
+ */
 @WebSocketGateway({
   cors: { origin: '*', credentials: true },
   namespace: '/',
@@ -29,13 +41,12 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly redis: RedisService,
+    private readonly cookieAuth: CookieAuthService,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
     try {
-      const token =
-        client.handshake.auth?.token ??
-        client.handshake.headers?.authorization?.replace('Bearer ', '');
+      const token = this.extractSocketToken(client);
 
       if (!token) {
         client.disconnect(true);
@@ -75,6 +86,41 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.warn(`Rejected unauthenticated connection: ${client.id}`);
       client.disconnect(true);
     }
+  }
+
+  /**
+   * Extract JWT from the Socket.IO handshake. Cookie-first (Phase 9),
+   * then explicit auth/header fallbacks.
+   */
+  private extractSocketToken(client: Socket): string | null {
+    // 1. Cookie (Phase 9: httpOnly path — browser sends automatically when
+    //    `withCredentials: true` is set on the client).
+    if (this.cookieAuth.isEnabled()) {
+      const cookieHeader = client.handshake.headers?.cookie;
+      if (cookieHeader) {
+        for (const piece of cookieHeader.split(';')) {
+          const eq = piece.indexOf('=');
+          if (eq < 0) continue;
+          const name = piece.slice(0, eq).trim();
+          if (name === ACCESS_TOKEN_COOKIE) {
+            const value = piece.slice(eq + 1).trim();
+            if (value) return decodeURIComponent(value);
+          }
+        }
+      }
+    }
+
+    // 2. Explicit handshake.auth.token (server-to-server, CLI, older clients).
+    const explicit = client.handshake.auth?.token;
+    if (typeof explicit === 'string' && explicit.length > 0) return explicit;
+
+    // 3. Authorization: Bearer header (some clients send it).
+    const authHeader = client.handshake.headers?.authorization;
+    if (typeof authHeader === 'string') {
+      const m = authHeader.match(/^Bearer\s+(.+)$/i);
+      if (m) return m[1];
+    }
+    return null;
   }
 
   handleDisconnect(client: Socket): void {

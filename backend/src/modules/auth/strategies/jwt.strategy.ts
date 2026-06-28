@@ -1,27 +1,79 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { JwtPayload } from '../interfaces/token.interface';
 import { ValidatedUser } from '../interfaces/auth.interface';
+import { CookieAuthService } from '../../../common/auth/cookie-auth.service';
+import * as passportJwt from 'passport-jwt';
 
-// Single Responsibility: validate JWT access tokens only.
+/**
+ * JwtStrategy — Phase 9 update (Auth Hardening).
+ *
+ * Token extraction priority:
+ *   1. `__Host-nc_at` cookie (the new httpOnly path; preferred for frontend-eaos)
+ *   2. `Authorization: Bearer <jwt>` header (kept for: server-to-server, CLI,
+ *      Socket.IO handshakes that still send a Bearer, internal Nest clients)
+ *
+ * When the httpOnly cookie auth feature flag is OFF, only the header is honoured
+ * (so dev environments can still test with curl without setting cookies).
+ */
+
+// Single Responsibility: validate JWT access tokens (cookie-first; header fallback).
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
+  private readonly cookieAuth: CookieAuthService;
+  private readonly httpOnlyAuthEnabled: () => boolean;
+
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    cookieAuth: CookieAuthService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: (req: unknown) => JwtStrategy.extractJwt(req as never, cookieAuth),
       ignoreExpiration: false,
       secretOrKey: (config && typeof (config as any).get === 'function'
         ? config.get<string>('JWT_SECRET')
         : process.env.JWT_SECRET) as string,
     });
+    this.cookieAuth = cookieAuth;
+    this.httpOnlyAuthEnabled = () => cookieAuth.isEnabled();
+  }
+
+  /**
+   * Custom extractor: httpOnly cookie → Bearer header → null.
+   */
+  private static extractJwt(
+    req: {
+      cookies?: Record<string, string>;
+      headers?: Record<string, string | string[] | undefined>;
+    } | undefined,
+    cookieAuth: CookieAuthService,
+  ): string | null {
+    if (!req) return null;
+
+    // 1. Try cookie FIRST — but only if the feature flag is on.
+    if (cookieAuth.isEnabled()) {
+      const fromCookie = cookieAuth.parseCookies(req as never).accessToken;
+      if (fromCookie) return fromCookie;
+    }
+
+    // 2. Fallback: Authorization: Bearer header (server-to-server, CLI, sockets).
+    const authHeader = req.headers?.authorization;
+    if (typeof authHeader === 'string') {
+      const m = authHeader.match(/^Bearer\s+(.+)$/i);
+      if (m) return m[1];
+    }
+    if (Array.isArray(authHeader) && authHeader[0]) {
+      const m = authHeader[0].match(/^Bearer\s+(.+)$/i);
+      if (m) return m[1];
+    }
+
+    return null;
   }
 
   async validate(
@@ -54,3 +106,6 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     };
   }
 }
+
+// Keep the type import alive for clarity even though passport-jwt's ExtractJwt isn't used.
+void passportJwt;

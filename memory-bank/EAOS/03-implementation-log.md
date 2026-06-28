@@ -1,9 +1,65 @@
 # NeureCore — EAOS Implementation Log
 
-**Last updated:** 2026-06-28 20:10
+**Last updated:** 2026-06-28 20:37
 **Purpose:** Chronological log of code changes, file references, and shipped features for the EAOS implementation. Newest first.
 
 **Format:** `## DATE · phase N · short title`, then a brief description with file:line references and PR link (when applicable).
+
+---
+
+## 2026-06-28 20:37 · Phase 9 — Auth Hardening COMPLETE ✅
+
+### Phase 9 done (14/14 tasks + 31 unit tests)
+
+**Backend (`backend/src/common/auth/` — new module):**
+
+- `cookie-auth.service.ts` — `CookieAuthService` singleton. Constants: `__Host-nc_at` (15 min access JWT), `__Host-nc_rt` (7-day refresh JWT), `__Host-nc_csrf` (CSRF token, NOT httpOnly — readable by SPA so it can echo as `X-CSRF-Token` header). Methods: `setAuthCookies(res, {accessToken, refreshToken, csrfToken?})`, `clearAuthCookies(res)`, `parseCookies(req)` (handles both `req.cookies` and raw `Cookie` header fallback), `generateCsrfToken()` (crypto.randomBytes 24 base64url), `safeEquals(a, b)` (constant-time), `isEnabled()` (reads `USE_HTTPONLY_AUTH` env; default ON in prod, OFF in dev).
+- `cookie-auth.module.ts` — `@Global()` module exporting `CookieAuthService`.
+- `csrf.middleware.ts` — `CsrfProtectionMiddleware` (double-submit cookie). Skips safe methods (GET/HEAD/OPTIONS) and pre-auth paths (`/api/v1/auth/{login,register,google,refresh}`). When feature flag is ON, requires `X-CSRF-Token` header value to match `__Host-nc_csrf` cookie value (constant-time). Returns 403 `CSRF_TOKEN_MISSING` or `CSRF_TOKEN_INVALID` on failure.
+
+**Backend (auth module updated):**
+
+- `auth.controller.ts` — `POST /auth/login` + `/register` + `/google` set all 3 cookies via `CookieAuthService.setAuthCookies`. `POST /auth/refresh` reads `refreshToken` from cookie first, falls back to body, rotates all 3 cookies. `POST /auth/logout` clears cookies + revokes tokens (204 No Content).
+- `auth.service.ts` — `refresh()` now throws on missing/non-string refresh tokens (defensive).
+- `strategies/jwt.strategy.ts` — custom extractor: httpOnly cookie first (when flag ON), then `Authorization: Bearer` header fallback (kept for server-to-server / CLI / legacy clients). All other behavior unchanged.
+- `dto/refresh-token.dto.ts` — `refreshToken` is now `@IsOptional()` (cookie path is preferred; body still works for back-compat).
+
+**Backend (other):**
+
+- `events.gateway.ts` — Socket.IO handshake reads JWT from cookie first, then `handshake.auth.token`, then `Authorization` header.
+- `app.module.ts` — registers `CookieAuthModule` + mounts `CsrfProtectionMiddleware` globally (runs BEFORE tenant context middleware so unauth'd mutating requests are rejected at the CSRF layer, not at the auth layer — defense-in-depth).
+- `main.ts` — mounts `cookie-parser`; CORS allowed headers now include `X-CSRF-Token`, `X-Tenant-ID`, `Idempotency-Key`.
+- `package.json` — added `cookie-parser@^1.4.7` + `@types/cookie-parser@^1.4.8`.
+
+**Frontend (`frontend-eaos/src/`):**
+
+- `core/hooks/auth/useAuth.ts` — NEW. `useAuthUser()` (TanStack Query against `/auth/me`, shared `['auth', 'me']` key), `useLogin()` (POST `/auth/login`, sets user cache on success), `useLogout()` (POST `/auth/logout`, clears queryClient + cookies), `useEnsureAuthUser()` (effect that prefetches on mount).
+- `components/workspace/useRole.ts` — now wraps `useAuthUser` (shared query key) so every component sees the same identity.
+- `infrastructure/api/RestClient.ts` — on mutating requests (POST/PATCH/PUT/DELETE), reads `cookieManager.getCsrfToken()` and sets `X-CSRF-Token` header. New `RequestConfig.skipCsrf` opt-out for pre-auth endpoints (`/auth/login`, `/auth/refresh`, `/auth/logout`). The refresh path (which calls `fetch` directly to avoid recursion through the RestClient) is also marked as skipCsrf.
+- `app/login/page.tsx` — NEW. `react-hook-form` + `zod` validation. `?next=` redirect param. 401 → inline password error. 429 → toast. Cookie-blocked → toast with troubleshooting hint. Wrapped in `Suspense` for `useSearchParams()` static export.
+- `app/page.tsx` — redirects to `/login?next=/` if unauthenticated; shows signed-in email + role + Sign out button.
+
+**Tests (`backend/test/unit/` — new):**
+
+- `cookie-auth.service.spec.ts` — 19 tests covering: cookie name constants use `__Host-` prefix; `isEnabled()` respects `NODE_ENV` and `USE_HTTPONLY_AUTH` override; `parseCookies()` reads from both `req.cookies` and raw `Cookie` header with URL decoding; `generateCsrfToken()` is non-empty, unique, base64url-safe; `safeEquals()` handles identical / different / different-length strings; `setAuthCookies()` attaches 3 cookies with correct `httpOnly` + `sameSite: 'strict'` + `secure` (prod only); `clearAuthCookies()` clears all 3.
+- `csrf.middleware.spec.ts` — 12 tests covering: safe methods (GET/HEAD/OPTIONS) pass through; exempt paths (`/auth/login`, `/auth/register`, `/auth/google`, `/auth/refresh`) bypass check; feature flag OFF bypasses check; missing cookie / missing header / mismatch all return `ForbiddenException`; matching cookie + header passes.
+
+### Verification
+
+- ✅ Backend `tsc --noEmit` clean
+- ✅ Backend `nest build` succeeds
+- ✅ Backend `npx jest` → 239/239 tests pass (was 208, +31 new)
+- ✅ Frontend `tsc --noEmit` clean
+- ✅ Frontend `next build` succeeds — `/login` route = 29.5 kB / 322 kB First Load JS; `/` = 6.94 kB / 292 kB
+- ✅ `packages/ui` `tsc --noEmit` clean
+
+### SOLID adherence
+
+- **SRP** — `CookieAuthService` owns cookie serialisation only; `CsrfProtectionMiddleware` owns CSRF validation only; `JwtStrategy` owns JWT extraction+validation only. No overlap.
+- **OCP** — new cookie naming or feature flag toggle requires no change to consumers (`CookieAuthService.isEnabled()` already gates both cookie attachment and JwtStrategy extraction).
+- **LSP** — `RequestConfig.skipCsrf` extends the existing interface without breaking call sites; default behavior (inject CSRF) is preserved.
+- **ISP** — `CookieAuthService` exposes a small surface (`set/clear/parse` + `generateCsrfToken` + `isEnabled`); clients never need to touch raw `Set-Cookie` headers.
+- **DIP** — `CsrfProtectionMiddleware` depends on `CookieAuthService` (injected), not on `res.cookie` directly. `EventsGateway` depends on the abstraction, not on `Socket.handshake.headers.cookie` parsing internals.
 
 ---
 

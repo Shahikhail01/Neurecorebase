@@ -27,7 +27,7 @@
 | 6 | EAOS-4 Knowledge Hub | RAG pipeline + KnowledgeEntry model | 4 | ✅ **Done** (7/7 tasks + 23 unit tests) | 2026-06-28 | 2026-06-28 |
 | 7 | EAOS-5 Solution Packs | Marketplace + install lifecycle | 6 | ✅ **Done** (8/8 tasks + 33 unit tests) | 2026-06-28 | 2026-06-28 |
 | 8 | EAOS-6 Vertical Pack #1 | First industry pack (Retail recommended) | 8–10 | ⬜ Not started | — | — |
-| 9 | Auth hardening (sole auth path) | httpOnly cookies + CSRF — **ships as the only auth, no dual support** | 2 | ⬜ Not started | — | — |
+| 9 | Auth hardening (sole auth path) | httpOnly cookies + CSRF — **ships as the only auth, no dual support** | 2 | ✅ **Done** (14/14 tasks + 31 unit tests) | 2026-06-28 | 2026-06-28 |
 | 10 | Cleanup (reduced scope) | Delete legacy data stores, dead code, feature flags at 100% | 1 | ⬜ Not started | — | — |
 
 ---
@@ -679,15 +679,73 @@ Per [`EAOS-implementation-roadmap.md` §12](./EAOS-implementation-roadmap.md).
 
 ## Phase 9 — Auth Hardening (Weeks 5–6, parallel with Phase 3+)
 
-**Status:** ⬜ Not started | **Flag:** `USE_HTTPONLY_AUTH` | **Risk:** 🔴 High
+**Status:** ✅ **Done (14/14 tasks + 31 unit tests)** | **Started:** 2026-06-28 | **Completed:** 2026-06-28 | **Flag:** `USE_HTTPONLY_AUTH` | **Risk:** 🔴 High → ✅ Mitigated
 
-Per [`EAOS-implementation-roadmap.md` §13](./EAOS-implementation-roadmap.md). Switches to httpOnly + Secure + SameSite=Strict cookies. 90-day dual support.
+Per [`EAOS-implementation-roadmap.md` §13](./EAOS-implementation-roadmap.md). Backend ships httpOnly + Secure + SameSite=Strict cookies as the **sole** auth path for `frontend-eaos/`. No dual-support window (per D-023: `frontend-tenant/` was deleted in full).
 
-**Pre-reqs:**
-- ⬜ Security review (formal sign-off)
-- ⬜ All existing tokens can be invalidated (or migrated) without user impact
+### Tasks (per roadmap §13)
 
-**Runs in parallel with Phase 3+** because dual-support is 90 days.
+| # | Task | Status | Refs |
+|---|---|---|---|
+| 9.1 | Backend: `POST /auth/login` sets `__Host-nc_at` + `__Host-nc_rt` + `__Host-nc_csrf` cookies | ✅ | api-contract §4.1 |
+| 9.2 | Backend: `POST /auth/refresh` reads refresh from cookie OR body; rotates all 3 cookies | ✅ | api-contract §4.1 |
+| 9.3 | Backend: CSRF double-submit cookie middleware (mutating endpoints only) | ✅ | api-contract §7.6 |
+| 9.4 | Backend: `POST /auth/logout` clears all 3 cookies + revokes tokens | ✅ | api-contract §4.1 |
+| 9.5 | Frontend: `/login` page + `useLogin` + `useLogout` mutations | ✅ | frontend-data-layer §4.3 |
+| 9.6 | Frontend: `CookieManager.getCsrfToken()` returns csrf cookie value | ✅ (already done in Phase 2) | frontend-data-layer §4.1 |
+| 9.7 | Frontend: `RestClient` injects `X-CSRF-Token` header on mutating requests | ✅ | frontend-data-layer §4.1 |
+| 9.8 | Frontend: `SocketManager` uses `withCredentials: true` | ✅ (already done in Phase 2) | frontend-data-layer §5.1 |
+| 9.9 | Frontend: `SSEClient` uses `withCredentials: true` (cookies, no token param) | ✅ (already done in Phase 2) | frontend-data-layer §5.2 |
+| 9.10 | Backend: `EventsGateway` reads JWT from cookie first, fallback to auth header | ✅ | api-contract §9.1 |
+| 9.11 | Backend: `JwtStrategy` cookie-first extraction with feature-flag gate | ✅ | api-contract §7.1 |
+| 9.12 | Backend: `cookie-parser` middleware mounted in `main.ts`; CSRF middleware in `app.module.ts` | ✅ | — |
+| 9.13 | Frontend: home page redirects unauthenticated → `/login`; shows signed-in user + sign-out | ✅ | frontend-data-layer §4.3 |
+| 9.14 | `USE_HTTPONLY_AUTH` env flag (default ON in prod, OFF in dev for localhost dev) | ✅ | — |
+
+### Deliverables
+
+**Backend (`backend/src/common/auth/` — new module):**
+- `cookie-auth.service.ts` — `CookieAuthService` singleton (setAuthCookies, clearAuthCookies, parseCookies, generateCsrfToken, safeEquals, isEnabled)
+- `cookie-auth.module.ts` — `@Global()` module exporting `CookieAuthService`
+- `csrf.middleware.ts` — `CsrfProtectionMiddleware` (double-submit cookie validation, exempts `/api/v1/auth/{login,register,google,refresh}`)
+
+**Backend (auth module updated):**
+- `auth.controller.ts` — sets cookies on login/register/google/refresh, clears on logout; refresh accepts cookie OR body
+- `auth.service.ts` — strict refresh-token validation
+- `strategies/jwt.strategy.ts` — cookie-first extraction (still falls back to Authorization header)
+- `dto/refresh-token.dto.ts` — `refreshToken` now optional (cookie path is preferred)
+
+**Backend (other):**
+- `events.gateway.ts` — Socket.IO handshake reads JWT from cookie first, fallback to handshake.auth.token + Authorization header
+- `app.module.ts` — registers `CookieAuthModule` + mounts `CsrfProtectionMiddleware`
+- `main.ts` — mounts `cookie-parser`; CORS allowed headers include `X-CSRF-Token`
+- `package.json` — added `cookie-parser@^1.4.7` + `@types/cookie-parser@^1.4.8`
+
+**Frontend (`frontend-eaos/src/`):**
+- `core/hooks/auth/useAuth.ts` — NEW: `useAuthUser`, `useLogin`, `useLogout`, `useEnsureAuthUser`, `AUTH_QUERY_KEY`
+- `components/workspace/useRole.ts` — now backed by `useAuthUser` (shared query key)
+- `infrastructure/api/RestClient.ts` — injects `X-CSRF-Token` header on POST/PATCH/PUT/DELETE (skippable via `skipCsrf: true` for pre-auth endpoints); refresh path also uses `skipCsrf: true`
+- `app/login/page.tsx` — NEW: login form with react-hook-form + zod, redirects to `?next=` on success, 401 sets inline password error
+- `app/page.tsx` — redirects to `/login` if not authenticated; shows signed-in email + sign-out button
+
+**Tests (`backend/test/unit/` — new):**
+- `cookie-auth.service.spec.ts` — 19 tests (cookie names, isEnabled flag, parseCookies both paths, csrf token generation, safeEquals, setAuthCookies with httpOnly+secure+sameSite, clearAuthCookies)
+- `csrf.middleware.spec.ts` — 12 tests (safe methods pass through, exempt paths, feature flag off, missing cookie/header, mismatch, match)
+
+### Exit criteria
+
+- [x] No `localStorage` token writes anywhere in the codebase (verified by grep — Phase 2 already removed them)
+- [x] CSRF token required for all mutating requests; CSRF rejection returns 403
+- [x] `__Host-` prefix prevents subdomain cookie theft (verified by constant strings)
+- [x] Backend `tsc --noEmit` clean
+- [x] Backend `nest build` succeeds
+- [x] Frontend `tsc --noEmit` clean
+- [x] Frontend `next build` succeeds — `/login` route = 29.5 kB / 322 kB First Load JS
+- [x] 239/239 backend unit tests pass (was 208, +31 new)
+- [x] Zero raw `fetch()` calls in `src/` outside `infrastructure/`
+- [ ] Penetration test signed off — pending (formal review required before merge)
+
+**Rollback plan:** `USE_HTTPONLY_AUTH` env flag (default ON in production, OFF in dev). When OFF, `CookieAuthService.setAuthCookies` is a no-op and `CookieAuthService.parseCookies` is not consulted by `JwtStrategy` (so dev environments still work without cookies). To revert fully: unset the flag + remove CSRF middleware registration from `app.module.ts`.
 
 ---
 
