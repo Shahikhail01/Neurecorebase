@@ -17,10 +17,10 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./src/*"],
-      "@neurecore/ui": ["../packages/ui/src/index.ts"],
-      "@neurecore/ui/*": ["../packages/ui/src/*"]
+      "@neurecore/ui": ["./src/ui/index.ts"],
+      "@neurecore/ui/*": ["./src/ui/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "../packages/ui/dist/**"]
+  "exclude": ["node_modules"]
 }
