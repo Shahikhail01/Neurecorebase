@@ -14,6 +14,7 @@ import {
   LLMWithToolsResponse,
   LLMToolCall,
 } from '../interfaces/llm-client.interface';
+import { readConfigOr } from '../../../common/utils/config-getter';
 
 /**
  * MiniMax API response types
@@ -53,15 +54,13 @@ export class MiniMaxClient {
   private readonly apiKey: string;
 
   constructor(private readonly config?: ConfigService) {
-    const cfgGet =
-      config && typeof (config as any).get === 'function'
-        ? (key: string) => (config as any).get(key) as string | undefined
-        : (key: string) => process.env[key];
-
-    this.apiKey = (cfgGet('MINIMAX_API_KEY') as string) ?? '';
-    this.baseUrl =
-      (cfgGet('MINIMAX_BASE_URL') as string) ?? 'https://api.minimaxi.com/v1';
-    this.model = (cfgGet('MINIMAX_MODEL') as string) ?? 'MiniMax-M2.5';
+    this.apiKey = readConfigOr(config, 'MINIMAX_API_KEY', '');
+    this.baseUrl = readConfigOr(
+      config,
+      'MINIMAX_BASE_URL',
+      'https://api.minimaxi.com/v1',
+    );
+    this.model = readConfigOr(config, 'MINIMAX_MODEL', 'MiniMax-M2.5');
 
     if (!this.apiKey) {
       Logger.warn(

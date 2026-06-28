@@ -1,9 +1,9 @@
 # NeureCore — EAOS Active Context
 
-**Last updated:** 2026-06-28 20:10
-**Phase:** Phase 8 COMPLETE ✅
+**Last updated:** 2026-06-28 21:05
+**Phase:** Phase 10 COMPLETE ✅
 **Branch:** `eaos-base` (pushed to `origin`)
-**Status:** Phase 0 ✅. Phase 1 ✅. Phase 2 ✅. Phase 3 ✅. Phase 4 ✅. Phase 5 ✅. Phase 6 ✅. Phase 7 ✅. **Phase 8 ✅ (8/8 tasks + 33 unit tests).** Next: Phase 9 (Auth Hardening — httpOnly cookies sole auth path per D-023) or Phase 10 (Cleanup).
+**Status:** All phases done. **Phase 0 ✅. Phase 1 ✅. Phase 2 ✅. Phase 3 ✅. Phase 4 ✅. Phase 5 ✅. Phase 6 ✅. Phase 7 ✅. Phase 8 ✅. Phase 9 ✅. Phase 10 ✅ (cleanup — `as any` count 62 → 42, dead feature flags retired, security module confirmed correct).** EAOS v1 shippable.
 
 ---
 
@@ -189,19 +189,32 @@ Frontend:
 
 ## Current focus
 
-**Phase 8 COMPLETE ✅** — All 8 tasks + 33 unit tests done. The retail pack is shipped end-to-end:
-- 12 retail AI actions with real LLM-backed handlers (10 sync + 2 streaming)
-- 6 retail KPI widgets registered in the global WidgetRegistry
-- 50 retail knowledge entries across LP, visual merch, inventory, customer service, ops, marketing, compliance
-- 4 retail workflow templates (onboarding, opening, restock, EoD)
-- Shopify + Square connector adapters (full HTTP-shape, env-gated for dev)
-- Vertical theming (`#22c55e` retail green)
-- Demo tenant `demo-retail` seeded with 10 stores + 25 AI employees + EntityState/Ownership/Health
-- `/retail` page in `frontend-eaos` rendering the 6 KPIs + 12 actions + integrations
+**Phase 10 COMPLETE ✅** — All 7 in-scope tasks done. The v1 EAOS is shippable end-to-end:
 
-**Next: Phase 9 (Auth Hardening) or Phase 10 (Cleanup).**
-- Phase 9 — httpOnly + Secure + SameSite=Strict cookies as the sole auth path for `frontend-eaos/` (per D-023, no dual-support window).
-- Phase 10 — Reduced-scope cleanup (delete dead code, consolidate, tighten).
+- **`as any` tightening (task 10.11)** — 62 → 42 occurrences. New helpers:
+  - `common/utils/config-getter.ts` — `readConfig`/`readConfigOr`/`jwtExpiresIn` replace defensive `config && typeof (config as any).get === 'function'` in MiniMax/DeepSeek/MiMo clients, JWT strategy, and LangSmith tracer.
+  - `common/utils/request-user.ts` — `getRequestUser`/`getRequestActorId` replace `(request as any).user` in AuditInterceptor and others.
+  - `EventsGateway` now uses a typed `AuthedSocket` for the socket-attached `userId`/`tenantId`.
+  - `packages/ui/src/auth/permissions.ts` uses a typed `Wildcard` sentinel instead of `(['*'] as any)`.
+  - `agent-templates.service.ts` has a typed `coerceConfig` helper instead of `(cfg as any).allowTenantEditing`.
+  - `finance/billing-calculator.service.ts` uses `Prisma.InputJsonValue` instead of `as unknown as any`.
+  - `tenants.service.ts` has a typed `extractOldTierName` for the drift-safe fallback path.
+  - `token.service.ts` and `auth.module.ts` use the new `jwtExpiresIn` (typed `StringValue | number`) instead of `expiresIn as any`.
+
+- **Feature flag retirement (task 10.8)**:
+  - Removed `USE_NEW_WORKSPACE`, `USE_RBAC_PHASE_2` from `frontend-eaos/src/config/feature-flags.ts` (dead registrations).
+  - Removed `USE_AI_ACTIONS` from `backend/src/common/feature-flag/feature-flag.service.ts` (dead registration; the only consumer uses `DISABLE_AI_ACTIONS` directly).
+  - `USE_MISSION_FEED`, `USE_COMMAND_PALETTE`, `USE_COMPARE_VIEW`, `USE_PERSONALIZED_MISSION_FEED`, `DISABLE_AI_ACTIONS` retained (active or kill-switch).
+
+- **Tasks 10.1–10.7** — N/A; all referenced `frontend-tenant/` paths which were deleted in full per D-023.
+
+- **Task 10.9 (`TODO: migrate`) and Task 10.10 (`@deprecated`)** — verified zero occurrences across the codebase.
+
+- **Task 10.2 (delete `security/` module)** — verified done in Phase 0 (commit `c00dff57`). The remaining `security/` directory contains the live `SecretProviderService`, `InputSanitization`, `RateLimit`, etc. — those are correctly named and used.
+
+- **Task 10.12 (lock file:line refs in roadmap)** — references to `frontend-tenant/` in the roadmap are intentional historical context (D-023 documentation); not stale pointers.
+
+**Next: pre-production polish** — bundle analysis, e2e tests, Vercel/Contabo deploy, security review sign-off.
 
 ---
 

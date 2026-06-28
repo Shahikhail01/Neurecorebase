@@ -19,6 +19,7 @@ export class TenantsService {
     name: true,
     slug: true,
     status: true,
+    tierId: true,
     logoUrl: true,
     website: true,
     industry: true,
@@ -105,6 +106,20 @@ export class TenantsService {
     }
   }
 
+  /**
+   * Resolve a human-readable tier name from a tenant that may or may not have
+   * the `tier` relation loaded (depending on whether `findOne` hit the include
+   * path or the drift-safe fallback path). Replaces the previous
+   * `(tenant as any).tier?.name ?? (tenant as any).tierId ?? 'unknown'`.
+   */
+  private extractOldTierName(tenant: unknown): string {
+    if (!tenant || typeof tenant !== 'object') return 'unknown';
+    const t = tenant as { tier?: { name?: string } | null; tierId?: string | null };
+    if (t.tier && typeof t.tier.name === 'string') return t.tier.name;
+    if (typeof t.tierId === 'string') return t.tierId;
+    return 'unknown';
+  }
+
   async create(dto: CreateTenantDto) {
     const existing = await this.prisma.tenant.findUnique({
       where: { slug: dto.slug },
@@ -170,12 +185,14 @@ export class TenantsService {
   async update(id: string, dto: UpdateTenantDto) {
     await this.findOne(id);
 
-    // Prevent changing tierId directly - use changeTier instead
-    const { tierId, ...updateData } = dto as any;
+    // UpdateTenantDto intentionally does NOT include `tierId` — callers must
+    // use changeTier() instead. The destructure with rest is a no-op for the
+    // current DTO shape but defends against future field additions that
+    // should never reach Prisma.tenant.update directly.
 
     return this.prisma.tenant.update({
       where: { id },
-      data: updateData,
+      data: dto,
       include: { tier: true },
     });
   }
@@ -209,8 +226,7 @@ export class TenantsService {
       include: { tier: true },
     });
 
-    const oldTierName =
-      (tenant as any).tier?.name ?? (tenant as any).tierId ?? 'unknown';
+    const oldTierName = this.extractOldTierName(tenant);
     this.logger.log(
       `Tenant ${tenant.slug} changed from tier ${oldTierName} to ${newTier.name}`,
     );

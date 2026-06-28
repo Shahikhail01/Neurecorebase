@@ -14,6 +14,7 @@ import {
   LLMStreamResponse,
   LLMConfig,
 } from '../interfaces/llm-client.interface';
+import { readConfigOr } from '../../../common/utils/config-getter';
 
 @Injectable()
 export class DeepSeekClientService implements ILLMClient {
@@ -25,12 +26,7 @@ export class DeepSeekClientService implements ILLMClient {
   private readonly apiKey: string;
 
   constructor(private readonly config?: ConfigService) {
-    const cfgGet =
-      config && typeof (config as any).get === 'function'
-        ? (key: string) => (config as any).get(key) as string | undefined
-        : (key: string) => process.env[key];
-
-    this.apiKey = (cfgGet('DEEPSEEK_API_KEY') as string) ?? '';
+    this.apiKey = readConfigOr(config, 'DEEPSEEK_API_KEY', '');
     if (!this.apiKey) {
       this.logger.warn('DEEPSEEK_API_KEY not configured');
     }

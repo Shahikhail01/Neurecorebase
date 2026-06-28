@@ -7,6 +7,7 @@ import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { JwtPayload } from '../interfaces/token.interface';
 import { ValidatedUser } from '../interfaces/auth.interface';
 import { CookieAuthService } from '../../../common/auth/cookie-auth.service';
+import { readConfig } from '../../../common/utils/config-getter';
 import * as passportJwt from 'passport-jwt';
 
 /**
@@ -36,9 +37,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     super({
       jwtFromRequest: (req: unknown) => JwtStrategy.extractJwt(req as never, cookieAuth),
       ignoreExpiration: false,
-      secretOrKey: (config && typeof (config as any).get === 'function'
-        ? config.get<string>('JWT_SECRET')
-        : process.env.JWT_SECRET) as string,
+      secretOrKey:
+        readConfig(config, 'JWT_SECRET') ?? process.env.JWT_SECRET ?? '',
     });
     this.cookieAuth = cookieAuth;
     this.httpOnlyAuthEnabled = () => cookieAuth.isEnabled();

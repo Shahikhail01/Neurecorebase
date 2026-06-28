@@ -14,6 +14,7 @@ import {
   LLMStreamResponse,
   LLMConfig,
 } from '../interfaces/llm-client.interface';
+import { readConfig, readConfigOr } from '../../../common/utils/config-getter';
 
 /**
  * MiMo API message format
@@ -81,16 +82,10 @@ export class MiMoClientService implements ILLMClient {
   private readonly organizationId?: string;
 
   constructor(private readonly config?: ConfigService) {
-    const cfgGet =
-      config && typeof (config as any).get === 'function'
-        ? (key: string) => (config as any).get(key) as string | undefined
-        : (key: string) => process.env[key];
-
-    this.apiKey = (cfgGet('MIMO_API_KEY') as string) ?? '';
-    this.baseUrl =
-      (cfgGet('MIMO_BASE_URL') as string) ?? 'https://api.mimo.ai/v1';
-    this.model = (cfgGet('MIMO_MODEL') as string) ?? 'MiMo-72B-Instruct';
-    this.organizationId = (cfgGet('MIMO_ORG_ID') as string) ?? undefined;
+    this.apiKey = readConfigOr(config, 'MIMO_API_KEY', '');
+    this.baseUrl = readConfigOr(config, 'MIMO_BASE_URL', 'https://api.mimo.ai/v1');
+    this.model = readConfigOr(config, 'MIMO_MODEL', 'MiMo-72B-Instruct');
+    this.organizationId = readConfig(config, 'MIMO_ORG_ID');
 
     if (!this.apiKey) {
       this.logger.warn(

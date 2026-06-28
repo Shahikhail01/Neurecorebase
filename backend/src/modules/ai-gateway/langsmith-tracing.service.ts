@@ -8,6 +8,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
+import { readConfigOr } from '../../common/utils/config-getter';
 
 /**
  * Span representation for tracing
@@ -52,19 +53,17 @@ export class LangSmithTracingService {
   private flushTimeout?: NodeJS.Timeout;
 
   constructor(private readonly configService?: ConfigService) {
-    const cfgGet =
-      configService && typeof (configService as any).get === 'function'
-        ? (key: string) => (configService as any).get(key) as string | undefined
-        : (key: string) => process.env[key];
-
     this.config = {
-      apiKey: (cfgGet('LANGSMITH_API_KEY') as string) ?? '',
-      project: (cfgGet('LANGSMITH_PROJECT') as string) ?? 'neurecore',
-      endpoint:
-        (cfgGet('LANGSMITH_ENDPOINT') as string) ??
+      apiKey: readConfigOr(configService, 'LANGSMITH_API_KEY', ''),
+      project: readConfigOr(configService, 'LANGSMITH_PROJECT', 'neurecore'),
+      endpoint: readConfigOr(
+        configService,
+        'LANGSMITH_ENDPOINT',
         'https://api.smith.langchain.com',
+      ),
       enabled:
-        (cfgGet('LANGSMITH_TRACING_ENABLED') as unknown as boolean) ?? false,
+        readConfigOr(configService, 'LANGSMITH_TRACING_ENABLED', 'false') ===
+        'true',
     };
 
     if (this.config.enabled && this.config.apiKey) {

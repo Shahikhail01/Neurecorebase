@@ -14,6 +14,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { SecretProviderService } from '../security/providers/secret.provider';
 import { ObservabilityModule } from '../observability/observability.module';
 import { CookieAuthModule } from '../../common/auth/cookie-auth.module';
+import { jwtExpiresIn } from '../../common/utils/config-getter';
 
 @Module({
   imports: [
@@ -27,7 +28,7 @@ import { CookieAuthModule } from '../../common/auth/cookie-auth.module';
       ): JwtModuleOptions => ({
         secret: secrets.getJwtSecret(),
         signOptions: {
-          expiresIn: config.get<string>('JWT_ACCESS_EXPIRES', '15m') as any,
+          expiresIn: jwtExpiresIn(config, 'JWT_ACCESS_EXPIRES', '15m'),
         },
       }),
     }),

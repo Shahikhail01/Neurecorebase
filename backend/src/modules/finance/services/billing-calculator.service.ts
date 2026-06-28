@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import type {
   IBillingCalculator,
@@ -77,11 +78,11 @@ export class BillingCalculatorService implements IBillingCalculator {
         tenantId,
         category: category as ExpenseCategory,
         description,
-        amountUsd: amountUsd as unknown as any,
+        amountUsd,
         currency: opts.currency ?? 'USD',
         agentId: opts.agentId ?? null,
         invoiceId: opts.invoiceId ?? null,
-        metadata: (opts.metadata ?? {}) as never,
+        metadata: (opts.metadata ?? {}) as Prisma.InputJsonValue,
       },
     });
   }

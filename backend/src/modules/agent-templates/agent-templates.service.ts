@@ -229,13 +229,10 @@ export class AgentTemplatesService {
   }
 
   async createPlatform(dto: CreateAgentTemplateDto) {
-    const cfg =
-      dto.config && typeof dto.config === 'object' && !Array.isArray(dto.config)
-        ? dto.config
-        : {};
+    const cfg = this.coerceConfig(dto.config);
 
-    if ((cfg as any).allowTenantEditing === undefined) {
-      (cfg as any).allowTenantEditing = true;
+    if (cfg.allowTenantEditing === undefined) {
+      cfg.allowTenantEditing = true;
     }
 
     return this.prisma.agentTemplate.create({
@@ -247,7 +244,7 @@ export class AgentTemplatesService {
         systemPrompt: dto.systemPrompt,
         instructions: dto.instructions,
         permissions: (dto.permissions ?? []) as never,
-        config: (cfg ?? {}) as never,
+        config: cfg as never,
         isPublic: true,
         version: dto.version ?? '1.0.0',
         tenantId: null,
@@ -271,13 +268,8 @@ export class AgentTemplatesService {
         `Platform agent template ${platformTemplateId} not found`,
       );
 
-    const cfg =
-      template.config &&
-      typeof template.config === 'object' &&
-      !Array.isArray(template.config)
-        ? template.config
-        : {};
-    const allowTenantEditing = (cfg as any).allowTenantEditing === true;
+    const cfg = this.coerceConfig(template.config);
+    const allowTenantEditing = cfg.allowTenantEditing === true;
     if (!allowTenantEditing) {
       throw new ForbiddenException(
         'Tenant editing is disabled for this template',
@@ -418,5 +410,19 @@ export class AgentTemplatesService {
       config: template.config,
       templateId: template.id,
     };
+  }
+
+  /**
+   * Coerce a template `config` value (which Prisma stores as `JsonValue |
+   * null`) into a typed `Record<string, unknown>` for callers that need to
+   * read or set specific fields like `allowTenantEditing`.
+   *
+   * Replaces the previous `(cfg as any).allowTenantEditing` cast.
+   */
+  private coerceConfig(raw: unknown): Record<string, unknown> {
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      return raw as Record<string, unknown>;
+    }
+    return {};
   }
 }

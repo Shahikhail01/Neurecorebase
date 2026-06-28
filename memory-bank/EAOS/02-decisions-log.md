@@ -1,9 +1,53 @@
 # NeureCore — EAOS Decisions Log
 
-**Last updated:** 2026-06-27 18:00
+**Last updated:** 2026-06-28 21:05
 **Purpose:** Chronological log of all architectural, product, and process decisions made during EAOS planning and implementation. Each entry: decision, rationale, trade-offs, doc reference.
 
 **Format:** Newest first. Use ISO date prefix.
+
+---
+
+## 2026-06-28
+
+### D-026 · Phase 10 cleanup: new `common/utils/` helpers + feature flag retirement
+
+**Decision:** Phase 10 cleanup introduces two new shared utility modules and retires three dead feature flag registrations. The cleanup focuses on `as any` tightening, which was the largest remaining code-health issue.
+
+**New helpers (backend/src/common/utils/):**
+- `config-getter.ts` — `readConfig`, `readConfigOr`, `jwtExpiresIn`. Replaces the over-defensive `config && typeof (config as any).get === 'function'` pattern (5 files) and the `expiresIn as any` casts in JWT config (2 files).
+- `request-user.ts` — `getRequestUser`, `getRequestActorId`, `RequestUser`. Replaces `(request as any).user` defensive casts. Re-exports `ValidatedUser` for downstream consumers.
+
+**Other tightenings (each in-place, no abstraction introduced):**
+- `events.gateway.ts` — typed `AuthedSocket` module-local interface for socket-attached `userId`/`tenantId`.
+- `tenants.service.ts` — new `extractOldTierName` helper; added `tierId` to `driftSafeTenantSelect`.
+- `agent-templates.service.ts` — new `coerceConfig` helper that narrows `unknown` to `Record<string, unknown>`.
+- `global-exception.filter.ts` — new `extractValidationMessage` helper.
+- `billing-calculator.service.ts` — `amountUsd as unknown as any` → plain `amountUsd: number`; `metadata as never` → `Prisma.InputJsonValue`.
+- `packages/ui/src/auth/permissions.ts` — typed `Wildcard` sentinel + `RolePermissionSet` union (`Wildcard | readonly Permission[]`).
+
+**Retired feature flags (had reached 100% rollout or had zero consumers):**
+- `USE_NEW_WORKSPACE` — Phase 3 EAOS workspace is the only workspace since 2026-06-27; the legacy `/departments/[id]/workspace` route was deleted per D-023.
+- `USE_RBAC_PHASE_2` — Phase 0 already shipped the RBAC hardening the flag was meant to gate.
+- `USE_AI_ACTIONS` — only consumer was the kill-switch guard which reads `DISABLE_AI_ACTIONS` directly.
+
+**Rationale:**
+- The 62 `as any` casts were hiding real type problems in 5+ files (defensive `typeof === 'function'` checks against a typed `ConfigService`, defensive reads against a typed `req.user`, JWT lib boundary casts).
+- The dead feature flag registrations were drift from earlier phases that had since shipped — leaving them in place invited future contributors to "wire up" code that no longer had any reason to exist.
+- New helpers follow SOLID SRP — each module owns one concern. New helpers are consumed by 9 files; no abstraction was introduced without consumers (the v1.3 Phase 1 antipattern is explicitly avoided).
+
+**Trade-offs accepted:**
+- `as any` count went from 62 to 42, not 0. The remaining 42 are legitimate library-boundary casts (LangGraph node-name enums that don't export their node-name type, Prisma enum→string DTO boundary where the DTO is untyped, Socket.IO typed map keys). Eliminating them would require structural changes that are out of scope for cleanup.
+- New helpers are additive — old call sites can still work (they don't, because the old code is gone, but the new code is fully replaceable if a regression is found).
+- No new feature flag was introduced; if the same pattern arises again, the same approach will be used.
+
+**Doc references:**
+- `EAOS-implementation-roadmap.md` v1.3 §14 task 10.11 + 10.8
+- `01-active-context.md` (D-026)
+- `03-implementation-log.md` (Phase 10 entry)
+- `04-fixes-tracker.md` FIX-126 + FIX-127
+- `05-phase-tracker.md` Phase 10 section + Cross-cutting Concerns (Active Feature Flags)
+
+**Status:** Approved 2026-06-28 21:05. All checks pass: backend `tsc --noEmit`, `nest build`, `jest` 239/239; frontend-eaos `tsc --noEmit`; packages/ui `tsc --noEmit`.
 
 ---
 

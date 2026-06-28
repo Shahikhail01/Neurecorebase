@@ -31,6 +31,7 @@ import { Request } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { Reflector } from '@nestjs/core';
 import { AuditService } from '../../modules/audit/audit.service';
+import { getRequestUser } from '../utils/request-user';
 
 export const AUDIT_KEY = 'audit';
 
@@ -77,9 +78,9 @@ export class AuditInterceptor implements NestInterceptor {
     );
 
     // Extract user information
-    const user = (request as any).user;
+    const user = getRequestUser(request);
     const userId = user?.id ?? user?.sub;
-    const tenantId = user?.tenantId;
+    const tenantId = user?.tenantId ?? undefined;
     const actor = userId ?? 'anonymous';
 
     // Resolve the action label

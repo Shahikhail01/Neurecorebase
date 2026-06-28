@@ -260,11 +260,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     exception?: unknown,
   ): string {
     // Surface validation error details to clients (user-input related, not sensitive)
-    if (
-      code === ErrorCode.INVALID_REQUEST &&
-      Array.isArray((exception as any)?.response?.message)
-    ) {
-      return (exception as any).response.message.join('; ');
+    if (code === ErrorCode.INVALID_REQUEST) {
+      const message = this.extractValidationMessage(exception);
+      if (message) return message;
     }
 
     // If not in production, include original message for debugging
@@ -315,5 +313,21 @@ export class GlobalExceptionFilter implements ExceptionFilter {
    */
   private isProduction(): boolean {
     return process.env.NODE_ENV === 'production';
+  }
+
+  /**
+   * Extract the validation message array from a class-validator HttpException.
+   * Returns the joined string when the exception carries a message array
+   * (the canonical class-validator shape), otherwise returns null.
+   *
+   * Replaces the previous `(exception as any)?.response?.message` cast.
+   */
+  private extractValidationMessage(exception: unknown): string | null {
+    if (!exception || typeof exception !== 'object') return null;
+    const response = (exception as { response?: unknown }).response;
+    if (!response || typeof response !== 'object') return null;
+    const message = (response as { message?: unknown }).message;
+    if (!Array.isArray(message)) return null;
+    return message.join('; ');
   }
 }

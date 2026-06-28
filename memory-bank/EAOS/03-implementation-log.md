@@ -1,9 +1,66 @@
 # NeureCore — EAOS Implementation Log
 
-**Last updated:** 2026-06-28 20:37
+**Last updated:** 2026-06-28 21:05
 **Purpose:** Chronological log of code changes, file references, and shipped features for the EAOS implementation. Newest first.
 
 **Format:** `## DATE · phase N · short title`, then a brief description with file:line references and PR link (when applicable).
+
+---
+
+## 2026-06-28 21:05 · Phase 10 — Cleanup COMPLETE ✅
+
+### Phase 10 done (7 in-scope tasks; tasks 10.1–10.7 N/A per D-023)
+
+**New shared utilities (`backend/src/common/utils/`):**
+
+- `config-getter.ts` (103 lines) — `readConfig` / `readConfigOr` / `jwtExpiresIn` replace the over-defensive `config && typeof (config as any).get === 'function'` pattern (5 files) and the `expiresIn as any` casts in JWT config (2 files). `jwtExpiresIn` returns the lib's strict `StringValue | number` shape, removing the boundary `as any` in `token.service.ts` and `auth.module.ts`.
+
+- `request-user.ts` (74 lines) — `getRequestUser` / `getRequestActorId` replace `(request as any).user` defensive casts in `AuditInterceptor`. Re-exports `ValidatedUser` for downstream consumers. Plus a `RequestUser` structural type for loose typing at the request boundary.
+
+**Tightened files (high-value `as any` removals):**
+
+- `backend/src/modules/models/services/minimax-client.service.ts` — defensive `cfgGet` closure → `readConfigOr(config, 'MINIMAX_API_KEY', '')`
+- `backend/src/modules/models/services/deepseek-client.service.ts` — same pattern → `readConfigOr`
+- `backend/src/modules/models/services/mimo-client.service.ts` — same pattern → `readConfig`/`readConfigOr`
+- `backend/src/modules/ai-gateway/langsmith-tracing.service.ts` — same pattern → `readConfigOr`
+- `backend/src/modules/auth/strategies/jwt.strategy.ts` — `config && typeof (config as any).get === 'function'` → `readConfig`
+- `backend/src/modules/auth/auth.module.ts` — `expiresIn: ... as any` → `jwtExpiresIn(...)`
+- `backend/src/modules/auth/services/token.service.ts` — `expiresIn: accessExpiresIn as any` → typed via `jwtExpiresIn`
+- `backend/src/common/interceptors/audit.interceptor.ts` — `(request as any).user` → `getRequestUser(request)`
+- `backend/src/common/filters/global-exception.filter.ts` — `(exception as any)?.response?.message` → typed `extractValidationMessage(exception)` helper
+- `backend/src/modules/tenants/tenants.service.ts` — `(tenant as any).tier?.name ?? (tenant as any).tierId ?? 'unknown'` → typed `extractOldTierName(tenant)` helper. Also: added `tierId` to `driftSafeTenantSelect` so the fallback path no longer needs a cast.
+- `backend/src/modules/events/events.gateway.ts` — `(client as any).userId` / `(client as any).tenantId` → typed `AuthedSocket` via module-local `AuthedSocketData` interface
+- `backend/src/modules/finance/services/billing-calculator.service.ts` — `amountUsd as unknown as any` → plain `amountUsd: number` (Prisma accepts `number | string | Decimal` for `Decimal` columns); `metadata as never` → `Prisma.InputJsonValue`
+- `backend/src/modules/agent-templates/agent-templates.service.ts` — `(cfg as any).allowTenantEditing` → typed `coerceConfig(raw).allowTenantEditing` helper that narrows `unknown` → `Record<string, unknown>`
+- `packages/ui/src/auth/permissions.ts` — `['*'] as any` and `perms.includes('*' as any)` → typed `Wildcard` sentinel + `RolePermissionSet` union (`Wildcard | readonly Permission[]`)
+
+**Feature flag retirement (`task 10.8`):**
+
+- `frontend-eaos/src/config/feature-flags.ts` — removed `USE_NEW_WORKSPACE` (Phase 3 is the only workspace; legacy `/departments/[id]/workspace` deleted per D-023) and `USE_RBAC_PHASE_2` (Phase 0 already shipped the RBAC hardening; flag had no consumers)
+- `backend/src/common/feature-flag/feature-flag.service.ts` — removed `USE_AI_ACTIONS` registration (only consumer was the kill-switch guard, which reads `DISABLE_AI_ACTIONS` directly)
+
+**Tasks 10.9 / 10.10 verified clean:**
+
+- `grep -r "TODO: migrate" backend/src frontend-eaos/src packages/ui/src` → 0 matches
+- `grep -r "@deprecated" backend/src frontend-eaos/src packages/ui/src` → 0 matches
+
+**Verification:**
+
+- Backend `tsc --noEmit` clean
+- Backend `nest build` clean
+- Frontend `tsc --noEmit` clean
+- `packages/ui` `tsc --noEmit` clean
+- Backend `jest` → **239/239 pass** (no regressions)
+
+**SOLID adherence:**
+
+- **SRP** — each new helper (`config-getter.ts`, `request-user.ts`, `extractOldTierName`, `coerceConfig`, `extractValidationMessage`) owns one concern.
+- **OCP** — no call sites changed semantically; existing behavior preserved while types tightened.
+- **LSP** — `Wildcard` sentinel is a tagged union member, so `Record<UserRole, RolePermissionSet>` is a true refinement of the prior `Record<UserRole, Permission[]>` (any prior consumer that didn't switch on `'*'` still works).
+- **ISP** — `config-getter.ts` exports 3 small functions; callers import only what they need.
+- **DIP** — every helper takes its dependencies (the `ConfigService`) via parameter, not via global lookup; no hidden coupling.
+
+**`as any` count: 62 → 42.** The remaining 42 are legitimate library-boundary casts (LangGraph node-name enums, Prisma enum→string DTO boundary, `client.to()` Socket.IO typed map key) that would require structural changes to eliminate. They are documented in the source comments.
 
 ---
 

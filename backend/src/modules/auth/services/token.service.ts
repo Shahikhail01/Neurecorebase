@@ -7,6 +7,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { JwtPayload, TokenPair } from '../interfaces/token.interface';
 import { ValidatedUser } from '../interfaces/auth.interface';
 import { SecretProviderService } from '../../security/providers/secret.provider';
+import { jwtExpiresIn } from '../../../common/utils/config-getter';
 import * as crypto from 'crypto';
 
 // Single Responsibility: issue, verify, store, and revoke tokens.
@@ -24,11 +25,13 @@ export class TokenService {
 
   async issueTokenPair(user: ValidatedUser): Promise<TokenPair> {
     const jti = uuidv4();
-    const accessExpiresIn = this.config.get<string>(
+    const accessExpiresIn = jwtExpiresIn(
+      this.config,
       'JWT_ACCESS_EXPIRES',
       '15m',
     );
-    const refreshExpiresIn = this.config.get<string>(
+    const refreshExpiresIn = jwtExpiresIn(
+      this.config,
       'JWT_REFRESH_EXPIRES',
       '7d',
     );
@@ -42,11 +45,11 @@ export class TokenService {
     };
 
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwt.signAsync(payload, { expiresIn: accessExpiresIn as any }),
+      this.jwt.signAsync(payload, { expiresIn: accessExpiresIn }),
       this.jwt.signAsync(
         { sub: user.id, jti: uuidv4(), type: 'refresh' },
         {
-          expiresIn: refreshExpiresIn as any,
+          expiresIn: refreshExpiresIn,
           secret: this.secrets.getJwtSecret(),
         },
       ),
@@ -57,7 +60,7 @@ export class TokenService {
       .createHash('sha256')
       .update(refreshToken)
       .digest('hex');
-    const refreshMs = this.parseDurationMs(refreshExpiresIn);
+    const refreshMs = this.parseDurationMs(String(refreshExpiresIn));
 
     await this.prisma.refreshToken.create({
       data: {
@@ -67,7 +70,7 @@ export class TokenService {
       },
     });
 
-    const accessMs = this.parseDurationMs(accessExpiresIn);
+    const accessMs = this.parseDurationMs(String(accessExpiresIn));
 
     return {
       accessToken,

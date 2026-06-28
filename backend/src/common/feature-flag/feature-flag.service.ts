@@ -13,6 +13,11 @@
  *
  * SOLID: SRP — this service is the ONLY object that reads feature
  * flags. Guards depend on it (DIP).
+ *
+ * Phase 10 cleanup: `USE_AI_ACTIONS` was registered here but had zero
+ * readers (the only consumers are `AiActionKillSwitchGuard`, which checks
+ * `DISABLE_AI_ACTIONS` directly). The dead registration has been removed
+ * per roadmap §14 task 10.8 (100%-rolled flags are retired).
  */
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
@@ -37,7 +42,6 @@ export class FeatureFlagService implements OnModuleInit {
   refresh(): void {
     const knownFlags: Array<[string, boolean]> = [
       ['DISABLE_AI_ACTIONS', bool(this.config.get<string>('DISABLE_AI_ACTIONS'))],
-      ['USE_AI_ACTIONS', bool(this.config.get<string>('USE_AI_ACTIONS'))],
     ];
     for (const [key, value] of knownFlags) {
       const previous = this.cache.get(key);

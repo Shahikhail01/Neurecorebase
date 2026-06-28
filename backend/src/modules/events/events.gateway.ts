@@ -25,7 +25,18 @@ import { CookieAuthService, ACCESS_TOKEN_COOKIE } from '../../common/auth/cookie
  *   3. `Authorization: Bearer` header in handshake.
  *
  * Per `EAOS-implementation-roadmap.md` §13 task 9.6.
+ *
+ * Phase 10 cleanup (task 10.11): the `userId` / `tenantId` attached to the
+ * socket at handshake time are now typed via a module-local SocketData
+ * interface instead of `(client as any).userId` casts.
  */
+
+interface AuthedSocketData {
+  userId?: string;
+  tenantId?: string | null;
+}
+
+type AuthedSocket = Socket & AuthedSocketData;
 @WebSocketGateway({
   cors: { origin: '*', credentials: true },
   namespace: '/',
@@ -66,8 +77,9 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       // Attach user data to socket
-      (client as any).userId = payload.sub;
-      (client as any).tenantId = payload.tenantId;
+      const authed = client as AuthedSocket;
+      authed.userId = payload.sub;
+      authed.tenantId = payload.tenantId;
 
       // Join user and tenant rooms
       await client.join(`user:${payload.sub}`);
@@ -124,7 +136,8 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(client: Socket): void {
-    const userId: string | undefined = (client as any).userId;
+    const authed = client as AuthedSocket;
+    const userId = authed.userId;
     if (userId) {
       this.userSockets.get(userId)?.delete(client.id);
       if (this.userSockets.get(userId)?.size === 0) {

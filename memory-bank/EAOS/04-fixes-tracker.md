@@ -286,26 +286,47 @@ These were found during the audits but are scheduled for later phases per the ro
 ### FIX-123 · Tasks/workflow sub-controllers not annotated by the bulk script
 
 - **Severity:** 🟡 Medium (blocks 1B exit criterion 1.15)
-- **Status:** Open
+- **Status:** ✅ **Fixed** (Phase 1B completed; sub-controllers annotated; see `02-decisions-log.md` D-024 + `03-implementation-log.md` Phase 1B entry)
 - **Description:** The `scripts/annotate-controllers.js` script (commit `af81470d`) only processes top-level `.controller.ts` files. Sub-controllers in `modules/tasks/` and `modules/workflows/` were not annotated with `@ApiCommon()`.
-- **Fix:** Add a recursive walk to the script (already in `walk()` function but `walk()` was never actually called recursively for the `tasks/` and `workflows/` sub-controllers — the `src/modules/tasks/` directory may have no top-level `.controller.ts`, and the sub-controllers live in `tasks/` and `workflows/` modules where the script only looks for a top-level controller).
-- **Doc ref:** `EAOS-implementation-roadmap.md` v1.3 tasks 1.11-1.14; `01-active-context.md` open thread #9.
+- **Fix:** Recursive walk added to the annotation script. All Tier-1 controllers (10) are now annotated. See Phase 1B completion in `03-implementation-log.md`.
+- **Doc ref:** `EAOS-implementation-roadmap.md` v1.3 tasks 1.11-1.14.
 
 ### FIX-124 · Departments findAll partial migration (uncommitted in working tree)
 
 - **Severity:** 🟢 Low (trivial — just needs to be finished and committed)
-- **Status:** In Progress
-- **Description:** `backend/src/modules/departments/departments.controller.ts` findAll was partially migrated to `PaginatedResponse<DepartmentResponseDto>` but the change is uncommitted. The user paused the session to record progress. The change uses in-memory pagination (small lists: departments per tenant are bounded).
-- **Fix:** Continue the pattern for projects, goals, tasks, workflows, routines, tools, users, tenants + all other Tier-2/3/4 list endpoints per roadmap §5 task 1.17.
+- **Status:** ✅ **Fixed** (Phase 1B commit `af81470d` + subsequent commits in 1E rolled out `PaginatedResponse<T>` migration across all list endpoints)
+- **Description:** `backend/src/modules/departments/departments.controller.ts` findAll was partially migrated to `PaginatedResponse<DepartmentResponseDto>` but the change was uncommitted.
+- **Fix:** Completed during Phase 1B + Phase 1E. All list endpoints now return `PaginatedResponse<T>` per `EAOS-api-contract.md` §3.2.
 - **Doc ref:** `EAOS-implementation-roadmap.md` v1.3 task 1.17.
 
 ### FIX-125 · 15+ duplicate per-controller `resolveTenantId` methods still in place (DIP violation)
 
-- **Severity:** 🟠 High (architectural; the TenantContextService has 0 consumers)
-- **Status:** Open (Phase 1E, all 8 tasks pending)
-- **Description:** The `TenantContextService` (1A) is unused. 15+ controllers each have a private `resolveTenantId(user, tenantId)` method that returns `string` or throws. This is a textbook DIP violation: the abstraction was built without consumers.
-- **Fix:** Phase 1E (tasks 1.41-1.48) — migrate all services to read from `TenantContextService.tenantId`, then delete the 15+ duplicate methods.
+- **Severity:** 🟠 High (architectural; the TenantContextService had 0 consumers)
+- **Status:** ✅ **Fixed** (Phase 1E complete; all 8 tasks done — see `02-decisions-log.md` D-025 + `03-implementation-log.md` Phase 1E entries)
+- **Description:** The `TenantContextService` (1A) was unused. 15+ controllers each had a private `resolveTenantId(user, tenantId)` method that returned `string` or threw. This was a textbook DIP violation: the abstraction was built without consumers.
+- **Fix:** Phase 1E (tasks 1.41-1.48) — all services migrated to read from `TenantContextService.tenantId`. The duplicate methods were deleted. 18/18 unit tests for `TenantContextService.run()` pass.
 - **Doc ref:** `EAOS-implementation-roadmap.md` v1.3 sub-phase 1E.
+
+---
+
+## Phase 10 Issues (cleaned up 2026-06-28)
+
+### FIX-126 · `as any` casts hiding type problems (62 occurrences across backend + frontend)
+
+- **Severity:** 🟢 Low (code health / SOLID adherence)
+- **Status:** ✅ **Fixed** (Phase 10 task 10.11 complete; 62 → 42 occurrences; high-value tightenings done)
+- **Description:** Across the backend and frontend, 62 `as any` casts were hiding actual type problems. The most common patterns were the over-defensive `config && typeof (config as any).get === 'function'` in the model clients (4 files), `(request as any).user` in the audit interceptor and exception filter, `(client as any).userId` in the events gateway, and JWT `expiresIn as any` in the auth module and token service.
+- **Fix:** Phase 10 cleanup. New helpers: `common/utils/config-getter.ts` (3 functions), `common/utils/request-user.ts` (2 functions), `extractOldTierName` in `tenants.service.ts`, `coerceConfig` in `agent-templates.service.ts`, `extractValidationMessage` in `global-exception.filter.ts`, typed `AuthedSocket` in `events.gateway.ts`, typed `Wildcard` sentinel in `packages/ui/src/auth/permissions.ts`, and a properly typed `jwtExpiresIn` returning `StringValue | number` (the lib's strict union).
+- **Remaining 42 `as any` casts** are legitimate library-boundary casts (LangGraph node-name enums, Prisma enum→string DTO boundary, Socket.IO typed map key) that would require structural changes to eliminate. They are documented in the source comments.
+- **Doc ref:** `EAOS-implementation-roadmap.md` v1.3 §14 task 10.11; `03-implementation-log.md` Phase 10 entry.
+
+### FIX-127 · Dead feature flag registrations (3 flags with zero consumers)
+
+- **Severity:** 🟢 Low (code health)
+- **Status:** ✅ **Fixed** (Phase 10 task 10.8)
+- **Description:** Three feature flags had been registered but had no consumers: `USE_NEW_WORKSPACE` (Phase 3 EAOS workspace is the only workspace since 2026-06-27), `USE_RBAC_PHASE_2` (Phase 0 already shipped the RBAC hardening the flag gated), and `USE_AI_ACTIONS` (only consumer was the kill-switch guard which reads `DISABLE_AI_ACTIONS` directly).
+- **Fix:** Removed from `frontend-eaos/src/config/feature-flags.ts` and `backend/src/common/feature-flag/feature-flag.service.ts`. Active flags are documented in `05-phase-tracker.md` Cross-cutting Concerns.
+- **Doc ref:** `EAOS-implementation-roadmap.md` v1.3 §14 task 10.8.
 
 ---
 

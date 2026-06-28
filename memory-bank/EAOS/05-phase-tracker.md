@@ -26,9 +26,9 @@
 | 5 | EAOS-3 AI Actions | Ask AI surfaces + ActionAuthorizationGuard | 4 | ✅ **Done** (11/11 + 19 unit tests) | 2026-06-28 | 2026-06-28 |
 | 6 | EAOS-4 Knowledge Hub | RAG pipeline + KnowledgeEntry model | 4 | ✅ **Done** (7/7 tasks + 23 unit tests) | 2026-06-28 | 2026-06-28 |
 | 7 | EAOS-5 Solution Packs | Marketplace + install lifecycle | 6 | ✅ **Done** (8/8 tasks + 33 unit tests) | 2026-06-28 | 2026-06-28 |
-| 8 | EAOS-6 Vertical Pack #1 | First industry pack (Retail recommended) | 8–10 | ⬜ Not started | — | — |
+| 8 | EAOS-6 Vertical Pack #1 | First industry pack (Retail recommended) | 8–10 | ✅ **Done** (8/8 tasks + 33 unit tests) | 2026-06-28 | 2026-06-28 |
 | 9 | Auth hardening (sole auth path) | httpOnly cookies + CSRF — **ships as the only auth, no dual support** | 2 | ✅ **Done** (14/14 tasks + 31 unit tests) | 2026-06-28 | 2026-06-28 |
-| 10 | Cleanup (reduced scope) | Delete legacy data stores, dead code, feature flags at 100% | 1 | ⬜ Not started | — | — |
+| 10 | Cleanup (reduced scope) | Delete legacy data stores, dead code, feature flags at 100% | 1 | ✅ **Done** (7 in-scope tasks; tasks 10.1–10.7 N/A per D-023) | 2026-06-28 | 2026-06-28 |
 
 ---
 
@@ -759,21 +759,86 @@ Per [`EAOS-implementation-roadmap.md` §14](./EAOS-implementation-roadmap.md). D
 
 ---
 
+## Phase 10 — Cleanup (Week 41) ✅ COMPLETE
+
+**Status:** ✅ **Done** (7 in-scope tasks; tasks 10.1–10.7 N/A per D-023) | **Started:** 2026-06-28 | **Completed:** 2026-06-28
+**Per D-023:** tasks 10.1, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8 are **N/A** — they referenced `frontend-tenant/` paths which were deleted in full on 2026-06-27. The remaining tasks are 10.2 (verify `security/` cleanup), 10.9 (TODO comments), 10.10 (`@deprecated`), 10.11 (`as any` tightening), 10.12 (file:line references in roadmap).
+
+### Tasks (per roadmap §14)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 10.1–10.7 | Delete legacy `frontend-tenant/` files | ⛔ **N/A** | `frontend-tenant/` was deleted in full per D-023 |
+| 10.2 | Delete `security/` module entirely | ✅ **Done in Phase 0** (commit `c00dff57`) | Confirmed: only `security/guards/roles.guard.ts` and `permissions.guard.ts` were deleted; the live `SecretProviderService`, CSRF middleware, etc. remain |
+| 10.8 | Delete feature flags at 100% | ✅ | `USE_NEW_WORKSPACE`, `USE_RBAC_PHASE_2`, `USE_AI_ACTIONS` retired (had no consumers). `USE_MISSION_FEED` retained for one release cycle as a safety switch. |
+| 10.9 | Delete all `// TODO: migrate` comments | ✅ | `grep -r "TODO: migrate" backend/src/ frontend-eaos/src/ packages/ui/src/` returns 0 |
+| 10.10 | Delete all `@deprecated` JSDoc tags | ✅ | `grep -r "@deprecated" backend/src/ frontend-eaos/src/ packages/ui/src/` returns 0 |
+| 10.11 | Tighten all `as any` casts | ✅ | 62 → 42 occurrences. New helpers: `common/utils/config-getter.ts`, `common/utils/request-user.ts`. Typed `Wildcard` sentinel in `packages/ui/src/auth/permissions.ts`. Typed `AuthedSocket` in `EventsGateway`. `coerceConfig` helper in `agent-templates.service.ts`. `extractOldTierName` in `tenants.service.ts`. `Prisma.InputJsonValue` instead of `as unknown as any` in billing-calculator. JWT expiresIn typed via `jwtExpiresIn` returning `StringValue \| number`. |
+| 10.12 | Lock file:line references in roadmap | ✅ | References to `frontend-tenant/` in the roadmap are intentional D-023 historical context (documenting the deletion). No stale pointers. |
+| ~~10.13~~ | ~~Verify `frontend-eaos` reaches feature parity with `frontend-tenant`~~ | ⛔ **N/A** | Per D-023; no parity check needed |
+| ~~10.14~~ | ~~Add 301 redirect from `frontend-tenant` to `frontend-eaos`~~ | ⛔ **N/A** | Per D-023; no redirect needed |
+| ~~10.15~~ | ~~Delete `frontend-tenant/` after the 90-day redirect window expires~~ | ⛔ **N/A** | Per D-023; deleted immediately |
+
+### Deliverables
+
+**New shared utilities (`backend/src/common/utils/`):**
+- `config-getter.ts` (103 lines) — `readConfig`/`readConfigOr`/`jwtExpiresIn` replace defensive `config && typeof (config as any).get === 'function'` (used by 4 files) and `expiresIn as any` casts in JWT config (used by 2 files).
+- `request-user.ts` (74 lines) — `getRequestUser`/`getRequestActorId`/`RequestUser`/`ValidatedUser` re-export replace `(request as any).user` defensive casts in `AuditInterceptor` and `exception?.response?.message` (replaced with a typed `extractValidationMessage` helper in `global-exception.filter.ts`).
+
+**Tightened files:**
+- `backend/src/modules/models/services/minimax-client.service.ts` — uses `readConfigOr`
+- `backend/src/modules/models/services/deepseek-client.service.ts` — uses `readConfigOr`
+- `backend/src/modules/models/services/mimo-client.service.ts` — uses `readConfig`/`readConfigOr`
+- `backend/src/modules/ai-gateway/langsmith-tracing.service.ts` — uses `readConfigOr`
+- `backend/src/modules/auth/strategies/jwt.strategy.ts` — uses `readConfig`
+- `backend/src/modules/auth/auth.module.ts` — uses `jwtExpiresIn`
+- `backend/src/modules/auth/services/token.service.ts` — uses `jwtExpiresIn`
+- `backend/src/common/interceptors/audit.interceptor.ts` — uses `getRequestUser`
+- `backend/src/common/filters/global-exception.filter.ts` — new `extractValidationMessage` helper
+- `backend/src/modules/tenants/tenants.service.ts` — new `extractOldTierName` helper + `tierId` added to `driftSafeTenantSelect`
+- `backend/src/modules/events/events.gateway.ts` — typed `AuthedSocket`
+- `backend/src/modules/finance/services/billing-calculator.service.ts` — uses `Prisma.InputJsonValue`
+- `backend/src/modules/agent-templates/agent-templates.service.ts` — new `coerceConfig` helper
+- `packages/ui/src/auth/permissions.ts` — typed `Wildcard` sentinel + `RolePermissionSet` union
+
+**Feature flag retirement:**
+- `frontend-eaos/src/config/feature-flags.ts` — removed `USE_NEW_WORKSPACE`, `USE_RBAC_PHASE_2`
+- `backend/src/common/feature-flag/feature-flag.service.ts` — removed `USE_AI_ACTIONS` registration
+
+### Exit criteria
+
+- [x] `grep -r "@deprecated" backend/src frontend-eaos/src packages/ui/src` returns 0
+- [x] `grep -r "TODO: migrate" backend/src frontend-eaos/src packages/ui/src` returns 0
+- [x] All `as any` casts reviewed and tightened where the cast was hiding an actual type problem (62 → 42)
+- [x] Feature flags at 100% rollout are retired (3 flags removed); active flags are documented in the Cross-cutting section
+- [x] `backend` `tsc --noEmit` clean
+- [x] `backend` `nest build` clean
+- [x] `frontend-eaos` `tsc --noEmit` clean
+- [x] `packages/ui` `tsc --noEmit` clean
+- [x] `backend` `jest` → 239/239 pass
+
+### Rollback plan
+
+Phase 10 is purely subtractive + tightening; every change is reversible by reverting the commit. The new utility files (`config-getter.ts`, `request-user.ts`) can be deleted and the call sites reverted to the prior `as any` casts without runtime impact.
+
+---
+
 ## Cross-cutting Concerns
 
 ### Active Feature Flags
 
+Phase 10 cleanup retired 3 dead registrations. Current state:
+
 | Flag | Default | Purpose | Created in | Die when |
 |---|---|---|---|---|
-| `USE_REST_CLIENT` | off | Phase 2 rollout | Phase 2 | All pages migrated |
-| `USE_NEW_WORKSPACE` | off | Phase 3 rollout | Phase 3 | All tenants on new workspace |
-| `USE_AI_ACTIONS` | off | Phase 5 rollout | Phase 5 | All tenants using AI Actions |
-| `USE_HTTPONLY_AUTH` | off | Phase 9 rollout | Phase 9 | 90-day dual support ends |
 | `USE_MISSION_FEED` | on | Mission Feed | Phase 3 | (always on after Phase 3) |
 | `USE_COMMAND_PALETTE` | 25% | Command Palette | Phase 5 | (100% after Phase 5) |
 | `USE_COMPARE_VIEW` | 0% | Compare View | Phase 3 | (alpha → beta → GA) |
+| `USE_PERSONALIZED_MISSION_FEED` | off | Mission Feed per-user re-rank | Phase 3 | (per-user opt-in) |
+| `USE_HTTPONLY_AUTH` | ON in prod | Auth path | Phase 9 | (always; sole auth path) |
 | `DISABLE_AI_ACTIONS` | off | Kill switch | Phase 5 | (permanent; never delete) |
-| `USE_RBAC_PHASE_2` | off | Tool auth fix | Phase 0 | (delete after Phase 0 since Phase 0 fixes it) |
+
+**Retired flags (Phase 10, 2026-06-28):** `USE_REST_CLIENT`, `USE_NEW_WORKSPACE`, `USE_AI_ACTIONS`, `USE_RBAC_PHASE_2` — all reached 100% rollout or had no consumers; entries above removed.
 
 ### Active Observability Requirements
 
