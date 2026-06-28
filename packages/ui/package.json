@@ -40,7 +40,9 @@
     "./types": {
       "import": "./dist/types.js",
       "types": "./dist/types.d.ts"
-    }
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
