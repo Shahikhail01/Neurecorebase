@@ -47,6 +47,23 @@ export interface LoginInput {
   password: string;
 }
 
+export interface RegisterInput {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface GoogleSignInInput {
+  idToken: string;
+  intent?: 'signin' | 'link';
+}
+
+export type GoogleSignInResponse =
+  | { status: 'ok'; user: AuthUser; tokens: AuthTokens }
+  | { status: 'existing_unlinked'; email: string; firstName: string; lastName: string; googlePicture?: string; googleId: string }
+  | { status: 'conflict'; email: string; message: string };
+
 export const AUTH_QUERY_KEY = ['auth', 'me'] as const;
 
 export function useAuthUser(options?: { enabled?: boolean }) {
@@ -103,6 +120,42 @@ export function useLogout() {
       cookieManager.clearAuthCookies();
       qc.clear();
       qc.setQueryData(AUTH_QUERY_KEY, null);
+    },
+  });
+}
+
+export function useRegister() {
+  const qc = useQueryClient();
+  return useMutation<LoginResult, Error, RegisterInput>({
+    mutationFn: async (input) => {
+      const result = await restClient.post<LoginResult>(
+        API_ENDPOINTS.auth.register,
+        input,
+        { skipCsrf: true }, // pre-auth endpoint
+      );
+      return result;
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(AUTH_QUERY_KEY, data.user);
+    },
+  });
+}
+
+export function useGoogleSignIn() {
+  const qc = useQueryClient();
+  return useMutation<GoogleSignInResponse, Error, GoogleSignInInput>({
+    mutationFn: async ({ idToken, intent = 'signin' }) => {
+      const result = await restClient.post<GoogleSignInResponse>(
+        '/auth/google',
+        { idToken, intent },
+        { skipCsrf: true }, // pre-auth endpoint
+      );
+      return result;
+    },
+    onSuccess: (data) => {
+      if (data.status === 'ok') {
+        qc.setQueryData(AUTH_QUERY_KEY, data.user);
+      }
     },
   });
 }

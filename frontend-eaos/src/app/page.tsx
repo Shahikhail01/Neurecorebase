@@ -3,14 +3,33 @@
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { MissionFeedBanner } from '@/components/mission-feed/MissionFeedBanner';
 import { useAuthUser, useLogout } from '@/core/hooks/auth/useAuth';
+import { restClient } from '@/infrastructure/api/RestClient';
 import { Button } from '@neurecore/ui/components';
+
+interface Department {
+  id: string;
+  name: string;
+  type: string;
+}
 
 export default function HomePage() {
   const router = useRouter();
   const { data: user, isLoading } = useAuthUser();
   const logout = useLogout();
+
+  const { data: departments } = useQuery<Department[]>({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const data = await restClient.get<{ data?: Department[] }>('/departments', { skipCsrf: true });
+      return (data as unknown as { data?: Department[] })?.data ?? (Array.isArray(data) ? data : []);
+    },
+    enabled: !!user?.tenantId,
+  });
+
+  const firstDept = departments?.[0];
 
   // If no auth cookies and not currently authenticated, bounce to /login.
   useEffect(() => {
@@ -58,12 +77,21 @@ export default function HomePage() {
             </p>
           </div>
           <nav className="flex gap-3 text-sm">
-            <Link
-              href="/entity/department"
-              className="rounded-md border border-canvas-200 px-3 py-1 text-canvas-700 hover:bg-canvas-100 dark:border-canvas-700 dark:text-canvas-300 dark:hover:bg-canvas-900"
-            >
-              Browse entities
-            </Link>
+            {firstDept ? (
+              <Link
+                href={`/entity/department/${firstDept.id}`}
+                className="rounded-md border border-canvas-200 px-3 py-1 text-canvas-700 hover:bg-canvas-100 dark:border-canvas-700 dark:text-canvas-300 dark:hover:bg-canvas-900"
+              >
+                Browse entities
+              </Link>
+            ) : (
+              <Link
+                href="/agents"
+                className="rounded-md border border-canvas-200 px-3 py-1 text-canvas-700 hover:bg-canvas-100 dark:border-canvas-700 dark:text-canvas-300 dark:hover:bg-canvas-900"
+              >
+                Browse entities
+              </Link>
+            )}
             <Link
               href="/retail"
               className="rounded-md border border-canvas-200 px-3 py-1 text-canvas-700 hover:bg-canvas-100 dark:border-canvas-700 dark:text-canvas-300 dark:hover:bg-canvas-900"
@@ -81,7 +109,7 @@ export default function HomePage() {
           </nav>
         </header>
 
-        <MissionFeedBanner tenantId="default" role={user.role} />
+        <MissionFeedBanner tenantId={user.tenantId ?? 'default'} role={user.role} />
 
         <p className="text-sm text-canvas-500">
           Open an entity workspace at <code className="font-mono">/entity/[type]/[id]</code>.
