@@ -27,10 +27,9 @@ export class CookieManager {
 
   hasAuthCookies(): boolean {
     if (typeof document === 'undefined') return false;
-    return (
-      this.getCookie(ACCESS_TOKEN_COOKIE) !== null ||
-      this.getCookie(REFRESH_TOKEN_COOKIE) !== null
-    );
+    // httpOnly cookies (nc_at, nc_rt) are invisible to JS. Check the CSRF cookie
+    // (not httpOnly) as the signal that the backend set the auth cookie set.
+    return this.getCookie(CSRF_COOKIE) !== null;
   }
 
   clearAuthCookies(): void {

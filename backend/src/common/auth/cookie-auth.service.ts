@@ -75,7 +75,7 @@ export class CookieAuthService {
     const common = {
       httpOnly: true,
       secure: this.isProduction,
-      sameSite: 'strict' as const,
+      sameSite: 'none' as const,
       path: '/',
       ...(this.cookieDomain ? { domain: this.cookieDomain } : {}),
     };
@@ -95,7 +95,7 @@ export class CookieAuthService {
     res.cookie(CSRF_COOKIE, csrf, {
       httpOnly: false,
       secure: this.isProduction,
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
       ...(this.cookieDomain ? { domain: this.cookieDomain } : {}),
       maxAge: REFRESH_TOKEN_MAX_AGE_MS,
@@ -109,7 +109,7 @@ export class CookieAuthService {
     const clearOpts = {
       httpOnly: true,
       secure: this.isProduction,
-      sameSite: 'strict' as const,
+      sameSite: 'none' as const,
       path: '/',
       ...(this.cookieDomain ? { domain: this.cookieDomain } : {}),
     };
@@ -119,7 +119,7 @@ export class CookieAuthService {
     res.clearCookie(CSRF_COOKIE, {
       httpOnly: false,
       secure: this.isProduction,
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
       ...(this.cookieDomain ? { domain: this.cookieDomain } : {}),
     });
