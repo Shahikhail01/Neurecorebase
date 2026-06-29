@@ -1,6 +1,6 @@
 # NeureCore Frontends — Vercel Operations Reference
 
-**Last verified:** 2026-06-27 (post Phase C–F + Onboarding frontend deploy, alias `hq.neurecore.com`)
+**Last verified:** 2026-06-29 (post EAOS frontend deploy, Sentry stripped, devDeps install fix)
 **Audience:** Any engineer tasked with deploying or debugging the Next.js frontends
 **Purpose:** Stop the recurring "stuck on Vercel deploy" pattern. Everything below was discovered the hard way.
 
@@ -8,24 +8,26 @@
 
 ## 0. Quick Facts (Memorize These)
 
-| Item | Tenant frontend | Admin frontend |
-|---|---|---|
-| Local source dir | `/home/najeeb/Linux-Dev/neurecore-base/neurecore/frontend-tenant/` | `.../frontend-admin/` |
-| Vercel project ID | `prj_EV6YAjwGAnneM6OlVmkDuXWt3M9e` | `prj_PnHNvyq8699ohZmrmUAwGzTlkMzH` |
-| Vercel project name | `neurecorebase-tenant` | `neurecorebase` |
-| Org (team) | `team_wOWHtzagqXIj1iVZOpaeP4vz` | same |
-| Vercel rootDirectory | `frontend-tenant` | *(not set in dashboard — see §4)* |
-| Production URL | `https://hq.neurecore.com` | `https://cc.neurecore.com` |
-| Vercel-generated URL | `https://neurecorebase-tenant.vercel.app` | `https://neurecorebase.vercel.app` |
-| Git branch | `main` (auto-deploys on push) | `main` (auto-deploys on push) |
-| Framework | Next.js 15 | Next.js 15 |
-| Vercel CLI (project-local) | `/home/najeeb/.local/share/pnpm/bin/vercel` v54.6.1 OR `npx vercel` v54.17.3 | same |
-| Authenticated user | `shahisoftai-7053` (via `vercel whoami`) | same |
-| `.vercel/project.json` exists? | Yes (per-folder link) | Yes (per-folder link) |
-| `vercel.json` exists? | **No** | **Yes** (rewrites all `/x` to `/admin/x`) |
-| Install command | `npm install --legacy-peer-deps` | same |
-| Node version | `24.x` (per dashboard; runtime is 22.12 — see §3) | same |
-| Env file (local) | `.env.production` (committed, contains `NEXT_PUBLIC_*` only) | `.env.production` |
+| Item | Tenant frontend | Admin frontend | EAOS frontend |
+|---|---|---|---|
+| Local source dir | `/home/najeeb/Linux-Dev/neurecore-base/neurecore/frontend-tenant/` | `.../frontend-admin/` | `.../frontend-eaos/` |
+| Vercel project ID | `prj_EV6YAjwGAnneM6OlVmkDuXWt3M9e` | `prj_PnHNvyq8699ohZmrmUAwGzTlkMzH` | `prj_2Xi6mqsvUwGOsQhFqQHthsCs91ru` |
+| Vercel project name | `neurecorebase-tenant` | `neurecorebase` | `frontend-eaos` |
+| Org (team) | `team_wOWHtzagqXIj1iVZOpaeP4vz` | same | same |
+| Vercel rootDirectory | `frontend-tenant` | *(not set in dashboard — see §4)* | `frontend-eaos` |
+| Production URL | `https://hq.neurecore.com` | `https://cc.neurecore.com` | `https://frontend-eaos-shahisoftai-7053s-projects.vercel.app` (no custom domain yet) |
+| Vercel-generated URL | `https://neurecorebase-tenant.vercel.app` | `https://neurecorebase.vercel.app` | `https://frontend-eaos-shahisoftai-7053s-projects.vercel.app` |
+| Git branch | `main` (auto-deploys on push) | `main` (auto-deploys on push) | `main` (auto-deploys on push) |
+| Framework | Next.js 15 | Next.js 15 | **Next.js 16.2.9 (Turbopack default)** |
+| Vercel CLI (project-local) | `/home/najeeb/.local/share/pnpm/bin/vercel` v54.6.1 OR `npx vercel` v54.17.3 | same | same |
+| Authenticated user | `shahisoftai-7053` (via `vercel whoami`) | same | same |
+| `.vercel/project.json` exists? | Yes (per-folder link) | Yes (per-folder link) | Yes (per-folder link) |
+| `vercel.json` exists? | **No** | **Yes** (rewrites all `/x` to `/admin/x`) | **No** |
+| Install command | `npm install --legacy-peer-deps` | same | **`npm install --legacy-peer-deps --include=dev`** ⚠️ |
+| Node version | `24.x` (per dashboard; runtime is 22.12 — see §3) | same | `24.x` |
+| Sentry enabled? | Yes (env vars + next.config) | Yes | **No — stripped (see §12)** |
+| SSO/Vercel Auth | Default (off for tenant) | Default (off for admin) | **MUST be explicitly disabled** (see §1.6) |
+| Env file (local) | `.env.production` (committed, contains `NEXT_PUBLIC_*` only) | `.env.production` | `.env.example` only (no `.env.production` committed) |
 
 **Backend (used by both frontends):**
 - Public URL: `https://brain.neurecore.com/api/v1/`
@@ -88,6 +90,64 @@ vercel env add NEXT_PUBLIC_GOOGLE_CLIENT_ID production
 ```
 
 **Status (verified 2026-06-27):** ✅ Set on Vercel for `neurecorebase-tenant`. Added 9 hours ago (Session 6 fix).
+
+### 1.6 Vercel Authentication (SSO) Default-On Shows "Log in to Vercel" Page
+
+**Symptom:** Deployment status is `● Ready` (200 HTTP), but visiting the URL shows Vercel's own login page ("Log in to Vercel", "Continue with Email/GitHub/Apple", `auth-layout` class). NOT your app. The Inspect view shows empty `Builds` (`[0ms]`).
+
+**Cause:** The project has `ssoProtection.deploymentType: "all_except_custom_domains"` set (Vercel Authentication ON by default for many new projects, and explicitly enabled for the EAOS project). This protects all `*.vercel.app` generated URLs until you disable it.
+
+**How to detect:** Hit the deployed URL with `curl` and grep for `Log in to Vercel` or `auth-layout`. Or check via API:
+```bash
+curl -s "https://api.vercel.com/v9/projects/<PROJECT_ID>" \
+  -H "Authorization: Bearer $(cat ~/.local/share/com.vercel.cli/auth.json | grep -o '"token":"[^"]*"' | cut -d'"' -f4)" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('ssoProtection'))"
+# If output: {"deploymentType": "all_except_custom_domains"} → protected
+```
+
+**Fix (via API, no dashboard needed):**
+```bash
+TOKEN=$(cat ~/.local/share/com.vercel.cli/auth.json | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+curl -s -X PATCH "https://api.vercel.com/v9/projects/<PROJECT_ID>" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"ssoProtection": null}'
+```
+
+**Equivalent dashboard path:** Settings → **Deployment Protection** (NOT "General") → Vercel Authentication → toggle off.
+
+**Important:** This is in the **Deployment Protection** settings page, NOT General. The user might say "there's no protection in General" — that is correct. The setting is elsewhere.
+
+**Status (verified 2026-06-29):** ✅ Disabled for `frontend-eaos`.
+
+### 1.7 Build Fails: "Cannot find module 'tailwindcss'" / Missing devDependencies
+
+**Symptom:** Local `npm run build` is green. Vercel build fails with:
+```
+Error: Cannot find module 'tailwindcss'
+./node_modules/react-grid-layout/css/styles.css
+Error evaluating Node.js code
+```
+Or similar module-not-found errors for PostCSS plugins, `typescript`, `eslint-config-next`, etc.
+
+**Cause:** Vercel runs `npm install` TWICE during a deploy:
+1. **Install phase:** `npm install --legacy-peer-deps` → installs both deps + devDeps (e.g., 467 packages)
+2. **Build phase:** Vercel re-runs `npm install` (with `NODE_ENV=production` set) → strips devDeps (e.g., drops to 115 packages)
+
+If `tailwindcss`, `postcss`, `typescript`, `eslint`, etc. are in `devDependencies`, they get removed before the build runs, and PostCSS/Next.js can't find them.
+
+**Fix (via API, set install command to force devDeps):**
+```bash
+TOKEN=$(cat ~/.local/share/com.vercel.cli/auth.json | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+curl -s -X PATCH "https://api.vercel.com/v9/projects/<PROJECT_ID>" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"installCommand": "npm install --legacy-peer-deps --include=dev"}'
+```
+
+**Alternative fix:** Move build-time tools (tailwindcss, postcss, typescript, eslint) from `devDependencies` to `dependencies` in `package.json`. This works but is semantically wrong (they're not runtime deps).
+
+**Status (verified 2026-06-29):** ✅ `installCommand` set to `npm install --legacy-peer-deps --include=dev` on `frontend-eaos`.
 
 ---
 
@@ -443,6 +503,93 @@ Admin frontend uses the same backend URL. Most envs are inherited or not needed.
 | 2026-06-26 (Session 6) | First Google Sign-In frontend deploy | ✅ Live | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` missing in Vercel → added via dashboard |
 | 2026-06-26 (Session 8) | Vercel rootDirectory fix | ✅ Live | `rootDirectory: "frontend-tenant"` was missing, set in dashboard |
 | 2026-06-27 (Session 13) | Phase C–F + Onboarding frontend | ✅ Live (auto-deployed from git push) | Tried `vercel deploy --prod` first, hit duplicate-path bug, fell back to git push — worked in 1 minute |
+| 2026-06-29 (EAOS) | First EAOS frontend deploy | ✅ Live | Three compounding issues: (1) `ssoProtection` was on by default — Vercel showed its own login page, looked like build was broken but it wasn't; (2) `installCommand` was `npm install --legacy-peer-deps` which stripped devDeps (`tailwindcss`, `typescript`) at build time → "Cannot find module 'tailwindcss'"; (3) leftover `next.config.js` + Sentry `.bak` files + `turbopack.root: '.'` in `next.config.mjs` caused confusion. Fix: API PATCH for `ssoProtection: null` + `installCommand: "npm install --legacy-peer-deps --include=dev"`, then strip Sentry, delete root-level `package.json`/`pages/`, remove `turbopack.root` |
+
+---
+
+## 12. Frontend-EAOS Notes (Next.js 16 + Turbopack)
+
+EAOS is a newer Next.js 16.2.9 app (upgraded from 15.0.3) that uses Turbopack as the default bundler. Several quirks differ from the tenant/admin frontends:
+
+### 12.1 Sentry Was Stripped
+
+**Why:** Sentry's `withSentryConfig` wrapper requires `@sentry/nextjs` to be installed and configured with the right DSN. The EAOS frontend was a fork that never fully wired Sentry, and the broken config was preventing builds.
+
+**What was removed (2026-06-29):**
+- `next.config.mjs` no longer uses `withSentryConfig`
+- `_instrumentation.js.bak` / `_instrumentation-client.js.bak` (renamed from `.ts`)
+- `_sentry.server.config.js.bak` / `_sentry.edge.config.js.bak`
+- `next.config.js` at repo root (the Sentry-wrapped config that was being picked up)
+
+**If you need Sentry back:**
+1. `npm install @sentry/nextjs`
+2. Restore sentry config files (remove `.bak`)
+3. Add `SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` env vars to Vercel
+4. Re-wrap `next.config.mjs` with `withSentryConfig`
+
+### 12.2 Turbopack Default Means Different Build Behavior
+
+Next.js 16 uses Turbopack for `next build` by default. Differences from webpack:
+
+- **No `turbopack.root`:** Setting `turbopack: { root: '.' }` in `next.config.mjs` causes Vercel warnings (`Both outputFileTracingRoot and turbopack.root are set`). **Do not set turbopack.root unless you know you need it.**
+- **PostCSS resolution:** Turbopack resolves PostCSS plugins differently. `postcss.config.cjs` must export `tailwindcss: {}` (not `require('tailwindcss')({})`) for it to be found.
+- **Turbopack-specific errors:** If you see `turbopack:///[turbopack-node]/transforms/postcss.ts` in stack traces, the issue is PostCSS/Tailwind, not your code.
+
+**Escape hatch:** Set `NEXT_DISABLE_TURBOPACK=1` env var on Vercel to use webpack instead. Use only if Turbopack is blocking you.
+
+### 12.3 Vendored `@neurecore/ui` Components
+
+The original `packages/ui/` and `shared/` folders at the repo root caused Vercel build failures (cross-directory imports outside `rootDirectory`). Solution (2026-06-29):
+
+- Deleted `packages/` and `shared/` from repo root
+- All UI components are **vendored** at `frontend-eaos/src/ui/` (copy of the originals)
+- Imports in `src/` use relative paths: `import { Button } from '@/ui/button'` (NOT `@neurecore/ui/button`)
+
+**If you need to update shared components:** edit the files in `frontend-eaos/src/ui/` directly. They are not symlinked to a shared package.
+
+### 12.4 EAOS-Specific DOs
+
+| DO | Why |
+|---|---|
+| Set `installCommand: "npm install --legacy-peer-deps --include=dev"` in Vercel project | Prevents devDeps from being stripped during build (see §1.7) |
+| Set `ssoProtection: null` on the Vercel project | Default Vercel Auth blocks generated URLs (see §1.6) |
+| Keep `turbopack.root` unset in `next.config.mjs` | Avoids Vercel warnings and path resolution issues |
+| Use `frontend-eaos/` as `rootDirectory` (set in Vercel dashboard) | Tells Vercel where to find `package.json` and `next.config.mjs` |
+| Commit `package-lock.json` | Vercel uses `npm install` not `npm ci`, so the lockfile pins versions |
+
+### 12.5 EAOS-Specific DON'Ts
+
+| DON'T | Why |
+|---|---|
+| ❌ Don't put `vercel.json` at the repo root | Conflicts with `rootDirectory: frontend-eaos`; Vercel uses the framework default |
+| ❌ Don't put `package.json` at the repo root | Vercel will pick it up and ignore `frontend-eaos/package.json` |
+| ❌ Don't put `pages/` directory at the repo root | Vercel tries to build it instead of `frontend-eaos/src/app/` |
+| ❌ Don't enable Sentry config without `@sentry/nextjs` installed | Build will fail looking for the package |
+| ❌ Don't set `turbopack.root: '.'` | Causes Vercel path resolution warnings |
+| ❌ Don't reference `@neurecore/ui/*` imports | That package no longer exists; use `@/ui/*` (relative) |
+| ❌ Don't try to deploy with `vercel deploy --prod` from inside `frontend-eaos/` | Same rootDirectory bug as tenant/admin — use git push |
+
+### 12.6 EAOS Build & Deploy Commands
+
+```bash
+# 1. Local build verification
+cd /home/najeeb/Linux-Dev/neurecore-base/neurecore/frontend-eaos
+npx next build
+# Expect: "Compiled successfully" with route table (/, /login, /marketplace, /agents, etc.)
+
+# 2. Commit + push
+cd /home/najeeb/Linux-Dev/neurecore-base/neurecore
+git add -A
+git commit -m "feat(eaos): <description>"
+git push origin main
+
+# 3. Watch deploy
+cd frontend-eaos
+npx vercel ls 2>&1 | grep "Ready\|Building\|Error" | head -3
+
+# 4. Smoke test
+curl -sL https://frontend-eaos-shahisoftai-7053s-projects.vercel.app/ | grep -oE "EAOS|NeureCore" | head -2
+```
 
 ---
 
