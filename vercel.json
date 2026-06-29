@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd frontend-eaos && npm install --legacy-peer-deps && npm run build",
+  "installCommand": "cd frontend-eaos && npm install --legacy-peer-deps",
+  "outputDirectory": "frontend-eaos/.next"
+}
