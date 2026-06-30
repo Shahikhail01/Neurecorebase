@@ -124,27 +124,29 @@ rsync -avz \
 
 ```bash
 ssh contabo 'cd /opt/neurecore/frontend-eaos && \
-  nvm use 22.20.0 2>/dev/null || true && \
   npm install --legacy-peer-deps --include=dev && \
   NEXT_PUBLIC_API_URL=https://brain.neurecore.com/api/v1 \
     NEXT_PUBLIC_APP_NAME=NeureCore \
+    NEXT_PUBLIC_APP_VERSION=1.0.0 \
     NEXT_PUBLIC_DEFAULT_THEME=dark \
   npm run build'
 ```
 
-### 3. Copy Static Assets
+### 3. Restart Next.js
 
 ```bash
-ssh contabo 'cp -r /opt/neurecore/frontend-eaos/.next/static \
-  /opt/neurecore/frontend-eaos/.next/standalone/.next/static'
-```
+# Kill existing process on port 3011
+ssh contabo 'pkill -f "next-server.*3011" || true; sleep 2'
 
-### 4. PM2 Restart
+# Start fresh
+ssh contabo 'cd /opt/neurecore/frontend-eaos && \
+  node node_modules/.bin/next start --hostname 127.0.0.1 --port 3011 &'
 
-```bash
-ssh contabo 'pm2 restart neurecore-eaos || (cd /opt/neurecore/frontend-eaos && \
-  PORT=3011 pm2 start .next/standalone/server.js --name neurecore-eaos -- \
-  --port 3011 --hostname 127.0.0.1)'
+# Or use PM2 (create a wrapper script to avoid PM2 arg parsing issues)
+ssh contabo 'pm2 delete neurecore-eaos 2>/dev/null || true; \
+  echo "#!/bin/bash\ncd /opt/neurecore/frontend-eaos\nexec node node_modules/.bin/next start --hostname 127.0.0.1 --port 3011" > /opt/neurecore/frontend-eaos/start.sh && \
+  chmod +x /opt/neurecore/frontend-eaos/start.sh && \
+  pm2 start /opt/neurecore/frontend-eaos/start.sh --name neurecore-eaos && pm2 save'
 ```
 
 ---

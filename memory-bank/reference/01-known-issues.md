@@ -1,7 +1,7 @@
 # Reference — Known Issues
 
-**Last Updated:** 2026-06-30
-**Last Verified:** 2026-06-30
+**Last Updated:** 2026-07-01
+**Last Verified:** 2026-07-01
 **Audience:** All engineers
 
 ---
@@ -51,6 +51,60 @@ Previously `/api/metrics` returned 404. This was fixed in the One-Source consoli
 ```bash
 curl -s http://127.0.0.1:3003/api/metrics | head -5
 ```
+
+---
+
+### 4. Phase 8 Seed Schema Mismatches
+
+**Severity:** High
+**Status:** Fixed (2026-07-01)
+
+The `seed-phase8-demo-tenant.cjs` script had multiple Prisma field name mismatches vs the actual DB schema:
+
+| Field | Seed Used | Actual Schema |
+|---|---|---|
+| `Tenant.status` | `'ACTIVE'` (string) | `TenantStatus` enum |
+| `Agent.status` | `'ACTIVE'` | `AgentStatus.IDLE` |
+| `EntityState.currentState` | `state:` | `currentState:` |
+| `EntityHealth.severity` | `status:` | `severity:` |
+| `EntityLabel` | `labelName:` / `labelType:` | `kind:` / `key:` / `value:` |
+| `WorkspaceLayout` | `widgets:` field | `layout:` field |
+| `WorkspaceLayout` unique key | `userId_tenantId_entityType` | `userId_entityType` |
+
+**Fix:** Updated seed script to use correct field names and wrap entity metadata writes in per-field try/catch blocks.
+
+---
+
+### 5. Marketplace Installed Page Empty
+
+**Severity:** High
+**Status:** Fixed (2026-07-01)
+
+`src/app/marketplace/installed/page.tsx` used `getTenantId()` which extracted tenant from URL path. On `/marketplace/installed`, the tenant extraction returned `undefined`, disabling the `useInstalledPacks()` query (enabled: !!tenantId).
+
+**Fix:** Replaced URL-based tenant extraction with `useAuthUser()` hook.
+
+---
+
+### 6. Retail Page Auth Context
+
+**Severity:** High
+**Status:** Fixed (2026-07-01)
+
+`src/app/retail/page.tsx` passed hardcoded `'default'` as tenantId to all retail hooks. This bypassed auth filtering but could cause incorrect data routing.
+
+**Fix:** Use `useAuthUser().tenantId` for all retail hook calls.
+
+---
+
+### 7. FACILITY Not in EAOS_ENTITY_TYPES
+
+**Severity:** Medium
+**Status:** Fixed (2026-07-01)
+
+`src/lib/eaos-entity-types.ts` did not include `'FACILITY'`. The retail page and entity workspace use `FACILITY:retail-store` entity subtype.
+
+**Fix:** Added `'FACILITY'` to the `EAOS_ENTITY_TYPES` constant array.
 
 ---
 

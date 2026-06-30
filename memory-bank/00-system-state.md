@@ -204,5 +204,51 @@ cd /home/najeeb/Linux-Dev/neurecore-base/neurecore/deployment/scripts
 
 ---
 
-**Last Verified:** 2026-06-30
-**Verified By:** Live inspection of Contabo production server
+**Last Verified:** 2026-07-01
+**Verified By:** Live inspection of Contabo production server (2026-07-01T20:10 UTC)
+
+---
+
+## Demo Tenant (2026-07-01)
+
+A demo retail tenant has been seeded for EAOS demo purposes:
+
+| Field | Value |
+|---|---|
+| **Tenant** | Demo Retail Co. (`demo-retail`) |
+| **Tier** | Professional |
+| **Owner** | `retail@neurecore.ai` / `Retail@123!` |
+| **Departments** | 16 (10 retail stores + 6 corporate) |
+| **AI Employees** | 28 |
+| **Installed Packs** | `retail` v1.0.0, `corporate-services` v1.0.0 |
+
+The demo tenant provides realistic EAOS entity data for the retail pack demo pages.
+
+---
+
+## Frontend-EAOS Build & Deploy Notes (Updated 2026-07-01)
+
+**IMPORTANT:** `frontend-eaos` is deployed to Contabo ONLY. Do NOT push to Vercel for production. The Vercel preview URL (`frontend-eaos-shahisoftai-7053s-projects.vercel.app`) is for previews only.
+
+**Build on Contabo:**
+```bash
+ssh contabo
+cd /opt/neurecore/frontend-eaos
+NEXT_PUBLIC_API_URL=https://brain.neurecore.com/api/v1 \
+  NEXT_PUBLIC_APP_NAME=NeureCore \
+  NEXT_PUBLIC_APP_VERSION=1.0.0 \
+  NEXT_PUBLIC_DEFAULT_THEME=dark \
+  npm run build
+```
+
+**Start via PM2:**
+```bash
+# Kill any existing
+pkill -f "next-server.*3011" || true
+
+# Start fresh
+cd /opt/neurecore/frontend-eaos
+node node_modules/.bin/next start --hostname 127.0.0.1 --port 3011
+```
+
+The `.next` build is NOT standalone — use `node node_modules/.bin/next start` directly.

@@ -1,7 +1,7 @@
 # Frontend — EAOS (Tenant Frontend)
 
-**Last Updated:** 2026-06-30
-**Last Verified:** 2026-06-30 (live inspection)
+**Last Updated:** 2026-07-01
+**Last Verified:** 2026-07-01 (live inspection)
 **Audience:** Frontend developers, UI engineers
 
 ---
@@ -225,13 +225,44 @@ Multiple Next.js processes may conflict. Always check `netstat -tlnp | grep next
 
 ## Known Issues
 
-### PM2 Process Management (2026-06-30)
+### PM2 Process Management (2026-07-01 Updated)
 
-The `neurecore-eaos` PM2 process may fail to start correctly due to port conflicts. Currently running as standalone process. See `../troubleshooting/01-troubleshooting.md` for resolution.
+The `neurecore-eaos` PM2 process may fail to start correctly due to port conflicts. Workaround: use `node node_modules/.bin/next start` directly (not via PM2's `--` argument parsing which corrupts flags).
+
+```bash
+# Correct startup
+cd /opt/neurecore/frontend-eaos
+node node_modules/.bin/next start --hostname 127.0.0.1 --port 3011
+```
 
 ### Cookie Manager False Positive
 
 `CookieManager.hasAuthCookies()` returns false for cross-domain cookies (HQ domain vs API domain). This does NOT indicate actual auth failure - the auth works correctly via `/auth/me` endpoint. Do NOT block login based on this check.
+
+### FACILITY Entity Type (2026-07-01 Fixed)
+
+`FACILITY` was missing from `EAOS_ENTITY_TYPES` in `src/lib/eaos-entity-types.ts`. The retail page (`src/app/retail/page.tsx`) uses `FACILITY:retail-store` entities. Ensure `FACILITY` is included in the entity types list.
+
+### Tenant ID Extraction (2026-07-01 Fixed)
+
+Two pages incorrectly extracted `tenantId` from the URL path instead of from the auth session:
+
+- `src/app/marketplace/installed/page.tsx` — used URL path parsing (`getTenantId()`)
+- `src/app/retail/page.tsx` — hardcoded `'default'`
+
+**Correct pattern:** Use `useAuthUser()` hook from `@/core/hooks/auth/useAuth`:
+
+```typescript
+import { useAuthUser } from '@/core/hooks/auth/useAuth';
+
+function MyPage() {
+  const { data: authUser } = useAuthUser();
+  const tenantId = authUser?.tenantId ?? undefined;
+  // use tenantId in hooks...
+}
+```
+
+This was causing installed packs and retail widgets to appear empty (queries disabled with `undefined` tenantId).
 
 ---
 
