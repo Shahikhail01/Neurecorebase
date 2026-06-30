@@ -22,13 +22,17 @@ export class MissionFeedService {
 
   async list(options: {
     userId: string;
+    tenantId: string | null;
     page?: number;
     limit?: number;
     priority?: string;
   }) {
+    if (!options.tenantId) {
+      throw new Error('Tenant ID is required to list mission feed items');
+    }
     const page = Math.max(1, options.page ?? 1);
     const limit = Math.min(100, Math.max(1, options.limit ?? 20));
-    const tenantId = this.tenantContext.tenantId;
+    const tenantId = options.tenantId;
 
     const where: Prisma.MissionFeedItemWhereInput = {
       tenantId,
@@ -58,8 +62,10 @@ export class MissionFeedService {
     };
   }
 
-  async dismiss(itemId: string, userId: string) {
-    const tenantId = this.tenantContext.tenantId;
+  async dismiss(itemId: string, userId: string, tenantId: string | null) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required to dismiss mission feed items');
+    }
     // Idempotent: set dismissedAt if not already.
     await this.prisma.missionFeedItem.updateMany({
       where: {
@@ -73,8 +79,10 @@ export class MissionFeedService {
     return { dismissed: true };
   }
 
-  async create(dto: CreateMissionFeedItemDto) {
-    const tenantId = this.tenantContext.tenantId;
+  async create(dto: CreateMissionFeedItemDto, tenantId: string | null) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required to create mission feed items');
+    }
 
     // Idempotency on sourceEventId within a tenant.
     if (dto.sourceEventId) {

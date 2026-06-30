@@ -8,6 +8,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { AppModule } from './app.module';
 import { initTracing } from './infrastructure/tracing/tracing';
+import { MetricsService } from './modules/metrics/metrics.service';
 
 // Initialise tracing before the app bootstraps.
 void initTracing();
@@ -147,6 +148,17 @@ async function bootstrap() {
             '/api/docs-json',
           ],
         });
+      });
+
+      adapter.get('/api/metrics', async (_req: any, res: any) => {
+        try {
+          const metricsService = app.get(MetricsService);
+          const body = await metricsService.toExpositionFormat();
+          res.setHeader('Content-Type', metricsService.contentType);
+          res.status(200).send(body);
+        } catch (err) {
+          res.status(500).send('Metrics unavailable');
+        }
       });
     }
   } catch (err) {

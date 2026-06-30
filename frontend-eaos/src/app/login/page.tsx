@@ -56,14 +56,6 @@ function LoginForm() {
   const onSubmit = form.handleSubmit(async (values) => {
     try {
       const result = await login.mutateAsync(values);
-      // Cookies were set by the backend response. Confirm before navigating.
-      if (!cookieManager.hasAuthCookies()) {
-        toast.error(
-          'Cookies blocked',
-          'Your browser is blocking httpOnly cookies. Check site settings and try again.',
-        );
-        return;
-      }
       toast.success(
         `Welcome, ${result.user.firstName || result.user.email}`,
         'Logged in successfully',

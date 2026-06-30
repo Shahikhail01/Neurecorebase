@@ -50,6 +50,7 @@ export class MissionFeedController {
   ): Promise<PaginatedResponse<unknown>> {
     const result = await this.missionFeed.list({
       userId: user.sub,
+      tenantId: user.tenantId,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
       priority,
@@ -75,7 +76,7 @@ export class MissionFeedController {
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.missionFeed.dismiss(itemId, user.sub);
+    return this.missionFeed.dismiss(itemId, user.sub, user.tenantId);
   }
 
   @Post()
@@ -88,7 +89,7 @@ export class MissionFeedController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a Mission Feed item (admin/seed)' })
-  async create(@Body() dto: CreateMissionFeedItemDto) {
-    return this.missionFeed.create(dto);
+  async create(@CurrentUser() user: JwtPayload, @Body() dto: CreateMissionFeedItemDto) {
+    return this.missionFeed.create(dto, user.tenantId);
   }
 }

@@ -2,7 +2,7 @@
 # Phase 5 pre-req (`EAOS-implementation-roadmap.md` §9, Phase 5 Observability).
 #
 # Single scrape target: the NestJS backend on port 3003 (Contabo),
-# which exposes /metrics (Phase 5 pre-req). Prometheus scrapes every 15s.
+# which exposes /api/v1/metrics (versioned endpoint). Prometheus scrapes every 15s.
 
 global:
   scrape_interval: 15s
@@ -22,7 +22,7 @@ alerting:
 
 scrape_configs:
   - job_name: 'neurecore-backend'
-    metrics_path: '/api/metrics'
+    metrics_path: '/api/v1/metrics'
     scheme: 'http'
     scrape_interval: 15s
     scrape_timeout: 10s
