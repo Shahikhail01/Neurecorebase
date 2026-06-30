@@ -34,6 +34,52 @@ memory-bank/
 ├── security/
 │   ├── 01-authentication.md        ← Cookie-based auth, JWT, session management
 │   ├── 02-csrf.md                 ← CSRF protection, double-submit pattern
+│   └── 03-rbac.md                ← Role-based access control, permissions
+│
+├── deployment/
+│   ├── 01-deployment.md            ← Deployment procedures, scripts, workflow
+│   ├── 02-contabo-operations.md   ← Contabo server operations, PM2 management
+│   ├── 03-rollback.md              ← Rollback procedures, disaster recovery
+│   └── 04-environments.md         ← Environment variables, configuration
+│
+├── observability/
+│   ├── 01-observability.md         ← Prometheus, Grafana, Alertmanager setup
+│   └── 02-monitoring.md           ← Metrics, alerts, dashboards
+│
+├── reference/
+│   ├── 01-known-issues.md         ← Known bugs, limitations, workarounds
+│   ├── 02-technical-debt.md       ← Technical debt, future improvements
+│   ├── 03-decision-log.md         ← Architectural decisions, rationale
+│   └── 04-development-standards.md ← Code standards, patterns, conventions
+│
+└── troubleshooting/
+    └── 01-troubleshooting.md       ← Common issues, diagnostic commands, fixes
+```
+memory-bank/
+├── 00-index.md                     ← This file
+├── 00-system-state.md              ← Executive summary of current production system
+│
+├── infrastructure/
+│   ├── 01-infrastructure.md        ← Contabo VPS topology, directory layout
+│   ├── 02-litespeed.md            ← LiteSpeed configuration, vhosts, reverse proxy
+│   ├── 03-dns.md                  ← DNS configuration, records, cutover history
+│   └── 04-ssl.md                  ← SSL/TLS certificates, Let's Encrypt, renewal
+│
+├── backend/
+│   ├── 01-backend.md               ← NestJS backend architecture, modules, runtime
+│   ├── 02-api.md                  ← API contracts, versioning, endpoints
+│   ├── 03-database.md             ← Prisma schema, migrations, Neon PostgreSQL
+│   └── 04-ai-platform.md          ← AI integrations, tool registry, orchestrator
+│
+├── frontend-eaos/
+│   └── 01-frontend-eaos.md         ← EAOS tenant frontend architecture
+│
+├── frontend-admin/
+│   └── 01-frontend-admin.md         ← Admin console frontend architecture
+│
+├── security/
+│   ├── 01-authentication.md        ← Cookie-based auth, JWT, session management
+│   ├── 02-csrf.md                 ← CSRF protection, double-submit pattern
 │   └── 03-rbac.md                 ← Role-based access control, permissions
 │
 ├── deployment/
