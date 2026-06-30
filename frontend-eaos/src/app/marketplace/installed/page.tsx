@@ -12,7 +12,7 @@
  * who did what.
  */
 
-import { Suspense, useMemo } from 'react';
+import { Suspense } from 'react';
 import {
   Button,
   EmptyState,
@@ -25,14 +25,7 @@ import {
   usePackInstallHistory,
   useUninstallSolutionPack,
 } from '@/core/hooks/solution-packs';
-
-function getTenantId(): string | undefined {
-  if (typeof window === 'undefined') return undefined;
-  const parts = window.location.pathname.split('/').filter(Boolean);
-  const known = new Set(['knowledge', 'entity', 'agents', 'empty', 'test-query', 'marketplace', 'packs', 'installed']);
-  const candidate = parts.find((p) => !known.has(p));
-  return candidate;
-}
+import { useAuthUser } from '@/core/hooks/auth/useAuth';
 
 export default function InstalledPacksPage() {
   return (
@@ -43,7 +36,8 @@ export default function InstalledPacksPage() {
 }
 
 function InstalledPacksInner() {
-  const tenantId = useMemo(() => getTenantId(), []);
+  const { data: authUser } = useAuthUser();
+  const tenantId = authUser?.tenantId ?? undefined;
   const installedQuery = useInstalledPacks(tenantId);
   const historyQuery = usePackInstallHistory(tenantId, 20);
   const uninstall = useUninstallSolutionPack(tenantId);

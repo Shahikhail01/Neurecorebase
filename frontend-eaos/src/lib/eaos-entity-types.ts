@@ -12,6 +12,7 @@ export const EAOS_ENTITY_TYPES = [
   'INVOICE',
   'KNOWLEDGE_ENTRY',
   'TEMPLATE',
+  'FACILITY',
 ] as const;
 
 export type EaosEntityType = (typeof EAOS_ENTITY_TYPES)[number];

@@ -34,6 +34,7 @@ import {
   type RetailWidgetSummary,
   type RetailActionId,
 } from '@/core/hooks/retail';
+import { useAuthUser } from '@/core/hooks/auth/useAuth';
 
 const DEMO_ENTITY_TYPE = 'FACILITY';
 const DEMO_ENTITY_ID = 'soho-flagship';
@@ -50,10 +51,12 @@ const ICON_MAP: Record<string, string> = {
 const RETAIL_GREEN = '#22c55e';
 
 export default function RetailPage() {
-  const actions = useRetailActions('default');
-  const widgets = useRetailWidgets('default');
-  const syncShopify = useSyncShopify('default');
-  const syncSquare = useSyncSquare('default');
+  const { data: authUser } = useAuthUser();
+  const tenantId = authUser?.tenantId ?? undefined;
+  const actions = useRetailActions(tenantId);
+  const widgets = useRetailWidgets(tenantId);
+  const syncShopify = useSyncShopify(tenantId);
+  const syncSquare = useSyncSquare(tenantId);
 
   return (
     <main
