@@ -223,6 +223,131 @@ ssh contabo 'cd /opt/neurecore/backend/backend && \
 
 The `Tier` model references `defaultBudgetPerDay` column which doesn't exist in the database. Planned migration pending.
 
+### Entity Models - Column Case Mismatch
+
+**Status:** PARTIALLY FIXED - Schema updated, need to verify all endpoints
+
+PostgreSQL normalizes all identifiers to lowercase. The database has `tenantid`, `entitytype`, `entityid` (lowercase) but Prisma schema defined them as camelCase.
+
+**Fix Applied:**
+Added `@map()` annotations to all entity model fields in `schema.prisma`:
+- `EntityState`, `EntityLabel`, `EntityHealth`, `EntityOwnership`, `EntityWatcher`, `EntityRelationship`
+- `UserFavorite`, `UserRecentAccess`, `StateHistory`
+
+**Affected Models (all got @map annotations):**
+```prisma
+model EntityState {
+  tenantId     String  @map("tenantid")
+  entityType   EntityType @map("entitytype")
+  entityId     String  @map("entityid")
+  currentState UniversalStateValue @map("currentstate")
+  subState     String? @map("substate")
+  enteredAt    DateTime @map("enteredat")
+  enteredById  String? @map("enteredbyid")
+  metadata     Json    @map("metadata")
+}
+
+model EntityLabel {
+  tenantId     String    @map("tenantid")
+  entityType   EntityType @map("entitytype")
+  entityId     String   @map("entityid")
+  key          String   @map("key")
+  value        String   @map("value")
+  color        String?  @map("color")
+  createdById  String?  @map("createdbyid")
+  createdAt    DateTime @map("createdat")
+}
+
+model EntityHealth {
+  tenantId     String        @map("tenantid")
+  entityType   EntityType    @map("entitytype")
+  entityId     String       @map("entityid")
+  severity     HealthSeverity @map("severity")
+  trend        HealthTrend   @map("trend")
+  score        Int           @map("score")
+  openAlerts   Int           @map("openalerts")
+  signals      Json          @map("signals")
+  updatedAt    DateTime      @map("updatedat")
+}
+
+model EntityRelationship {
+  tenantId   String   @map("tenantid")
+  fromType   EntityType @map("fromtype")
+  fromId     String   @map("fromid")
+  toType     EntityType @map("totype")
+  toId       String   @map("toid")
+  type       RelationshipType @map("type")
+  position   Int      @map("position")
+  metadata   Json     @map("metadata")
+  createdAt  DateTime @map("createdat")
+}
+
+model StateHistory {
+  tenantId       String              @map("tenantid")
+  entityType     EntityType         @map("entitytype")
+  entityId       String             @map("entityid")
+  fromState      UniversalStateValue @map("fromstate")
+  toState        UniversalStateValue @map("tostate")
+  transitionedAt DateTime           @map("transitionedat")
+  transitionedById String?          @map("transitionedbyid")
+  reason         String?            @map("reason")
+  isAuto         Boolean            @map("isauto")
+  metadata       Json               @map("metadata")
+  entityStateId  String?            @map("entitystateid")
+}
+
+model EntityOwnership {
+  tenantId         String   @map("tenantid")
+  entityType       EntityType @map("entitytype")
+  entityId         String   @map("entityid")
+  ownerId          String?  @map("ownerid")
+  responsibleTeamId String?  @map("responsibleteamid")
+  managerId        String?  @map("managerid")
+  aiAssistantId    String?  @map("aiassistantid")
+  notes            String?  @map("notes")
+  createdAt        DateTime @map("createdat")
+  updatedAt        DateTime @map("updatedat")
+}
+
+model EntityWatcher {
+  tenantId           String    @map("tenantid")
+  watcherId          String   @map("watcherid")
+  entityType         EntityType @map("entitytype")
+  entityId           String   @map("entityid")
+  watchOnStateChange Boolean   @map("watchonstatechange")
+  watchOnUpdate      Boolean   @map("watchonupdate")
+  watchOnComment     Boolean   @map("watchoncomment")
+  watchOnAssign      Boolean   @map("watchonassign")
+  createdAt          DateTime @map("createdat")
+}
+
+model UserFavorite {
+  tenantId   String   @map("tenantid")
+  userId     String   @map("userid")
+  entityType EntityType @map("entitytype")
+  entityId   String   @map("entityid")
+  pinnedAt   DateTime @map("pinnedat")
+  sortOrder  Int      @map("sortorder")
+}
+
+model UserRecentAccess {
+  tenantId   String   @map("tenantid")
+  userId     String   @map("userid")
+  entityType EntityType @map("entitytype")
+  entityId   String   @map("entityid")
+  accessedAt DateTime @map("accessedat")
+}
+```
+
+**Verification:**
+```bash
+# After applying fix, regenerate and restart:
+ssh contabo 'cd /opt/neurecore/backend/backend && npx prisma generate && pm2 restart neurecore-backend'
+
+# Test identity endpoint:
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/f65bc966-20bb-4b65-a1f5-475d781252fc/identity"
+```
+
 ---
 
 ## Related Documents

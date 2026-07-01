@@ -256,6 +256,72 @@ Currently EAOS runs as a standalone process, not managed by PM2. For production 
      ./node_modules/.bin/prisma db execute --stdin <<< "SELECT 1"'
    ```
 
+### Entity Workspace - Column Does Not Exist
+
+**Symptom:** `The column 'entity_labels.tenantId' does not exist` error.
+
+**Cause:** PostgreSQL normalizes identifiers to lowercase. Database has `tenantid` but Prisma schema expects `tenantId` without `@map()` annotations.
+
+**Diagnosis:**
+```bash
+# Check actual column names in database:
+ssh contabo 'PGPASSWORD=npg_xxx psql -h ep-summer-pond-adpkqy1m-pooler... -U neondb_owner -d neondb -c "SELECT column_name FROM information_schema.columns WHERE table_name = '\''entity_labels'\'';"'
+
+# Expected output shows tenantid (lowercase)
+```
+
+**Fix Applied:**
+- Added `@map("tenantid")` annotations to all entity models in schema.prisma
+- Added `@map("entitytype")`, `@map("entityid")`, etc. to all entity fields
+
+**After Fix:**
+```bash
+# Regenerate Prisma client on Contabo
+ssh contabo 'cd /opt/neurecore/backend/backend && npx prisma generate'
+
+# Restart backend
+ssh contabo 'pm2 restart neurecore-backend && sleep 15'
+
+# Test
+curl -s http://127.0.0.1:3003/api/v1/entities/department/<id>/identity
+```
+
+### Entity Workspace - 404 on Panel Endpoints
+
+**Symptom:** `/entities/department/:id/health` returns 404 but identity works.
+
+**Cause:** Entity type parameter comes as lowercase from URL but database stores uppercase enum values.
+
+**Diagnosis:**
+```bash
+# Check logs for 404 errors
+ssh contabo 'pm2 logs neurecore-backend --lines 20 | grep 404'
+```
+
+**Fix Applied:**
+- Added `params.type.toUpperCase()` calls in `entities.controller.ts` for all service calls
+- The resolver already uppercases internally, but other service calls did not
+
+**Testing All 10 Panel Endpoints:**
+```bash
+DEPT_ID="f65bc966-20bb-4b65-a1f5-475d781252fc"
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/$DEPT_ID/identity"
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/$DEPT_ID/health"
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/$DEPT_ID/intelligence"
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/$DEPT_ID/operations"
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/$DEPT_ID/resources"
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/$DEPT_ID/collaboration"
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/$DEPT_ID/insights"
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/$DEPT_ID/automation"
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/$DEPT_ID/activity"
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/$DEPT_ID/lifecycle"
+```
+
+**Pending Issues:**
+- `/workspace/summary` - fails with type undefined error
+- `/health` - returns 404 (route may not exist)
+- Other panels may have similar issues
+
 ---
 
 ## Observability Issues

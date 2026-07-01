@@ -8,7 +8,101 @@
 
 ## Known Issues
 
-### 1. CSRF Exemptions Incomplete
+### 1. Entity Workspace - Database Column Case Mismatch (CRITICAL)
+
+**Severity:** Critical
+**Status:** PARTIALLY FIXED - Work in Progress
+
+**Root Cause:** PostgreSQL normalizes all identifiers to lowercase. The database has columns like `tenantid`, `entitytype`, `entityid` (lowercase), but the Prisma schema defines them as `tenantId`, `entityType`, `entityId` (camelCase). Without `@map()` annotations, Prisma generates SQL with camelCase column names, causing "column does not exist" errors.
+
+**Affected Tables:**
+- `entity_states` (tenantid, entitytype, entityid, currentstate, etc.)
+- `entity_labels` (tenantid, entitytype, entityid, etc.)
+- `entity_healths` (tenantid, entitytype, entityid, etc.)
+- `entity_ownerships` (tenantid, entitytype, entityid, etc.)
+- `entity_watchers` (tenantid, entitytype, entityid, etc.)
+- `entity_relationships` (tenantid, fromtype, fromid, totype, toid, etc.)
+- `user_favorites` (tenantid, userid, entitytype, entityid, etc.)
+- `user_recent_accesses` (tenantid, userid, entitytype, entityid, etc.)
+- `state_history` (tenantid, entitytype, entityid, fromstate, tostate, etc.)
+
+**What Was Fixed:**
+- Added `@map()` annotations to all entity models in `schema.prisma` to map camelCase fields to snake_case columns
+- Added `type.toUpperCase()` for entity type params in `entities.controller.ts` to handle lowercase URL params
+
+**What's Still Broken:**
+- The `/workspace/summary` endpoint fails with `Cannot read properties of undefined (reading 'toUpperCase')` - indicates a routing issue with composite endpoints
+- `/health` and other panel endpoints return 404 - routes may not be implemented or routing is broken
+- `workspaceSummary` method is missing proper type parameter handling
+
+**Database State:**
+```sql
+-- Working tables (have proper columns):
+departments: id, name, tenantId (camelCase - WORKS)
+entity_labels: tenantid (lowercase - NEEDS @map)
+
+-- Entity tables (have snake_case columns):
+entity_labels: tenantid, entitytype, entityid, kind, key, value, color, createdbyid, createdat
+entity_states: tenantid, entitytype, entityid, currentstate, substate, enteredat, enteredbyid, metadata
+entity_healths: tenantid, entitytype, entityid, severity, trend, score, openalerts, signals, updatedat
+```
+
+**Fix Applied to Schema:**
+```prisma
+model EntityLabel {
+  id          String     @id @default(uuid())
+  tenantId    String    @map("tenantid")  -- Added
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityType  EntityType @map("entitytype")  -- Added
+  entityId    String    @map("entityid")  -- Added
+  kind        LabelKind  @default(CUSTOM)
+  key         String    @map("key")
+  value       String    @map("value")
+  color       String?   @map("color")
+  createdById String?   @map("createdbyid")
+  createdBy   User?      @relation(...)
+  createdAt   DateTime  @default(now()) @map("createdat")
+  // ... rest
+}
+```
+
+**Fix Applied to Controller:**
+```typescript
+// Before (broken with lowercase URL params like /entities/department/...):
+this.identity.get((params.type as EaosEntityType), params.id, tenantId, user.sub);
+
+// After (uppercase the type for database enum):
+this.identity.get(params.type.toUpperCase() as EaosEntityType, params.id, tenantId, user.sub);
+```
+
+**Pending Issues:**
+1. `workspaceSummary` route handler - type parameter undefined at line 132
+2. Entity type case inconsistency - URL uses lowercase (`department`) but database stores uppercase (`DEPARTMENT`)
+3. Need to verify all 10 panel endpoints work after full fix
+
+**Test Command:**
+```bash
+# Login first
+curl -s -c /tmp/cookies.txt -X POST http://127.0.0.1:3003/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"retail@neurecore.ai","password":"Retail@123!"}'
+
+# Test identity (WORKS with uppercase):
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/DEPARTMENT/f65bc966-20bb-4b65-a1f5-475d781252fc/identity"
+
+# Test identity with lowercase (NOW WORKS after fix):
+curl -s -b /tmp/cookies.txt "http://127.0.0.1:3003/api/v1/entities/department/f65bc966-20bb-4b65-a1f5-475d781252fc/identity"
+```
+
+**Related Files:**
+- `backend/prisma/schema.prisma` - Entity models with @map annotations
+- `backend/src/modules/entities/entities.controller.ts` - Type uppercase fixes
+- `backend/src/modules/entities/services/identity.capability.ts` - Entity queries
+- `backend/src/modules/entities/services/entity-resolver.service.ts` - Entity resolution
+
+---
+
+### 2. CSRF Exemptions Incomplete
 
 **Severity:** Low
 **Status:** Known limitation
